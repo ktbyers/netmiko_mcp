@@ -16,3 +16,5 @@
 ## Code Quality
 
 - Type hints required for all code
+- `src/netmiko_mcp/__init__.py` defines the public API surface via `__all__`. Adding a
+  symbol there is a deliberate API decision, not a convenience re-export.
