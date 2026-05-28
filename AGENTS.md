@@ -18,3 +18,7 @@
 - Type hints required for all code
 - `src/netmiko_mcp/__init__.py` defines the public API surface via `__all__`. Adding a
   symbol there is a deliberate API decision, not a convenience re-export.
+- IMPORTANT: All imports go at the top of the file — inline imports hide
+  dependencies and obscure circular-import bugs. Only exception: when a
+  top-level import genuinely can't work (lazy-loading optional deps, or
+  tests that re-import a module).
