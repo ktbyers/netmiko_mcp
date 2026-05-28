@@ -465,6 +465,7 @@ source = { editable = "." }
 dependencies = [
     { name = "mcp" },
     { name = "netmiko" },
+    { name = "ntc-templates" },
 ]
 
 [package.dev-dependencies]
@@ -477,6 +478,7 @@ dev = [
 requires-dist = [
     { name = "mcp", specifier = ">=1.27.1" },
     { name = "netmiko", specifier = ">=4.7.0" },
+    { name = "ntc-templates", specifier = ">=4.1.0" },
 ]
 
 [package.metadata.requires-dev]
