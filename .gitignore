@@ -30,3 +30,4 @@ docs/build/doctrees/
 .DS_Store
 */.DS_Store
 
+netmiko_mcp.egg-info/

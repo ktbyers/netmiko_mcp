@@ -1,0 +1,64 @@
+[project]
+name = "netmiko-mcp"
+version = "0.1.0"
+description = "MCP Server for Netmiko Network Automation Library."
+authors = [{ name = "Kirk Byers", email = "ktbyers@twb-tech.com" }]
+license = { text = "Apache-2.0" }
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "mcp>=1.27.1",
+    "netmiko>=4.7.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.15",
+]
+
+[tool.uv]
+managed = true
+package = true
+
+[tool.ruff]
+line-length = 100
+
+# Specify your floor Python version (i.e. minimum version Netmiko supports) 
+target-version = "py310"
+
+# Files or directories to exclude from linting and formatting
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Enable these rule sets for a modern, clean codebase
+# E/W = pycodestyle, F = Pyflakes, I = isort, UP = pyupgrade, B = bugbear
+# select = ["E", "F", "W", "I", "UP", "B"]
+
+# If you want to be extra strict about line length in the linter:
+# extend-select = ["E501"]
+
+[tool.ruff.format]
+# Matches Black's style but honors the 100 char limit
+quote-style = "double"
+indent-style = "space"
+
+# Optional: Formats code snippets inside docstrings!
+docstring-code-format = true
+docstring-code-line-length = 80
