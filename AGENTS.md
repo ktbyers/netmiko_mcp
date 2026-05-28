@@ -1,5 +1,9 @@
 # Netmiko MCP Agent Instructions
 
+## Architecture & Design
+
+- Refer to the `ARCHITECTURE.md` file in the root directory for high-level architecture decisions, structural guardrails, state management, and security constraints.
+
 ## Package Management
 
 - ONLY use uv, NEVER pip
