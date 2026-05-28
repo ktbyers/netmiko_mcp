@@ -2,7 +2,8 @@
 
 ## Architecture & Design
 
-- Refer to the `ARCHITECTURE.md` file in the root directory for high-level architecture decisions, structural guardrails, state management, and security constraints.
+- Refer to the `ARCHITECTURE.md` file in the root directory for high-level architecture
+  decisions, structural guardrails, state management, and security constraints.
 
 ## Package Management
 
@@ -22,5 +23,10 @@
   dependencies and obscure circular-import bugs. Only exception: when a
   top-level import genuinely can't work (lazy-loading optional deps, or
   tests that re-import a module).
-- `ruff check` and `ruff format --check` must 100% pass before committing.
-- `mypy src` must 100% pass before committing.
+- Always run "uv run" with the --frozen argument (unless you are explicitly trying to
+  upgrade the lock file).
+- `uv run --frozen ruff check` and `uv run --frozen ruff format --check` must 100% pass
+   before committing.
+- `uv run --frozen mypy src tests` must 100% pass before committing.
+- `uv run --frozen pytest -v` must 100% pass before committing.
+
