@@ -10,3 +10,4 @@
 - Installation: `uv add <package>`
 - Running tools: `uv run --frozen <tool>`. Always pass `--frozen` so uv doesn't
   rewrite `uv.lock` as a side effect.
+- Upgrading: `uv lock --upgrade-package <package>`
