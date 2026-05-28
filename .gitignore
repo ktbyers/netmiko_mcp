@@ -25,6 +25,17 @@ docs/build/doctrees/
 .tox/*
 
 .pytest_cache/*
+.ruff_cache/
+__pycache__/
+
+# Environment Variables / Secrets
+.env
+.env.*
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
 
 # Mac stuff
 .DS_Store
