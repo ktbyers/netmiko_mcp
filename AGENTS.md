@@ -12,3 +12,7 @@
   rewrite `uv.lock` as a side effect.
 - Upgrading: `uv lock --upgrade-package <package>`
 - FORBIDDEN: `uv pip install`, `@latest` syntax
+
+## Code Quality
+
+- Type hints required for all code
