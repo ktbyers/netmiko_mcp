@@ -23,3 +23,4 @@
   top-level import genuinely can't work (lazy-loading optional deps, or
   tests that re-import a module).
 - `ruff check` and `ruff format --check` must 100% pass before committing.
+- `mypy src` must 100% pass before committing.
