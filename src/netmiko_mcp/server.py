@@ -18,15 +18,16 @@ def list_devices(device_or_group: str = "all") -> str:
 
 
 @mcp.tool()
-def send_show_command(device_name: str, command: str) -> str:
+def send_show_command(device_name: str, command: str, use_textfsm: bool = False) -> str:
     """
     Connect to a network device and execute a show command.
 
     Args:
         device_name: The exact name of the device from the inventory.
         command: The CLI command to execute (e.g. 'show ip int brief').
+        use_textfsm: Set to True to attempt parsing the output into structured JSON data using ntc-templates.
     """
-    return run_show_command(device_name, command)
+    return run_show_command(device_name, command, use_textfsm)
 
 
 @mcp.tool()

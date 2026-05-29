@@ -20,7 +20,24 @@ def test_run_show_command_success(mock_get_params: MagicMock, mock_connect: Magi
 
     assert result == "GigabitEthernet0/0 up up"
     mock_connect.assert_called_once_with(host="1.1.1.1", device_type="cisco_ios")
-    mock_net_connect.send_command.assert_called_once_with("show ip int brief")
+    mock_net_connect.send_command.assert_called_once_with("show ip int brief", use_textfsm=False)
+
+
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+def test_run_show_command_textfsm(mock_get_params: MagicMock, mock_connect: MagicMock) -> None:
+    """Test that textfsm parsed data is correctly serialized to JSON."""
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+
+    mock_net_connect = MagicMock()
+    # Simulate textfsm returning a list of dicts
+    mock_net_connect.send_command.return_value = [{"intf": "Gi0/0", "status": "up"}]
+    mock_connect.return_value.__enter__.return_value = mock_net_connect
+
+    result = run_show_command("rtr1", "show ip int brief", use_textfsm=True)
+
+    assert '"intf": "Gi0/0"' in result
+    mock_net_connect.send_command.assert_called_once_with("show ip int brief", use_textfsm=True)
 
 
 @patch("netmiko_mcp.connection.get_device_params")

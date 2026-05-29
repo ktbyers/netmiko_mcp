@@ -26,5 +26,5 @@ def test_list_devices_tool(mock_get_sanitized: Any) -> None:
 def test_send_show_command_tool(mock_run_show: Any) -> None:
     """Test that the send_show_command tool delegates to the connection module."""
     mock_run_show.return_value = "Router Uptime 5 days"
-    assert send_show_command("rtr1", "show version") == "Router Uptime 5 days"
-    mock_run_show.assert_called_once_with("rtr1", "show version")
+    assert send_show_command("rtr1", "show version", True) == "Router Uptime 5 days"
+    mock_run_show.assert_called_once_with("rtr1", "show version", True)
