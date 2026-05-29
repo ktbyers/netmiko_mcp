@@ -9,8 +9,8 @@ from netmiko_mcp.inventory import get_device_params
 
 def run_show_command(device_name: str, command: str) -> str:
     """
-    Connect to a device and execute a single show command.
-
+    Connect to a network device and execute a single show command.
+    
     Args:
         device_name: The name of the device in the inventory.
         command: The CLI command to execute.
