@@ -1,5 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 
+from netmiko_mcp.connection import run_show_command
 from netmiko_mcp.inventory import get_sanitized_inventory
 
 # Initialize the FastMCP server
@@ -14,6 +15,18 @@ def list_devices(device_or_group: str = "all") -> str:
     Returns a JSON string containing device configurations (excluding credentials).
     """
     return get_sanitized_inventory(device_or_group)
+
+
+@mcp.tool()
+def send_show_command(device_name: str, command: str) -> str:
+    """
+    Connect to a network device and execute a show command.
+
+    Args:
+        device_name: The exact name of the device from the inventory.
+        command: The CLI command to execute (e.g. 'show ip int brief').
+    """
+    return run_show_command(device_name, command)
 
 
 @mcp.tool()
