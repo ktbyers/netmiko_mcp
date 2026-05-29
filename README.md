@@ -1,3 +1,3 @@
 # Netmiko MCP Server
 
-> **WARNING:** You can make serious, detrimental mistakes that could cause massive outages in your environment by using this tool. You, and you alone, are solely responsible for using this tool.
+> **WARNING:** You can make serious, incredibly detrimental mistakes by using this tool. This tool could cause massive outages in your environment. You, and you alone, are solely responsible for using this tool. Don't say I didn't warn you.
