@@ -27,7 +27,7 @@ cisco_router_1:
 ## Environment Variables
 
 - `NETMIKO_TOOLS_CFG`: Overrides the path to the configuration file (default behavior searches the current directory `./.netmiko.yml` then the home directory `~/.netmiko.yml`).
-- `NETMIKO_TOOLS_KEY`: The encryption key required to decrypt any values prefixed with `__encrypt__`.
+- `NETMIKO_TOOLS_KEY`: A human-readable string used as the master encryption password (e.g., `export NETMIKO_TOOLS_KEY="my_secret_string"`). Netmiko automatically derives a secure cryptographic key from this string using `PBKDF2HMAC` and a random salt before encrypting/decrypting the `__encrypt__` fields.
 
 ## Python API for Loading (Important for MCP)
 
@@ -55,5 +55,5 @@ devices = obtain_all_devices(parsed_yaml)
 ## Encryption Management (CLI)
 
 To manually encrypt passwords to place into the YAML file, users can leverage Netmiko's provided CLI utilities:
-- `netmiko-encrypt --text <password>`: Encrypts a single string using the key in `NETMIKO_TOOLS_KEY`.
-- `netmiko-bulk-encrypt --input-file <file>`: Safely encrypts an entire `.netmiko.yml` file in place.
+- `netmiko-encrypt <password>`: Encrypts a single string using the `NETMIKO_TOOLS_KEY` environment variable. It will output the `__encrypt__` string to be pasted into the YAML file.
+- `netmiko-bulk-encrypt --input-file <file> --output-file <file>`: Safely encrypts an entire `.netmiko.yml` file in place.
