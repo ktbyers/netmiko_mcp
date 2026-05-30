@@ -56,4 +56,4 @@ devices = obtain_all_devices(parsed_yaml)
 
 To manually encrypt passwords to place into the YAML file, users can leverage Netmiko's provided CLI utilities:
 - `netmiko-encrypt <password>`: Encrypts a single string using the `NETMIKO_TOOLS_KEY` environment variable. It will output the `__encrypt__` string to be pasted into the YAML file.
-- `netmiko-bulk-encrypt --input-file <file> --output-file <file>`: Safely encrypts an entire `.netmiko.yml` file in place.
+- `netmiko-bulk-encrypt --input_file <file> --output_file <file>`: Safely encrypts an entire `.netmiko.yml` file in place.
