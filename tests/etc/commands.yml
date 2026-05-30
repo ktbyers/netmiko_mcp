@@ -3,14 +3,14 @@
 # By default, only non-destructive operational commands are permitted.
 # All commands must be fully expanded (no abbreviations like 'sh ip int br').
 
-allowed_prefixes:
+allowed_commands:
   - "show "
   - "ping "
   - "traceroute "
   - "dir "
 
-# Explicitly denied substrings (these override allowed_prefixes)
-denied_substrings:
+# Explicitly denied commands/substrings (these override allowed_commands)
+denied_commands:
   - "|"             # Prevent command piping
   - "run"           # Prevent escaping to shell (e.g., 'run shell')
   - "commit"        # Prevent committing staged configs (Juniper/XR)

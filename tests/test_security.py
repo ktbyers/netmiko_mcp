@@ -30,8 +30,8 @@ def test_validate_command_default_denied() -> None:
 def test_validate_command_custom_yaml(mock_load: Any) -> None:
     """Test that an external YAML config overrides the defaults."""
     mock_load.return_value = {
-        "allowed_prefixes": ["display "],  # Huawei/Comware syntax
-        "denied_substrings": ["reboot"],
+        "allowed_commands": ["display "],  # Huawei/Comware syntax
+        "denied_commands": ["reboot"],
     }
 
     # Defaults should now fail

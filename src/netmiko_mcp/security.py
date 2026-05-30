@@ -4,8 +4,8 @@ from typing import Any
 from netmiko.utilities import load_yaml_file
 
 # Default fallback if no custom configuration is provided
-DEFAULT_ALLOWED_PREFIXES = ["show ", "ping ", "traceroute ", "dir "]
-DEFAULT_DENIED_SUBSTRINGS = ["|", "run", "commit", "clear", "debug"]
+DEFAULT_ALLOWED_COMMANDS = ["show ", "ping ", "traceroute ", "dir "]
+DEFAULT_DENIED_COMMANDS = ["|", "run", "commit", "clear", "debug"]
 
 
 def load_security_config() -> dict[str, Any]:
@@ -25,22 +25,22 @@ def validate_command(command: str) -> bool:
 
     Rules:
     1. Command must not use abbreviations (must start with canonical words).
-    2. Command must start with a string in 'allowed_prefixes'.
-    3. Command must NOT contain any string in 'denied_substrings'.
+    2. Command must start with a string in 'allowed_commands'.
+    3. Command must NOT contain any string in 'denied_commands'.
     """
     config = load_security_config()
 
-    allowed_prefixes = config.get("allowed_prefixes", DEFAULT_ALLOWED_PREFIXES)
-    denied_substrings = config.get("denied_substrings", DEFAULT_DENIED_SUBSTRINGS)
+    allowed_commands = config.get("allowed_commands", DEFAULT_ALLOWED_COMMANDS)
+    denied_commands = config.get("denied_commands", DEFAULT_DENIED_COMMANDS)
 
     # 1. Deny Check: If it contains any forbidden substring, reject immediately
-    for denied in denied_substrings:
+    for denied in denied_commands:
         if denied in command:
             return False
 
     # 2. Allow Check: It must start exactly with an allowed prefix
     # (e.g. "show " prevents "sh " abbreviation)
-    for allowed in allowed_prefixes:
+    for allowed in allowed_commands:
         if command.startswith(allowed):
             return True
 
