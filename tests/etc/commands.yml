@@ -1,0 +1,18 @@
+---
+# Netmiko MCP Command Whitelist
+# By default, only non-destructive operational commands are permitted.
+# All commands must be fully expanded (no abbreviations like 'sh ip int br').
+
+allowed_prefixes:
+  - "show "
+  - "ping "
+  - "traceroute "
+  - "dir "
+
+# Explicitly denied substrings (these override allowed_prefixes)
+denied_substrings:
+  - "|"             # Prevent command piping
+  - "run"           # Prevent escaping to shell (e.g., 'run shell')
+  - "commit"        # Prevent committing staged configs (Juniper/XR)
+  - "clear"         # Prevent clearing counters/sessions
+  - "debug"         # Prevent CPU spikes from debugging
