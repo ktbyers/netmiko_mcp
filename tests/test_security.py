@@ -6,14 +6,14 @@ from netmiko_mcp.security import validate_command
 
 def test_validate_command_default_allowed() -> None:
     """Test that default canonical commands are allowed."""
-    assert validate_command("show ip interface brief") is True
-    assert validate_command("ping 8.8.8.8") is True
+    assert validate_command("show ip int brief") is True
+    assert validate_command("show version") is True
 
 
 def test_validate_command_abbreviations_denied() -> None:
-    """Test that abbreviated commands are denied."""
-    assert validate_command("sh ip int br") is False
-    assert validate_command("p 8.8.8.8") is False
+    """Test that abbreviated or non-exact commands are denied."""
+    assert validate_command("show ip int bri") is False
+    assert validate_command("show version | include ios") is False
 
 
 def test_validate_command_default_denied() -> None:
@@ -30,7 +30,7 @@ def test_validate_command_default_denied() -> None:
 def test_validate_command_custom_yaml(mock_load: Any) -> None:
     """Test that an external YAML config overrides the defaults."""
     mock_load.return_value = {
-        "allowed_commands": ["display "],  # Huawei/Comware syntax
+        "allowed_commands": ["display interface brief"],  # Huawei/Comware syntax
         "denied_commands": ["reboot"],
     }
 

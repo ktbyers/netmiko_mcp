@@ -4,7 +4,7 @@ from typing import Any
 from netmiko.utilities import load_yaml_file
 
 # Default fallback if no custom configuration is provided
-DEFAULT_ALLOWED_COMMANDS = ["show ", "ping ", "traceroute ", "dir "]
+DEFAULT_ALLOWED_COMMANDS = ["show ip int brief", "show version", "ping 8.8.8.8"]
 DEFAULT_DENIED_COMMANDS = ["|", "run", "commit", "clear", "debug"]
 
 
@@ -38,10 +38,9 @@ def validate_command(command: str) -> bool:
         if denied in command:
             return False
 
-    # 2. Allow Check: It must start exactly with an allowed prefix
-    # (e.g. "show " prevents "sh " abbreviation)
+    # 2. Allow Check: It must EXACTLY match an allowed command
     for allowed in allowed_commands:
-        if command.startswith(allowed):
+        if command.strip() == allowed.strip():
             return True
 
     # If it matches no allowed prefix, deny it
