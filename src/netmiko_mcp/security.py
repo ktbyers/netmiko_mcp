@@ -4,7 +4,9 @@ from typing import Any
 from netmiko.utilities import load_yaml_file
 
 # Default fallback if no custom configuration is provided
-DEFAULT_ALLOWED_COMMANDS = ["show ip int brief", "show version", "ping 8.8.8.8"]
+# We default to strictly denying everything. Users MUST provide a YAML configuration
+# file to allow commands.
+DEFAULT_ALLOWED_COMMANDS: list[str] = []
 DEFAULT_DENIED_COMMANDS = ["|", "run", "commit", "clear", "debug"]
 
 

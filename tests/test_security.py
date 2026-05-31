@@ -5,9 +5,9 @@ from netmiko_mcp.security import validate_command
 
 
 def test_validate_command_default_allowed() -> None:
-    """Test that default canonical commands are allowed."""
-    assert validate_command("show ip int brief") is True
-    assert validate_command("show version") is True
+    """Test that default behavior strictly denies everything if no YAML is loaded."""
+    assert validate_command("show ip int brief") is False
+    assert validate_command("show version") is False
 
 
 def test_validate_command_abbreviations_denied() -> None:
