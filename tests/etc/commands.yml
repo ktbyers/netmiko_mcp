@@ -4,15 +4,8 @@
 # All commands must be fully expanded (no abbreviations like 'sh ip int br').
 
 allowed_commands:
-  - "show "
-  - "ping "
-  - "traceroute "
-  - "dir "
+  - "show version"
 
 # Explicitly denied commands/substrings (these override allowed_commands)
 denied_commands:
-  - "|"             # Prevent command piping
-  - "run"           # Prevent escaping to shell (e.g., 'run shell')
-  - "commit"        # Prevent committing staged configs (Juniper/XR)
-  - "clear"         # Prevent clearing counters/sessions
-  - "debug"         # Prevent CPU spikes from debugging
+  - "configure terminal"

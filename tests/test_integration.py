@@ -25,7 +25,7 @@ async def test_live_device_connection(mcp_client: ClientSession) -> None:
     End-to-end integration test against a real network device.
     This simulates an MCP client asking for the inventory, and then executing a command.
     """
-    # 1. Test the inventory list
+    # Test the inventory list
     inv_result = await mcp_client.call_tool("list_devices", arguments={"device_or_group": "cisco1"})
 
     assert len(inv_result.content) == 1
@@ -37,7 +37,7 @@ async def test_live_device_connection(mcp_client: ClientSession) -> None:
     assert inventory["cisco1"]["device_type"] == "cisco_ios"
     assert "password" not in inventory["cisco1"]
 
-    # 2. Test actual execution via the MCP tool
+    # Test actual execution via the MCP tool
     cmd_result = await mcp_client.call_tool(
         "send_show_command",
         arguments={"device_name": "cisco1", "command": "show version", "use_textfsm": False},

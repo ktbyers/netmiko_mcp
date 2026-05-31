@@ -19,7 +19,7 @@ async def mcp_client() -> AsyncGenerator[ClientSession, None]:
     server_params = StdioServerParameters(
         command=sys.executable,
         args=["-c", "from netmiko_mcp.server import main; main()"],
-        env={**os.environ}
+        env={**os.environ},
     )
 
     async with stdio_client(server_params) as (read, write):
