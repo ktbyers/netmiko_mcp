@@ -33,7 +33,7 @@ class McpConfig(BaseSettings):
     )
     encryption_key_env_var: str = Field(
         default="NETMIKO_TOOLS_KEY",
-        validation_alias="NETMIKO_MCP_ENCRYPTION_KEY_ENV_VAR",
+        validation_alias="NETMIKO_TOOLS_KEY",
     )
     allow_config_changes: bool = Field(
         default=False,
