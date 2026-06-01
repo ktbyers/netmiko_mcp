@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict
 
 import os
+from pathlib import Path
 
 from netmiko.cli_tools.helpers import obtain_devices
 
@@ -13,7 +14,8 @@ def _set_inventory_env_var() -> None:
     Ensure Netmiko's obtain_devices function reads the correct inventory file
     as defined by our global settings.
     """
-    os.environ["NETMIKO_TOOLS_CFG"] = os.path.expanduser(settings.inventory_file)
+    inventory_path = Path(settings.inventory_file).expanduser()
+    os.environ["NETMIKO_TOOLS_CFG"] = str(inventory_path)
 
 
 def get_device_params(device_name: str) -> Dict[str, Any]:
