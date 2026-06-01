@@ -28,5 +28,10 @@
 - `uv run --frozen ruff check` and `uv run --frozen ruff format --check` must 100% pass
    before committing.
 - `uv run --frozen mypy src tests` must 100% pass before committing.
-- `uv run --frozen pytest -v` must 100% pass before committing.
+- `uv run --frozen pytest -v` must 100% pass before committing. Note: Live integration tests are protected via `@pytest.mark.skipif(not os.environ.get("RUN_LIVE_TESTS"), ...)`.
+
+## Configuration & Paths
+- **Global Config:** The MCP Server uses `pydantic-settings` centralized in `src/netmiko_mcp/config.py`. It reads from `~/.netmiko-mcp.yml` or overrides via `NETMIKO_MCP_` environment variables.
+- **Paths:** Always use the `pathlib.Path` module for file operations instead of `os.path`.
+- **Security:** Commands are strictly validated via exact matching against a whitelist defined in the configuration YAML (`commands.yml`). Default is deny-all.
 
