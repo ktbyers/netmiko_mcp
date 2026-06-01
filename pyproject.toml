@@ -20,6 +20,8 @@ dependencies = [
     "mcp>=1.27.1",
     "netmiko>=4.7.0",
     "ntc-templates>=4.1.0",
+    "pydantic-settings>=2.14.1",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]

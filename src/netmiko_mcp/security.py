@@ -1,6 +1,7 @@
 import os
 from typing import Any
 
+from netmiko_mcp.config import settings
 from netmiko.utilities import load_yaml_file
 
 # Default fallback if no custom configuration is provided
@@ -12,11 +13,10 @@ DEFAULT_DENIED_COMMANDS = ["|", "run", "commit", "clear", "debug"]
 
 def load_security_config() -> dict[str, Any]:
     """
-    Load the command whitelist/blacklist from a YAML file.
-    Uses NETMIKO_MCP_SECURITY_CFG if set, otherwise defaults to None.
+    Load the command whitelist/blacklist from the file defined in global config.
     """
-    config_path = os.environ.get("NETMIKO_MCP_SECURITY_CFG")
-    if config_path and os.path.isfile(config_path):
+    config_path = os.path.expanduser(settings.command_file)
+    if os.path.isfile(config_path):
         return load_yaml_file(config_path)  # type: ignore
     return {}
 

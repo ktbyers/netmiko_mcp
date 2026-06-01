@@ -1,7 +1,19 @@
 import json
 from typing import Any, Dict
 
+import os
+
 from netmiko.cli_tools.helpers import obtain_devices
+
+from netmiko_mcp.config import settings
+
+
+def _set_inventory_env_var() -> None:
+    """
+    Ensure Netmiko's obtain_devices function reads the correct inventory file
+    as defined by our global settings.
+    """
+    os.environ["NETMIKO_TOOLS_CFG"] = os.path.expanduser(settings.inventory_file)
 
 
 def get_device_params(device_name: str) -> Dict[str, Any]:
@@ -9,6 +21,7 @@ def get_device_params(device_name: str) -> Dict[str, Any]:
     Retrieve full device parameters including credentials.
     INTERNAL USE ONLY. Never expose this directly to the LLM.
     """
+    _set_inventory_env_var()
     devices = obtain_devices(device_name)
     if isinstance(devices, str):
         # Netmiko returns a string error message if the device/group is not found
@@ -23,6 +36,7 @@ def get_sanitized_inventory(device_or_group: str) -> str:
     Retrieve device inventory by group-name, all, or device-name.
     Returns JSON string with sensitive credentials completely removed.
     """
+    _set_inventory_env_var()
     devices = obtain_devices(device_or_group)
     if isinstance(devices, str):
         # Return the error as structured JSON
