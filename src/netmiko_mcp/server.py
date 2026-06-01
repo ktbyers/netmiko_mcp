@@ -1,3 +1,5 @@
+from typing import Any
+
 from mcp.server.fastmcp import FastMCP
 
 from netmiko_mcp.connection import run_show_command
@@ -18,7 +20,9 @@ def list_devices(device_or_group: str = "all") -> str:
 
 
 @mcp.tool()
-def send_show_command(device_name: str, command: str, use_textfsm: bool = False) -> str:
+def send_show_command(
+    device_name: str, command: str, use_textfsm: bool = False
+) -> str | list[Any] | dict[str, Any]:
     """
     Connect to a network device and execute a show command.
 

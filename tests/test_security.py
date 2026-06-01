@@ -4,8 +4,10 @@ from unittest.mock import patch
 from netmiko_mcp.security import validate_command
 
 
-def test_validate_command_default_allowed() -> None:
+@patch("netmiko_mcp.security.load_security_config")
+def test_validate_command_default_allowed(mock_load: Any) -> None:
     """Test that default behavior strictly denies everything if no YAML is loaded."""
+    mock_load.return_value = {}  # Simulate missing or empty YAML
     assert validate_command("show ip int brief") is False
     assert validate_command("show version") is False
 

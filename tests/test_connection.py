@@ -44,7 +44,9 @@ def test_run_show_command_textfsm(
 
     result = run_show_command("rtr1", "show ip int brief", use_textfsm=True)
 
-    assert '"intf": "Gi0/0"' in result
+    # It should return the list of dicts directly, not a JSON string
+    assert isinstance(result, list)
+    assert result[0]["intf"] == "Gi0/0"
     mock_net_connect.send_command.assert_called_once_with("show ip int brief", use_textfsm=True)
 
 

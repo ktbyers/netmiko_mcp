@@ -1,4 +1,4 @@
-import json
+from typing import Any
 
 from netmiko import ConnectHandler
 from netmiko.exceptions import (
@@ -10,7 +10,9 @@ from netmiko_mcp.inventory import get_device_params
 from netmiko_mcp.security import validate_command
 
 
-def run_show_command(device_name: str, command: str, use_textfsm: bool = False) -> str:
+def run_show_command(
+    device_name: str, command: str, use_textfsm: bool = False
+) -> str | list[Any] | dict[str, Any]:
     """
     Connect to a network device and execute a single show command.
 
@@ -20,7 +22,7 @@ def run_show_command(device_name: str, command: str, use_textfsm: bool = False) 
         use_textfsm: If True, attempt to return parsed JSON data instead of raw text.
 
     Returns:
-        The text output of the command (or JSON string if parsed), or an error message if the connection fails.
+        The text output of the command (or structured data if parsed), or an error message if the connection fails.
     """
     # Security Check
     if not validate_command(command):
@@ -38,9 +40,10 @@ def run_show_command(device_name: str, command: str, use_textfsm: bool = False) 
             output = net_connect.send_command(command, use_textfsm=use_textfsm)
 
             # If use_textfsm successfully parsed it, it returns a List or Dict.
-            # We must serialize it back to a JSON string for the MCP client.
+            # We return this directly so the MCP framework can serialize it properly
+            # without causing double JSON serialization.
             if isinstance(output, (list, dict)):
-                return json.dumps(output, indent=2)
+                return output
 
             return str(output)
 

@@ -25,6 +25,9 @@ def test_list_devices_tool(mock_get_sanitized: Any) -> None:
 @patch("netmiko_mcp.server.run_show_command")
 def test_send_show_command_tool(mock_run_show: Any) -> None:
     """Test that the send_show_command tool delegates to the connection module."""
-    mock_run_show.return_value = "Router Uptime 5 days"
-    assert send_show_command("rtr1", "show version", True) == "Router Uptime 5 days"
-    mock_run_show.assert_called_once_with("rtr1", "show version", True)
+    # Mock returning structured data
+    mock_run_show.return_value = [{"intf": "Gi0/0", "status": "up"}]
+    assert send_show_command("rtr1", "show ip int brief", True) == [
+        {"intf": "Gi0/0", "status": "up"}
+    ]
+    mock_run_show.assert_called_once_with("rtr1", "show ip int brief", True)
