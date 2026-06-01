@@ -51,3 +51,21 @@ async def test_live_device_connection(mcp_client: ClientSession) -> None:
     assert (
         "Cisco IOS Software" in output or "Cisco Internetwork Operating System Software" in output
     )
+
+    # Test piped execution via the MCP tool
+    piped_result = await mcp_client.call_tool(
+        "send_show_command",
+        arguments={
+            "device_name": "cisco1",
+            "command": "show version | include Version",
+            "use_textfsm": False,
+        },
+    )
+
+    assert len(piped_result.content) == 1
+    assert piped_result.content[0].type == "text"
+    piped_output = getattr(piped_result.content[0], "text", "")
+
+    # Assert the output was correctly filtered by the router
+    assert "Version 15.5(3)M8" in piped_output
+    assert "uptime is" not in piped_output  # Proves the output was filtered
