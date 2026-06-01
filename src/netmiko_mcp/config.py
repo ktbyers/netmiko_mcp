@@ -21,10 +21,16 @@ class McpConfig(BaseSettings):
 
     inventory_type: Literal["netmiko_tools"] = Field(
         default="netmiko_tools",
+        description="Type of inventory to load. Currently only 'netmiko_tools' is supported.",
         validation_alias="NETMIKO_MCP_INVENTORY_TYPE",
     )
-    inventory_file: str = Field(
-        default="~/.netmiko.yml",
+    inventory_file: str | None = Field(
+        default=None,
+        description=(
+            "Path to the inventory file. If inventory_type is 'netmiko_tools', this path is passed "
+            "to Netmiko via the NETMIKO_TOOLS_CFG environment variable. If left as None, Netmiko's "
+            "default search order is used (NETMIKO_TOOLS_CFG -> ./ -> ~/)."
+        ),
         validation_alias="NETMIKO_MCP_INVENTORY_FILE",
     )
     command_file: str = Field(
