@@ -19,8 +19,8 @@ class McpConfig(BaseSettings):
         extra="ignore",
     )
 
-    inventory_type: Literal["netmiko_yaml"] = Field(
-        default="netmiko_yaml",
+    inventory_type: Literal["netmiko_tools"] = Field(
+        default="netmiko_tools",
         validation_alias="NETMIKO_MCP_INVENTORY_TYPE",
     )
     inventory_file: str = Field(
