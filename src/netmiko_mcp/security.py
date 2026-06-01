@@ -11,7 +11,7 @@ DEFAULT_ALLOWED_COMMANDS: list[str] = []
 DEFAULT_DENIED_COMMANDS = ["run", "commit", "clear", "debug"]
 
 
-def load_security_config() -> dict[str, Any]:
+def load_commands() -> dict[str, Any]:
     """
     Load the command whitelist/blacklist from the file defined in global config.
     """
@@ -31,16 +31,17 @@ def validate_command(command: str) -> bool:
     3. If a pipe is present, 'allow_pipe' must be True, and the pipe modifier
        must be a safe operational filter (e.g. include, exclude, section, begin, count).
     """
-    config = load_security_config()
+    commands = load_commands()
 
-    allowed_commands = config.get("allowed_commands", DEFAULT_ALLOWED_COMMANDS)
-    denied_commands = config.get("denied_commands", DEFAULT_DENIED_COMMANDS)
+    allowed_commands = commands.get("allowed_commands", DEFAULT_ALLOWED_COMMANDS)
+    denied_commands = commands.get("denied_commands", DEFAULT_DENIED_COMMANDS)
 
-    # 1. Deny Check: If it contains any forbidden substring, reject immediately
+    # Deny Check: If it contains any forbidden substring, reject immediately
     for denied in denied_commands:
         if denied in command:
             return False
 
+    # Check for pipe character
     # Extract base command and potential pipe segment
     parts = command.split("|", 1)
     base_command = parts[0].strip()
