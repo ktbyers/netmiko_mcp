@@ -12,15 +12,41 @@ class McpConfig(BaseSettings):
     Global configuration for the Netmiko MCP server.
     """
 
-    model_config = SettingsConfigDict(env_prefix="NETMIKO_MCP_")
+    model_config = SettingsConfigDict(
+        env_prefix="NETMIKO_MCP_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    inventory_type: Literal["netmiko_yaml"] = Field(default="netmiko_yaml")
-    inventory_file: str = Field(default="~/.netmiko.yml")
-    command_file: str = Field(default="~/commands.yml")
-    encryption_key_env_var: str = Field(default="NETMIKO_TOOLS_KEY")
-    allow_config_changes: bool = Field(default=False)
-    allow_pipe: bool = Field(default=False)
-    allow_regex: bool = Field(default=False)
+    inventory_type: Literal["netmiko_yaml"] = Field(
+        default="netmiko_yaml",
+        validation_alias="NETMIKO_MCP_INVENTORY_TYPE",
+    )
+    inventory_file: str = Field(
+        default="~/.netmiko.yml",
+        validation_alias="NETMIKO_MCP_INVENTORY_FILE",
+    )
+    command_file: str = Field(
+        default="~/commands.yml",
+        validation_alias="NETMIKO_MCP_COMMAND_FILE",
+    )
+    encryption_key_env_var: str = Field(
+        default="NETMIKO_TOOLS_KEY",
+        validation_alias="NETMIKO_MCP_ENCRYPTION_KEY_ENV_VAR",
+    )
+    allow_config_changes: bool = Field(
+        default=False,
+        validation_alias="NETMIKO_MCP_ALLOW_CONFIG_CHANGES",
+    )
+    allow_pipe: bool = Field(
+        default=False,
+        validation_alias="NETMIKO_MCP_ALLOW_PIPE",
+    )
+    allow_regex: bool = Field(
+        default=False,
+        validation_alias="NETMIKO_MCP_ALLOW_REGEX",
+    )
 
 
 def load_config() -> McpConfig:
