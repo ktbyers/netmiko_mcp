@@ -1,0 +1,5 @@
+---
+inventory_type: "netmiko_tools"
+inventory_file: "tests/etc/.netmiko.yml"
+command_file: "tests/etc/commands.yml"
+allow_pipe: true
