@@ -69,3 +69,14 @@ async def test_live_device_connection(mcp_client: ClientSession) -> None:
     # Assert the output was correctly filtered by the router
     assert "Version 15.5(3)M8" in piped_output
     assert "uptime is" not in piped_output  # Proves the output was filtered
+
+    # 4. Test execution of a benign but explicitly denied piped command
+    cmd_result_denied = await mcp_client.call_tool(
+        "send_show_command",
+        arguments={"device_name": "cisco1", "command": "show version | awk", "use_textfsm": False},
+    )
+
+    assert len(cmd_result_denied.content) == 1
+    assert cmd_result_denied.content[0].type == "text"
+    denied_output = getattr(cmd_result_denied.content[0], "text", "")
+    assert "Security Error: Command 'show version | awk' is not permitted" in denied_output

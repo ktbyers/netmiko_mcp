@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from netmiko.utilities import load_yaml_file
 
@@ -22,6 +22,7 @@ class McpConfig(BaseSettings):
     inventory_type: Literal["netmiko_tools"] = Field(
         default="netmiko_tools",
         description="Type of inventory to load. Currently only 'netmiko_tools' is supported.",
+        validation_alias=AliasChoices("NETMIKO_MCP_INVENTORY_TYPE", "inventory_type"),
     )
     inventory_file: str | None = Field(
         default=None,
@@ -30,25 +31,21 @@ class McpConfig(BaseSettings):
             "to Netmiko via the NETMIKO_TOOLS_CFG environment variable. If left as None, Netmiko's "
             "default search order is used (NETMIKO_TOOLS_CFG -> ./.netmiko.yml -> ~/.netmiko.yml)."
         ),
-        validation_alias="NETMIKO_MCP_INVENTORY_FILE",
+        validation_alias=AliasChoices("NETMIKO_MCP_INVENTORY_FILE", "inventory_file"),
     )
     command_file: str = Field(
         default="~/commands.yml",
-        validation_alias="NETMIKO_MCP_COMMAND_FILE",
+        validation_alias=AliasChoices("NETMIKO_MCP_COMMAND_FILE", "command_file"),
+    )
+    allow_pipe: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("NETMIKO_MCP_ALLOW_PIPE", "allow_pipe"),
     )
 
 
-#    encryption_key_env_var: str = Field(
-#        default="NETMIKO_TOOLS_KEY",
-#        validation_alias="NETMIKO_TOOLS_KEY",
-#    )
 #    allow_config_changes: bool = Field(
 #        default=False,
 #        validation_alias="NETMIKO_MCP_ALLOW_CONFIG_CHANGES",
-#    )
-#    allow_pipe: bool = Field(
-#        default=False,
-#        validation_alias="NETMIKO_MCP_ALLOW_PIPE",
 #    )
 #    allow_regex: bool = Field(
 #        default=False,
