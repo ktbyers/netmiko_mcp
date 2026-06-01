@@ -1,17 +1,20 @@
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from netmiko.utilities import load_yaml_file
 
 
-class McpConfig(BaseModel):
+class McpConfig(BaseSettings):
     """
     Global configuration for the Netmiko MCP server.
     """
 
-    inventory_type: str = Field(default="netmiko_yaml")
+    model_config = SettingsConfigDict(env_prefix="NETMIKO_MCP_")
+
+    inventory_type: Literal["netmiko_yaml"] = Field(default="netmiko_yaml")
     inventory_file: str = Field(default="~/.netmiko.yml")
     command_file: str = Field(default="~/commands.yml")
     encryption_key_env_var: str = Field(default="NETMIKO_TOOLS_KEY")
@@ -29,15 +32,15 @@ def load_config() -> McpConfig:
     2. ~/.netmiko-mcp.yml
     3. Default values
     """
-    config_path = os.environ.get("NETMIKO_MCP_CONFIG")
+    config_path_str = os.environ.get("NETMIKO_MCP_CONFIG")
 
-    if not config_path:
-        default_path = Path.home() / ".netmiko-mcp.yml"
-        if default_path.is_file():
-            config_path = str(default_path)
+    if config_path_str:
+        config_path = Path(config_path_str).expanduser()
+    else:
+        config_path = Path.home() / ".netmiko-mcp.yml"
 
-    if config_path and os.path.isfile(config_path):
-        yaml_data: dict[str, Any] = load_yaml_file(config_path)  # type: ignore
+    if config_path.is_file():
+        yaml_data: dict[str, Any] = load_yaml_file(str(config_path))  # type: ignore
         return McpConfig(**yaml_data)
 
     # Return defaults if no file is found
