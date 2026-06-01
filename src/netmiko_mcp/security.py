@@ -51,10 +51,11 @@ def validate_command(command: str) -> bool:
             return False
 
         # Ensure the pipe modifier is a safe, standard filter.
-        # This prevents dangerous redirects (e.g. '| redirect tftp://...')
-        # or shell escapes.
+        # We explicitly block dangerous redirects, file manipulations, or shell escapes
+        # (e.g., redirect, append, tee, email, awk, sed, vsh).
         pipe_modifier = parts[1].strip().lower()
         safe_modifiers = (
+            # Standard IOS/IOS-XE
             "include",
             "exclude",
             "section",
@@ -65,6 +66,23 @@ def validate_command(command: str) -> bool:
             "s",
             "b",
             "c",
+            # Additional NX-OS safe operational filters
+            "grep",
+            "egrep",
+            "head",
+            "last",
+            "less",
+            "no-more",
+            "sort",
+            "uniq",
+            "wc",
+            "json",
+            "json-pretty",
+            "xml",
+            "xmlin",
+            "xmlout",
+            "human",
+            "end",
         )
 
         # Check if the first word after the pipe is in our safe list
