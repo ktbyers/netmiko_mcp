@@ -83,6 +83,7 @@ def validate_command(command: str) -> bool:
             "xmlout",
             "human",
             "end",
+            "nz",
         )
 
         # Check if the first word after the pipe is in our safe list

@@ -88,6 +88,7 @@ def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any)
     assert validate_command("show version | uniq") is True
     assert validate_command("show version | wc") is True
     assert validate_command("show version | end test") is True
+    assert validate_command("show version | nz") is True
 
 
 @patch("netmiko_mcp.security.settings")
