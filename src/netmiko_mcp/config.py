@@ -22,7 +22,6 @@ class McpConfig(BaseSettings):
     inventory_type: Literal["netmiko_tools"] = Field(
         default="netmiko_tools",
         description="Type of inventory to load. Currently only 'netmiko_tools' is supported.",
-        validation_alias="NETMIKO_MCP_INVENTORY_TYPE",
     )
     inventory_file: str | None = Field(
         default=None,
