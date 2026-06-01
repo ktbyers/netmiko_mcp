@@ -29,7 +29,7 @@ class McpConfig(BaseSettings):
         description=(
             "Path to the inventory file. If inventory_type is 'netmiko_tools', this path is passed "
             "to Netmiko via the NETMIKO_TOOLS_CFG environment variable. If left as None, Netmiko's "
-            "default search order is used (NETMIKO_TOOLS_CFG -> ./ -> ~/)."
+            "default search order is used (NETMIKO_TOOLS_CFG -> ./.netmiko.yml -> ~/.netmiko.yml)."
         ),
         validation_alias="NETMIKO_MCP_INVENTORY_FILE",
     )
@@ -37,22 +37,24 @@ class McpConfig(BaseSettings):
         default="~/commands.yml",
         validation_alias="NETMIKO_MCP_COMMAND_FILE",
     )
-    encryption_key_env_var: str = Field(
-        default="NETMIKO_TOOLS_KEY",
-        validation_alias="NETMIKO_TOOLS_KEY",
-    )
-    allow_config_changes: bool = Field(
-        default=False,
-        validation_alias="NETMIKO_MCP_ALLOW_CONFIG_CHANGES",
-    )
-    allow_pipe: bool = Field(
-        default=False,
-        validation_alias="NETMIKO_MCP_ALLOW_PIPE",
-    )
-    allow_regex: bool = Field(
-        default=False,
-        validation_alias="NETMIKO_MCP_ALLOW_REGEX",
-    )
+
+
+#    encryption_key_env_var: str = Field(
+#        default="NETMIKO_TOOLS_KEY",
+#        validation_alias="NETMIKO_TOOLS_KEY",
+#    )
+#    allow_config_changes: bool = Field(
+#        default=False,
+#        validation_alias="NETMIKO_MCP_ALLOW_CONFIG_CHANGES",
+#    )
+#    allow_pipe: bool = Field(
+#        default=False,
+#        validation_alias="NETMIKO_MCP_ALLOW_PIPE",
+#    )
+#    allow_regex: bool = Field(
+#        default=False,
+#        validation_alias="NETMIKO_MCP_ALLOW_REGEX",
+#    )
 
 
 def load_config() -> McpConfig:
@@ -62,7 +64,7 @@ def load_config() -> McpConfig:
     Order of precedence:
     1. NETMIKO_MCP_CONFIG environment variable (if set)
     2. ~/.netmiko-mcp.yml
-    3. Default values
+    3. Use default values
     """
     config_path_str = os.environ.get("NETMIKO_MCP_CONFIG")
 
