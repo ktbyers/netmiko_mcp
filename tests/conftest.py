@@ -16,10 +16,14 @@ def anyio_backend() -> str:
 @pytest.fixture
 async def mcp_client() -> AsyncGenerator[ClientSession, None]:
     """Provide a fully initialized MCP ClientSession connected to the local server."""
+    # Simulate a fully localized test environment utilizing the new global config
+    test_env = {**os.environ}
+    test_env["NETMIKO_MCP_CONFIG"] = os.path.abspath("tests/etc/netmiko-mcp.yml")
+
     server_params = StdioServerParameters(
         command=sys.executable,
         args=["-c", "from netmiko_mcp.server import main; main()"],
-        env={**os.environ},
+        env=test_env,
     )
 
     async with stdio_client(server_params) as (read, write):
