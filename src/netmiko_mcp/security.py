@@ -1,3 +1,20 @@
+"""
+Security validation and command verification layer for the Netmiko MCP server.
+
+Security Principles:
+1. Default Deny: By default, no commands are permitted. Access must be explicitly
+   granted via configuration.
+2. Multi-Command Prevention: Command chaining, semi-colons, and unapproved pipes
+   are strictly disallowed by default to prevent command injection.
+3. Audit Logging: Every attempted and executed command must be logged for audit
+   and compliance (TODO).
+4. Operational-Only: Configuration changes are disallowed by default, both at the
+   Netmiko connection level and the command-validation level.
+5. Override Capability: While ultimate control rests with the administrator (who
+   can allow any command via custom configuration), the system must make it difficult
+   to inadvertently execute destructive actions.
+"""
+
 from pathlib import Path
 from typing import Any
 
@@ -13,11 +30,11 @@ DEFAULT_DENIED_COMMANDS = ["run", "commit", "clear", "debug"]
 
 def load_commands() -> dict[str, Any]:
     """
-    Load the command whitelist/blacklist from the file defined in global config.
+    Load the command whitelist/blacklist from the command_file defined in global config.
     """
-    config_path = Path(settings.command_file).expanduser()
-    if config_path.is_file():
-        return load_yaml_file(str(config_path))  # type: ignore
+    file_path = Path(settings.command_file).expanduser()
+    if file_path.is_file():
+        return load_yaml_file(str(file_path))
     return {}
 
 
