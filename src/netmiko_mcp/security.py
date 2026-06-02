@@ -14,6 +14,9 @@ Rules:
    (no send_config_set) and at the command-validation level.
 6. Globbing should be supported ("show *") in both the whitelist and in the blacklist.
    This will be converted over to regular expressions in the Python code.
+
+Questions:
+1. How to handle the command abbreviation issue?
 """
 
 import re
