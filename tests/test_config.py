@@ -1,10 +1,8 @@
-import os
-from typing import Any
-from unittest.mock import patch
+from pathlib import Path
 import pytest
 from pydantic_core import ValidationError
 
-from netmiko_mcp.config import McpConfig, load_config
+from netmiko_mcp.config import McpConfig
 
 
 def test_mcp_config_defaults() -> None:
@@ -13,6 +11,7 @@ def test_mcp_config_defaults() -> None:
     assert config.inventory_type == "netmiko_tools"
     assert config.inventory_file is None
     assert config.command_file == "~/commands.yml"
+    assert config.allow_pipe is False
 
 
 def test_mcp_config_validation() -> None:
@@ -22,33 +21,52 @@ def test_mcp_config_validation() -> None:
         McpConfig(inventory_type="invalid_type")  # type: ignore
 
 
-@patch("netmiko_mcp.config.load_yaml_file")
-@patch("os.path.isfile")
-def test_load_config_from_yaml(mock_isfile: Any, mock_load_yaml: Any) -> None:
-    """Test that load_config correctly parses an explicitly discovered YAML file."""
-    mock_isfile.return_value = True
-    # Simulate the YAML file returning these exact keys
-    mock_load_yaml.return_value = {
-        "NETMIKO_MCP_INVENTORY_TYPE": "netmiko_tools",
-        "NETMIKO_MCP_INVENTORY_FILE": "/custom/path.yml",
-        "NETMIKO_MCP_COMMAND_FILE": "/custom/commands.yml",
-    }
-
-    config = load_config()
-    assert config.inventory_file == "/custom/path.yml"
-    assert config.command_file == "/custom/commands.yml"
-
-
-@patch.dict(
-    os.environ,
-    {
-        "NETMIKO_MCP_INVENTORY_FILE": "/env/path.yml",
-        "NETMIKO_MCP_COMMAND_FILE": "/env/commands.yml",
-    },
-)
-def test_mcp_config_env_vars() -> None:
+@pytest.mark.anyio
+async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that McpConfig natively reads from NETMIKO_MCP_ environment variables."""
-    # We instantiate directly to test pydantic-settings native env reading
+    # We temporarily set environment variables to test native env reading
+    monkeypatch.setenv("NETMIKO_MCP_INVENTORY_FILE", "/env/path.yml")
+    monkeypatch.setenv("NETMIKO_MCP_COMMAND_FILE", "/env/commands.yml")
+
     config = McpConfig()
     assert config.inventory_file == "/env/path.yml"
     assert config.command_file == "/env/commands.yml"
+
+
+@pytest.mark.anyio
+async def test_load_config_real_yaml_and_env_precedence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Test loading configuration from a real physical YAML file on disk,
+    verifying alias resolution and environment variable precedence.
+    """
+    # Create a real physical configuration file using the plain lowercase keys
+    cfg_file = tmp_path / "test-config.yml"
+    cfg_content = """---
+inventory_type: "netmiko_tools"
+inventory_file: "/yaml/netmiko.yml"
+command_file: "/yaml/commands.yml"
+allow_pipe: true
+"""
+    cfg_file.write_text(cfg_content, encoding="utf-8")
+
+    # Point our environment at our temporary configuration file
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+
+    # Load the configuration and verify Pydantic parsed the plain YAML fields correctly
+    config = McpConfig()
+    assert config.inventory_type == "netmiko_tools"
+    assert config.inventory_file == "/yaml/netmiko.yml"
+    assert config.command_file == "/yaml/commands.yml"
+    assert config.allow_pipe is True
+
+    # Set environment variables to override the values loaded from the YAML file
+    # and prove that environment variables have highest precedence
+    monkeypatch.setenv("NETMIKO_MCP_ALLOW_PIPE", "false")
+    monkeypatch.setenv("NETMIKO_MCP_COMMAND_FILE", "/env/override_commands.yml")
+
+    config_override = McpConfig()
+    assert config_override.allow_pipe is False
+    assert config_override.command_file == "/env/override_commands.yml"
+    assert config_override.inventory_file == "/yaml/netmiko.yml"

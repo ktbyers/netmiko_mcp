@@ -1,10 +1,14 @@
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal, Tuple, Type
 
-from pydantic import Field, AliasChoices
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from netmiko.utilities import load_yaml_file
+from pydantic import Field
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
 
 
 class McpConfig(BaseSettings):
@@ -19,63 +23,42 @@ class McpConfig(BaseSettings):
         extra="ignore",
     )
 
-    inventory_type: Literal["netmiko_tools"] = Field(
-        default="netmiko_tools",
-        description="Type of inventory to load. Currently only 'netmiko_tools' is supported.",
-        validation_alias=AliasChoices("NETMIKO_MCP_INVENTORY_TYPE", "inventory_type"),
-    )
-    inventory_file: str | None = Field(
-        default=None,
-        description=(
-            "Path to the inventory file. If inventory_type is 'netmiko_tools', this path is passed "
-            "to Netmiko via the NETMIKO_TOOLS_CFG environment variable. If left as None, Netmiko's "
-            "default search order is used (NETMIKO_TOOLS_CFG -> ./.netmiko.yml -> ~/.netmiko.yml)."
-        ),
-        validation_alias=AliasChoices("NETMIKO_MCP_INVENTORY_FILE", "inventory_file"),
-    )
-    command_file: str = Field(
-        default="~/commands.yml",
-        validation_alias=AliasChoices("NETMIKO_MCP_COMMAND_FILE", "command_file"),
-    )
-    allow_pipe: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("NETMIKO_MCP_ALLOW_PIPE", "allow_pipe"),
-    )
+    inventory_type: Literal["netmiko_tools"] = Field(default="netmiko_tools")
+    inventory_file: str | None = Field(default=None)
+    command_file: str = Field(default="~/commands.yml")
+    allow_pipe: bool = Field(default=False)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """
+        Define the exact priority order for settings sources.
+        """
+        config_path_str = os.environ.get("NETMIKO_MCP_CONFIG")
+        if config_path_str:
+            config_path = Path(config_path_str).expanduser()
+        else:
+            config_path = Path.home() / ".netmiko-mcp.yml"
+
+        # If the YAML file exists, we register it as the lowest priority settings source.
+        # This guarantees that environment variables and .env files will always take
+        # precedence over any values defined inside the physical YAML file.
+        yaml_source = None
+        if config_path.is_file():
+            yaml_source = YamlConfigSettingsSource(settings_cls, yaml_file=config_path)
+
+        sources = [init_settings, env_settings, dotenv_settings]
+        if yaml_source:
+            sources.append(yaml_source)
+
+        return tuple(sources)
 
 
-#    allow_config_changes: bool = Field(
-#        default=False,
-#        validation_alias="NETMIKO_MCP_ALLOW_CONFIG_CHANGES",
-#    )
-#    allow_regex: bool = Field(
-#        default=False,
-#        validation_alias="NETMIKO_MCP_ALLOW_REGEX",
-#    )
-
-
-def load_config() -> McpConfig:
-    """
-    Load the global MCP configuration.
-
-    Order of precedence:
-    1. NETMIKO_MCP_CONFIG environment variable (if set)
-    2. ~/.netmiko-mcp.yml
-    3. Use default values
-    """
-    config_path_str = os.environ.get("NETMIKO_MCP_CONFIG")
-
-    if config_path_str:
-        config_path = Path(config_path_str).expanduser()
-    else:
-        config_path = Path.home() / ".netmiko-mcp.yml"
-
-    if config_path.is_file():
-        yaml_data: dict[str, Any] = load_yaml_file(str(config_path))  # type: ignore
-        return McpConfig(**yaml_data)
-
-    # Return defaults if no file is found
-    return McpConfig()
-
-
-# Global singleton configuration object loaded at startup
-settings = load_config()
+# The global singleton configuration object loaded at startup
+settings = McpConfig()
