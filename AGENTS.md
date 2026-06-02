@@ -4,6 +4,7 @@
 
 - Refer to the `ARCHITECTURE.md` file in the root directory for high-level architecture
   decisions, structural guardrails, state management, and security constraints.
+- **Refactoring:** Major code refactoring must always be reviewed and approved prior to proceeding.
 
 ## Package Management
 
@@ -29,6 +30,7 @@
    before committing.
 - `uv run --frozen mypy src tests` must 100% pass before committing.
 - `uv run --frozen pytest -v` must 100% pass before committing. Note: Live integration tests are protected via `@pytest.mark.skipif(not os.environ.get("RUN_LIVE_TESTS"), ...)`.
+- **Comment Style:** Avoid using numbered or bulleted lists in inline code comments (e.g., `# 1. This part` or `# 2. Some other part`). Write comments as descriptive paragraphs or clear, individual sentences without numeric or alphabetic step indicators.
 
 ## Configuration & Paths
 - **Global Config:** The MCP Server uses `pydantic-settings` centralized in `src/netmiko_mcp/config.py`. It reads from `~/.netmiko-mcp.yml` or overrides via `NETMIKO_MCP_` environment variables.
