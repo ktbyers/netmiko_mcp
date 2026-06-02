@@ -22,7 +22,22 @@ def test_mcp_config_validation() -> None:
 
 
 @pytest.mark.anyio
-async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_mcp_config_default_file_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that McpConfig natively attempts to load from ~/.netmiko-mcp.yml when no env var is set."""
+    # Ensure the environment variable is NOT set
+    monkeypatch.delenv("NETMIKO_MCP_CONFIG", raising=False)
+
+    # Mock Path.home() to point to our isolated tmp_path
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    # Create the default file in our mocked home directory
+    default_cfg = tmp_path / ".netmiko-mcp.yml"
+    default_cfg.write_text("allow_pipe: true\n", encoding="utf-8")
+
+    config = McpConfig()
+    assert config.allow_pipe is True
     """Test that McpConfig natively reads from NETMIKO_MCP_ environment variables."""
     # We temporarily set environment variables to test native env reading
     monkeypatch.setenv("NETMIKO_MCP_INVENTORY_FILE", "/env/path.yml")
