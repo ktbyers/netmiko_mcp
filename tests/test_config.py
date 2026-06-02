@@ -38,12 +38,18 @@ async def test_mcp_config_default_file_path(
 
     config = McpConfig()
     assert config.allow_pipe is True
+
+
+@pytest.mark.anyio
+async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that McpConfig natively reads from NETMIKO_MCP_ environment variables."""
     # We temporarily set environment variables to test native env reading
+    monkeypatch.setenv("NETMIKO_MCP_INVENTORY_TYPE", "netmiko_tools")
     monkeypatch.setenv("NETMIKO_MCP_INVENTORY_FILE", "/env/path.yml")
     monkeypatch.setenv("NETMIKO_MCP_COMMAND_FILE", "/env/commands.yml")
 
     config = McpConfig()
+    assert config.inventory_type == "netmiko_tools"
     assert config.inventory_file == "/env/path.yml"
     assert config.command_file == "/env/commands.yml"
 
@@ -85,3 +91,23 @@ allow_pipe: true
     assert config_override.allow_pipe is False
     assert config_override.command_file == "/env/override_commands.yml"
     assert config_override.inventory_file == "/yaml/netmiko.yml"
+
+
+@pytest.mark.anyio
+async def test_inventory_type_precedence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Test that NETMIKO_MCP_INVENTORY_TYPE overrides the YAML configuration.
+    We prove this by placing an invalid type in the YAML and a valid one in the environment.
+    """
+    cfg_file = tmp_path / "test-config.yml"
+    cfg_file.write_text("inventory_type: invalid_yaml_type\n", encoding="utf-8")
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+
+    # 1. Prove the invalid YAML fails on its own
+    with pytest.raises(ValidationError):
+        McpConfig()
+
+    # 2. Prove the environment variable overrides it safely
+    monkeypatch.setenv("NETMIKO_MCP_INVENTORY_TYPE", "netmiko_tools")
+    config = McpConfig()
+    assert config.inventory_type == "netmiko_tools"
