@@ -1,3 +1,4 @@
+import os
 import json
 from typing import Any
 from unittest.mock import patch
@@ -78,3 +79,35 @@ def test_get_sanitized_inventory_handles_error(mock_obtain: Any) -> None:
 
     assert "error" in result
     assert result["error"] == "Device or group not found"
+
+
+@patch("netmiko_mcp.inventory.settings")
+def test_inventory_env_var_override(mock_settings: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that explicit inventory_file overrides NETMIKO_TOOLS_CFG."""
+    from netmiko_mcp.inventory import _set_inventory_env_var
+
+    mock_settings.inventory_type = "netmiko_tools"
+    mock_settings.inventory_file = "/custom/mcp/inventory.yml"
+
+    # Ensure it's cleared first
+    monkeypatch.delenv("NETMIKO_TOOLS_CFG", raising=False)
+
+    _set_inventory_env_var()
+    assert os.environ.get("NETMIKO_TOOLS_CFG") == "/custom/mcp/inventory.yml"
+
+
+@patch("netmiko_mcp.inventory.settings")
+def test_inventory_env_var_fallback(mock_settings: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that if inventory_file is None, we DO NOT override NETMIKO_TOOLS_CFG."""
+    from netmiko_mcp.inventory import _set_inventory_env_var
+
+    mock_settings.inventory_type = "netmiko_tools"
+    mock_settings.inventory_file = None
+
+    # Set a pre-existing environment variable
+    monkeypatch.setenv("NETMIKO_TOOLS_CFG", "/existing/native/netmiko.yml")
+
+    _set_inventory_env_var()
+
+    # Assert it was untouched
+    assert os.environ.get("NETMIKO_TOOLS_CFG") == "/existing/native/netmiko.yml"
