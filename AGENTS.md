@@ -33,7 +33,7 @@
 - **Comment Style:** Avoid using numbered or bulleted lists in inline code comments (e.g., `# 1. This part` or `# 2. Some other part`). Write comments as descriptive paragraphs or clear, individual sentences without numeric or alphabetic step indicators.
 
 ## Configuration & Paths
-- **Global Config:** The MCP Server uses `pydantic-settings` centralized in `src/netmiko_mcp/config.py`. It reads from `~/.netmiko-mcp.yml` or overrides via `NETMIKO_MCP_` environment variables.
+- **Global Config:** The MCP Server uses `pydantic-settings` centralized in `src/netmiko_mcp/config.py`. It reads natively from `~/.netmiko-mcp.yml` (and other custom profiles) with strict precedence handling managed via the `settings_customise_sources` classmethod. Environment variables prefixed with `NETMIKO_MCP_` always take precedence over keys in the physical YAML config.
 - **Paths:** Always use the `pathlib.Path` module for file operations instead of `os.path`.
 - **Security:** Commands are strictly validated via exact matching against a whitelist defined in the configuration YAML (`commands.yml`). Default is deny-all.
 

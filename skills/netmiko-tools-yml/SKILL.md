@@ -36,19 +36,19 @@ Netmiko provides utilities to discover, parse, and decrypt this file automatical
 ```python
 from netmiko.utilities import find_cfg_file, load_yaml_file, obtain_all_devices
 
-# 1. Find the .netmiko.yml file (respects NETMIKO_TOOLS_CFG)
+# Find the .netmiko.yml file while respecting the NETMIKO_TOOLS_CFG setting
 try:
     cfg_file = find_cfg_file()
 except ValueError as e:
     # Handle case where file is not found
     pass
 
-# 2. Parse the YAML file into a dictionary
+# Parse the YAML file into a standard dictionary
 parsed_yaml = load_yaml_file(cfg_file)
 
-# 3. Extract devices and decrypt credentials
-# This automatically looks for the NETMIKO_TOOLS_KEY and decrypts fields starting with __encrypt__
-# Returns a dict: {"cisco_router_1": {"device_type": "cisco_ios", "host": "...", ...}}
+# Extract devices and decrypt their credentials.
+# This automatically checks for NETMIKO_TOOLS_KEY and decrypts fields starting with __encrypt__
+# and returns a dictionary of device connection parameters.
 devices = obtain_all_devices(parsed_yaml)
 ```
 
