@@ -17,10 +17,10 @@ The server is configured via a central YAML file.
 ### Supported Fields
 ```yaml
 ---
-inventory_type: "netmiko_tools"          # Required
-inventory_file: "~/.netmiko.yml"         # Optional (falls back to Netmiko defaults if None)
-command_file: "~/commands.yml"           # Required (path to security rules)
-allow_pipe: true                         # Optional (enables safe regex/formatting pipes)
+inventory_type: "netmiko_tools"          # Optional (Defaults to netmiko_tools. Must be exact match)
+# inventory_file: "~/.netmiko.yml"       # Optional. If omitted, uses native Netmiko search paths (NETMIKO_TOOLS_CFG env var -> ./.netmiko.yml -> ~/.netmiko.yml)
+command_file: "~/commands.yml"           # Optional (Defaults to ~/commands.yml. Path to security rules)
+allow_pipe: true                         # Optional (Defaults to false. Enables safe regex/formatting pipes)
 ```
 
 ## Security Whitelist (`~/commands.yml`)

@@ -14,12 +14,13 @@ Create a `~/.netmiko-mcp.yml` file with the following minimum required settings:
 
 ```yaml
 ---
+# Optional: explicitly define inventory type (Defaults to netmiko_tools)
 inventory_type: "netmiko_tools"
-# Optional: explicitly point to your .netmiko.yml inventory (defaults to standard Netmiko search paths)
-inventory_file: "~/.netmiko.yml"
-# Required: Explicitly point to your commands.yml whitelist
+# Optional: explicitly point to your .netmiko.yml inventory (If omitted, defaults to standard Netmiko search paths: NETMIKO_TOOLS_CFG env var -> ./.netmiko.yml -> ~/.netmiko.yml)
+# inventory_file: "~/.netmiko.yml"
+# Optional: Explicitly point to your commands.yml whitelist (Defaults to ~/commands.yml)
 command_file: "~/commands.yml"
-# Optional: Allow safe piping logic (e.g. | include)
+# Optional: Allow safe piping logic (e.g. | include). Defaults to false.
 allow_pipe: true
 ```
 
