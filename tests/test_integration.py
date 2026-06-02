@@ -80,3 +80,18 @@ async def test_live_device_connection(mcp_client: ClientSession) -> None:
     assert cmd_result_denied.content[0].type == "text"
     denied_output = getattr(cmd_result_denied.content[0], "text", "")
     assert "Security Error: Command 'show version | awk' is not permitted" in denied_output
+
+    # 5. Test command injection block against a wildcard pattern in the integration test
+    cmd_result_inject = await mcp_client.call_tool(
+        "send_show_command",
+        arguments={
+            "device_name": "cisco1",
+            "command": "show version ; reload",
+            "use_textfsm": False,
+        },
+    )
+
+    assert len(cmd_result_inject.content) == 1
+    assert cmd_result_inject.content[0].type == "text"
+    inject_output = getattr(cmd_result_inject.content[0], "text", "")
+    assert "Security Error: Command 'show version ; reload' is not permitted" in inject_output

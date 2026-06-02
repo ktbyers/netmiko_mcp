@@ -1,20 +1,22 @@
 """
 Security validation and command verification layer for the Netmiko MCP server.
 
-Security Principles:
-1. Default Deny: By default, no commands are permitted. Access must be explicitly
-   granted via configuration.
-2. Multi-Command Prevention: Command chaining, semi-colons, and unapproved pipes
-   are strictly disallowed by default to prevent command injection.
-3. Audit Logging: Every attempted and executed command must be logged for audit
-   and compliance (TODO).
-4. Operational-Only: Configuration changes are disallowed by default, both at the
-   Netmiko connection level and the command-validation level.
-5. Override Capability: While ultimate control rests with the administrator (who
-   can allow any command via custom configuration), the system must make it difficult
-   to inadvertently execute destructive actions.
+Rules:
+1. Default Deny: Nothing is allowed unless it is added the whitelist (allowed_commands).
+   The whitelist is empty be default.
+2. The blacklist (denied_commands) has precedence over the whitelist so if both
+   blacklist and whitelist match a given command, then the command is denied.
+3. Pipes are denied by default. [THIS WILL BE EXPANDED TO ENCOMPASS ADDITIONAL
+   WAYS OF DOING MULTIPLE COMMANDS: FIX].
+4. Every attempted and executed command must be logged for audit and compliance.
+   This should include the reason for acceptance or rejection. [FIX]
+5. Configuration changes are disallowed by default, both at the Netmiko-level
+   (no send_config_set) and at the command-validation level.
+6. Globbing should be supported ("show *") in both the whitelist and in the blacklist.
+   This will be converted over to regular expressions in the Python code.
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,25 @@ from netmiko.utilities import load_yaml_file
 # file to allow commands.
 DEFAULT_ALLOWED_COMMANDS: list[str] = []
 DEFAULT_DENIED_COMMANDS = ["run", "commit", "clear", "debug"]
+
+
+def glob_to_regex(glob_pattern: str) -> re.Pattern:
+    """
+    Convert a simple glob pattern containing '*' into a compiled regular expression.
+    To prevent command injection, the wildcard '*' is compiled to match any character
+    EXCEPT command separators (newlines, semicolons, ampersands).
+
+    It also intelligently handles spaces preceding asterisks (e.g., 'show version *'
+    will match 'show version' with or without arguments).
+    """
+    escaped = re.escape(glob_pattern.strip())
+    # Match escaped space followed by escaped asterisk '\ \*'
+    # and convert to an optional group of whitespace and safe characters
+    escaped = escaped.replace(r"\ \*", r"(?:\s+[^;\n\r&]*)?")
+    # Convert any remaining solo asterisks to 0 or more safe characters
+    escaped = escaped.replace(r"\*", r"[^;\n\r&]*")
+
+    return re.compile("^" + escaped + "$", re.IGNORECASE)
 
 
 def load_commands() -> dict[str, Any]:
@@ -43,8 +64,8 @@ def validate_command(command: str) -> bool:
     Validate that the requested command is safe to execute.
 
     Rules:
-    1. Command must NOT contain any string in 'denied_commands'.
-    2. Base command (before any pipe) must EXACTLY match a string in 'allowed_commands'.
+    1. Command must NOT contain any string in 'denied_commands' (supports glob patterns).
+    2. Base command (before any pipe) must match a glob/exact string in 'allowed_commands'.
     3. If a pipe is present, 'allow_pipe' must be True, and the pipe modifier
        must be a safe operational filter (e.g. include, exclude, section, begin, count).
     """
@@ -53,12 +74,25 @@ def validate_command(command: str) -> bool:
     allowed_commands = commands.get("allowed_commands", DEFAULT_ALLOWED_COMMANDS)
     denied_commands = commands.get("denied_commands", DEFAULT_DENIED_COMMANDS)
 
-    # Deny Check: If it contains any forbidden substring, reject immediately
-    for denied in denied_commands:
-        if denied in command:
-            return False
+    # Strictly reject command separator characters in the raw input
+    # before any whitespace normalization or splitting occurs.
+    if any(char in command for char in (";", "\n", "\r", "&")):
+        return False
 
-    # Check for pipe character
+    # Normalize whitespace
+    command = " ".join(command.split())
+
+    # 1. Deny Check: If it contains any forbidden substring/glob pattern, reject immediately
+    for denied in denied_commands:
+        denied_str = denied.strip()
+        if "*" in denied_str:
+            pattern = glob_to_regex(denied_str)
+            if pattern.match(command):
+                return False
+        else:
+            if denied_str in command:
+                return False
+
     # Extract base command and potential pipe segment
     parts = command.split("|", 1)
     base_command = parts[0].strip()
@@ -109,9 +143,10 @@ def validate_command(command: str) -> bool:
         if modifier_keyword not in safe_modifiers:
             return False
 
-    # 3. Allow Check: The base command must EXACTLY match an allowed command
+    # 3. Allow Check: The base command must match an allowed command pattern
     for allowed in allowed_commands:
-        if base_command == allowed.strip():
+        pattern = glob_to_regex(allowed)
+        if pattern.match(base_command):
             return True
 
     # If it matches no allowed prefix, deny it
