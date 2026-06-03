@@ -145,3 +145,4 @@ NETMIKO_MCP_PIPE_MODIFIERS='["include", "exclude", "section", "begin", "count", 
 ```
 
 Anything not in `pipe_modifiers` is **always blocked** — there is no separate blocklist.
+
