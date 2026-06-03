@@ -47,11 +47,26 @@ async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NETMIKO_MCP_INVENTORY_TYPE", "netmiko_tools")
     monkeypatch.setenv("NETMIKO_MCP_INVENTORY_FILE", "/env/path.yml")
     monkeypatch.setenv("NETMIKO_MCP_COMMAND_FILE", "/env/commands.yml")
+    monkeypatch.setenv("NETMIKO_MCP_ALLOW_PIPE", "true")
 
     config = McpConfig()
     assert config.inventory_type == "netmiko_tools"
     assert config.inventory_file == "/env/path.yml"
     assert config.command_file == "/env/commands.yml"
+    assert config.allow_pipe is True
+
+
+@pytest.mark.anyio
+async def test_mcp_config_yaml_allow_pipe_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that allow_pipe: false set explicitly in a config file is respected."""
+    cfg_file = tmp_path / "test-config.yml"
+    cfg_file.write_text("allow_pipe: false\n", encoding="utf-8")
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+
+    config = McpConfig()
+    assert config.allow_pipe is False
 
 
 @pytest.mark.anyio

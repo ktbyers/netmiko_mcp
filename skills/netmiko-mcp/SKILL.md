@@ -20,7 +20,7 @@ The server is configured via a central YAML file.
 inventory_type: "netmiko_tools"          # Optional (Defaults to netmiko_tools. Must be exact match)
 # inventory_file: "~/.netmiko.yml"       # Optional. If omitted, uses native Netmiko search paths (NETMIKO_TOOLS_CFG env var -> ./.netmiko.yml -> ~/.netmiko.yml)
 command_file: "~/commands.yml"           # Optional (Defaults to ~/commands.yml. Path to security rules)
-allow_pipe: true                         # Optional (Defaults to false. Enables safe regex/formatting pipes)
+allow_pipe: true                         # Optional (Defaults to false. Enables safe read-only pipe operators — see Pipe Support below)
 ```
 
 ## Security Whitelist (`~/commands.yml`)
@@ -38,6 +38,40 @@ allowed_commands:
 denied_commands:
   - "configure *"
   - "reload"
+```
+
+## Pipe Support (`allow_pipe`)
+
+`allow_pipe` is `false` by default. Set it to `true` in `~/.netmiko-mcp.yml` or via `NETMIKO_MCP_ALLOW_PIPE=true` to enable pipe operators.
+
+When enabled, the base command is still validated against `allowed_commands`. Only the pipe modifier keyword is checked — it must be on the safe list below. Anything not on the list is blocked.
+
+### Safe pipe operators
+
+| Platform | Operators |
+|---|---|
+| IOS / IOS-XE | `include`, `exclude`, `section`, `begin`, `count` (shortcuts: `i`, `e`, `s`, `b`, `c`) |
+| NX-OS (text) | `grep`, `egrep`, `head`, `last`, `less`, `no-more`, `sort`, `uniq`, `wc`, `nz`, `end` |
+| NX-OS (structured) | `json`, `json-pretty`, `xml`, `xmlin`, `xmlout`, `human` |
+
+### Always blocked (even with `allow_pipe: true`)
+`redirect`, `append`, `tee`, `awk`, `sed`, `cut`, `tr`, `vsh`, `email`, `diff`, and any operator not in the safe list.
+
+### Example
+```yaml
+# ~/.netmiko-mcp.yml
+allow_pipe: true
+command_file: "~/commands.yml"
+```
+```
+# These work when allow_pipe: true and "show version *" is in allowed_commands
+show version | include IOS
+show version | exclude uptime
+show version | json
+
+# These are always blocked
+show version | redirect tftp://1.1.1.1/out.txt
+show version | awk '{print $1}'
 ```
 
 ## The Inventory (`~/.netmiko.yml`)

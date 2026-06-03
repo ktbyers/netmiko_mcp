@@ -30,7 +30,7 @@ from netmiko.utilities import load_yaml_file
 # We default to strictly denying everything. Users MUST provide a YAML configuration
 # file to allow commands.
 DEFAULT_ALLOWED_COMMANDS: list[str] = []
-DEFAULT_DENIED_COMMANDS = ["run", "commit", "clear", "debug"]
+DEFAULT_DENIED_COMMANDS: list[str] = []
 
 
 def glob_to_regex(glob_pattern: str) -> re.Pattern:

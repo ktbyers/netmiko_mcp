@@ -2,9 +2,43 @@
 
 > **WARNING:** You can make serious, incredibly detrimental mistakes by using this tool. This tool could cause massive outages in your environment. You, and you alone, are solely responsible for using this tool. Don't say I didn't warn you.
 
-## Configuration
+## Getting Started (TLDR)
 
-The Netmiko MCP Server requires configuration to understand where your inventory lives and what commands are permitted.
+Create a Netmiko MCP Configuration file (see [MCP Configuration](#mcp-configuration)). In this you should specify the following:
+
+```yaml
+---
+# Netmiko Tools Inventory Format (currently: only inventory format supported)
+inventory_type: netmiko_tools
+
+# See [Netmiko Tools Inventory Format](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory)
+inventory_file: "/path/to/netmiko_inventory.yml"
+
+# Define allowed_commands and denied_commands (see LINK)
+command_file: "/path/to/commands.yml"
+```
+
+Set the **`NETMIKO_MCP_CONFIG`** environment variable and point this at the Netmiko MCP Configuration file that you just created.
+
+In your commands.yml, you must specify which commands are allowed (see LINK):
+
+```yaml
+ ---                                                                                                                              
+ # Netmiko MCP Command Whitelist                                                                                                  
+
+ # By default, no commands are allowed.
+                                                                                                                                  
+ allowed_commands:                                                                                                                
+   - "show version"
+
+ # Explicitly denied commands/substrings (these override allowed_commands)                                                        
+ denied_commands:                                                                                                                 
+   - "configure *"
+```
+
+## MCP Configuration
+
+The Netmiko MCP Server has a YAML-based configuration file. requires configuration to understand where your inventory lives and what commands are permitted.
 
 ### 1. Global Configuration File
 By default, the server looks for a configuration file at **`~/.netmiko-mcp.yml`** (in your home directory).
