@@ -125,12 +125,14 @@ def test_glob_to_regex_strips_leading_trailing_whitespace() -> None:
     assert p.match("show version")
 
 
-def test_glob_to_regex_mid_pattern_wildcard() -> None:
-    """A wildcard in the middle of a pattern must match safely."""
+def test_glob_to_regex_trailing_wildcard_with_multiword_prefix() -> None:
+    """A trailing wildcard after a multi-word prefix anchors that prefix strictly."""
     p = glob_to_regex("show ip *")
     assert p.match("show ip interface brief")
     assert p.match("show ip route")
-    assert not p.match("show version")
+    assert p.match("show ip")          # bare — wildcard group is optional
+    assert not p.match("show version")  # wrong prefix
+    assert not p.match("show ipv6 route")  # 'ipv6' != 'ip'
 
 
 # --- bypass attempts --------------------------------------------------------

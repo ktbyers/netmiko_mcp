@@ -1,12 +1,13 @@
 # Netmiko MCP — commands.yml
 
 The `commands.yml` file defines what the LLM is and is not allowed to send to network
-devices. By default the server denies **all** commands — nothing is permitted until you
-explicitly allow it.
+devices. By default the server should deny all commands. No commands should be permitted 
+until you explicitly allow it.
 
 The path to this file is controlled by the `command_file` setting in your
 [configuration file](configuration.md). It defaults to `~/commands.yml`.
-
+<br />
+<br />
 
 ## File Structure
 
@@ -17,14 +18,18 @@ allowed_commands:
   - "show ip route *"
 
 denied_commands:
-  - "configure *"
-  - "reload"
+  - "configure*"
+  - "reload*"
 ```
 
 Both lists are optional. An empty or missing `allowed_commands` means nothing is permitted.
-An empty or missing `denied_commands` means no extra blocking beyond the
-[unsafe characters](#unsafe-characters) check.
 
+An empty or missing `denied_commands` means no extra command blocking. Even with an empty
+`denied_commands` list, the command must still pass the and be allowed by allowed_commands.
+Additional it must still pass through additional checks like [unsafe characters](#unsafe-characters)
+and [allow pipe](configuration.md).
+<br />
+<br />
 
 ## Matching Rules
 
@@ -34,6 +39,8 @@ Both `allowed_commands` and `denied_commands` use identical matching rules:
 - A **glob pattern** containing `*` matches the command prefix with optional arguments.
 - `denied_commands` **always takes precedence** over `allowed_commands`. If a command
   matches both lists, it is denied.
+<br />
+<br />
 
 ### Exact matching
 
@@ -51,6 +58,8 @@ allowed_commands:
 
 > **Note:** Command abbreviations are not supported. `sh ver` will not match
 > `show version`. Users and the LLM must send fully-expanded commands.
+<br />
+<br />
 
 ### Glob matching
 
@@ -68,7 +77,6 @@ allowed_commands:
 | `show version detail` | ✅ allowed |
 | `show version \| include IOS` | ✅ allowed (if pipes are enabled) |
 
-A `*` in the middle of a pattern works the same way but anchors the prefix strictly:
 
 ```yaml
 allowed_commands:
@@ -81,7 +89,8 @@ allowed_commands:
 | `show ip interface brief` | ✅ allowed |
 | `show ip bgp neighbors 10.0.0.1` | ✅ allowed |
 | `show version` | ❌ denied — prefix doesn't match |
-
+<br />
+<br />
 
 ## `allowed_commands`
 
@@ -109,7 +118,8 @@ allowed_commands:
   - "display interface brief"
   - "display ip routing-table *"
 ```
-
+<br />
+<br />
 
 ## `denied_commands`
 
@@ -139,7 +149,8 @@ denied_commands:
 > **Tip:** `denied_commands` is most useful when you have broad glob patterns in
 > `allowed_commands` and want to carve out specific exceptions. For example, allowing
 > `"show *"` while denying `"show running-config"`.
-
+<br />
+<br />
 
 ## Unsafe Characters
 
@@ -149,7 +160,8 @@ for characters defined in `unsafe_chars` (configured in
 
 **Default unsafe characters:** `;`  `\n` (newline)  `\r` (carriage return)  `&`
 
-These block the most common shell-style command injection vectors:
+These block ``some`` potential command injection vectors (i.e. attempts to bypass the
+allowed_commands and denied_commands settings).
 
 | Character | Injection technique blocked |
 |---|---|
@@ -157,9 +169,8 @@ These block the most common shell-style command injection vectors:
 | `\n` | Multi-line command injection |
 | `\r` | Carriage-return injection |
 | `&` | Background execution (`show version && reload`) |
-
-This check happens **before** `denied_commands` and before `allowed_commands`. A command
-containing an unsafe character is rejected regardless of what is in either list.
+<br />
+<br />
 
 ### Adding unsafe characters
 
@@ -171,8 +182,9 @@ at the character level rather than via `allow_pipe`), you can add `|` to the lis
 unsafe_chars: [";", "\n", "\r", "&", "|"]
 ```
 
-> **Warning:** Do not remove the defaults. Only add to this list.
-
+> **Warning:** Typically you do not remove the defaults. You would want to add to this list.
+<br />
+<br />
 
 ## Pipe Support
 
@@ -183,16 +195,6 @@ By default, pipe operators (`|`) are **disabled**. Enable them in your
 allow_pipe: true
 ```
 
-### How pipe validation works
-
-When a pipe is present the server:
-
-1. Splits the command on the **first** `|` only.
-2. Validates the **base command** (left of `|`) against `allowed_commands` as normal.
-3. Checks that there is exactly **one** pipe — multiple pipes are always blocked.
-4. Extracts the first keyword after the pipe and checks it against `pipe_modifiers`.
-5. Rejects if the modifier keyword is not in the list or if nothing follows the pipe.
-
 ### `pipe_modifiers`
 
 Controls which keywords are permitted after `|`. Default (IOS/IOS-XE):
@@ -200,27 +202,6 @@ Controls which keywords are permitted after `|`. Default (IOS/IOS-XE):
 ```yaml
 pipe_modifiers: ["include", "exclude", "section", "begin", "count"]
 ```
-
-Extend for NX-OS or other platforms:
-
-```yaml
-pipe_modifiers:
-  - "include"
-  - "exclude"
-  - "section"
-  - "begin"
-  - "count"
-  - "grep"
-  - "egrep"
-  - "json"
-  - "json-pretty"
-  - "xml"
-  - "no-more"
-  - "head"
-  - "tail"
-```
-
-### Pipe examples
 
 ```
 # allow_pipe: true, pipe_modifiers includes "include" and "section"
