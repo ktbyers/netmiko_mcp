@@ -2,6 +2,7 @@
 
 The Netmiko MCP server is configured via a YAML file. This document covers the supported
 settings, their default values, and the corresponding environment variables.
+<br />
 
 
 ## File Location
@@ -90,8 +91,8 @@ against command injection. Full details in [commands.md — Unsafe Characters](c
 unsafe_chars: [";", "\n", "\r", "&"]
 ```
 
-> **Note:** Only add to this list — do not remove the defaults unless you fully understand
-> the security implications.
+> **Note:** Only add to this list — do not remove the defaults unless you understand the
+> security implications.
 
 Environment variable override accepts a JSON array:
 ```
