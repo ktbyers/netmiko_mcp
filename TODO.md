@@ -4,6 +4,13 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ---
 
+## Documentation
+
+- **Finish reviewing and editing `docs/commands.md`** — content was drafted but needs a
+  full review pass for accuracy, tone, and completeness.
+
+---
+
 ## Security (`security.py`)
 
 - **Audit logging** `[FIX in docstring]` — Every attempted command must be logged with a
