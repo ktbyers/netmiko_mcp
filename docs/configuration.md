@@ -12,13 +12,8 @@ By default the server looks for:
 ~/.netmiko-mcp.yml
 ```
 
-Override the path by setting `NETMIKO_MCP_CONFIG` in your shell rc file so it is available
-whenever a new shell session starts. Add the following to your `~/.bashrc` (bash) or
-`~/.zshrc` (zsh):
-
-```bash
-export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"
-```
+Override the path by setting the `NETMIKO_MCP_CONFIG` environment variable **before** the
+server starts.
 
 
 ## Settings Reference
