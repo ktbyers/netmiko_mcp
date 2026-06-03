@@ -7,7 +7,6 @@ explicitly allow it.
 The path to this file is controlled by the `command_file` setting in your
 [configuration file](configuration.md). It defaults to `~/commands.yml`.
 
----
 
 ## File Structure
 
@@ -26,7 +25,6 @@ Both lists are optional. An empty or missing `allowed_commands` means nothing is
 An empty or missing `denied_commands` means no extra blocking beyond the
 [unsafe characters](#unsafe-characters) check.
 
----
 
 ## Matching Rules
 
@@ -84,7 +82,6 @@ allowed_commands:
 | `show ip bgp neighbors 10.0.0.1` | ✅ allowed |
 | `show version` | ❌ denied — prefix doesn't match |
 
----
 
 ## `allowed_commands`
 
@@ -113,7 +110,6 @@ allowed_commands:
   - "display ip routing-table *"
 ```
 
----
 
 ## `denied_commands`
 
@@ -144,7 +140,6 @@ denied_commands:
 > `allowed_commands` and want to carve out specific exceptions. For example, allowing
 > `"show *"` while denying `"show running-config"`.
 
----
 
 ## Unsafe Characters
 
@@ -178,7 +173,6 @@ unsafe_chars: [";", "\n", "\r", "&", "|"]
 
 > **Warning:** Do not remove the defaults. Only add to this list.
 
----
 
 ## Pipe Support
 
@@ -243,7 +237,6 @@ show running-config | include int   ❌ denied — base command not in allowed_c
 show version | awk '{print $1}'     ❌ denied — "awk" not in pipe_modifiers
 ```
 
----
 
 ## Globbing Reference
 
@@ -278,7 +271,6 @@ denied_commands:
 | `show running-config` | ❌ denied — exact deny overrides the glob allow |
 | `show startup-config` | ❌ denied — exact deny overrides the glob allow |
 
----
 
 ## Validation Pipeline
 
@@ -294,7 +286,6 @@ Every command passes through these checks in order. The first failure stops proc
 4. allowed_commands check   — rejects if the base command matches no allowed pattern
 ```
 
----
 
 ## Full Example
 
