@@ -4,7 +4,6 @@
 
 > I have tried to make reasonable defaults and to limit what the Netmiko-MCP server allows (by default). It is highly advisable to start with ONLY show commands executed against ONLY test or lab devices. You should also strongly consider additional security mechanisms completely outside of the LLM and Netmiko- MCP (for example, a tightly-controlled AAA solution). LLMs and LLM-agents inherently have a lot of variance and are difficult to predict and control.
 <br />
-<br />
 
 ## Getting Started
 
@@ -15,6 +14,7 @@ First, set the `NETMIKO_MCP_CONFIG` environment variable to point at the configu
 ```bash
 export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"
 ```
+<br />
 
 ### Step 1 — Create the Netmiko-MCP configuration file
 
@@ -28,7 +28,7 @@ command_file: "~/commands.yml"
 ```
 
 Additional details on the Netmiko-MCP configuration file and corresponding environment variables: [docs/configuration.md](docs/configuration.md)
-
+<br />
 
 ### Step 2 — Create the device inventory
 
@@ -37,7 +37,7 @@ Currently, device inventory is limited to Netmiko Tools' [device inventory](http
 Create the `~/.netmiko.yml` device inventory. This file contains device dictionaries and groups of devices. It also supports encryption for keys and secrets.
 
 Netmiko Tools AI [skill file](https://github.com/ktbyers/netmiko_mcp/blob/main/skills/netmiko-tools-yml/SKILL.md)
-
+<br />
 
 ### Step 3 — Create the commands whitelist
 
@@ -54,7 +54,7 @@ denied_commands: []
 ```
 
 Full details on allowed/denied matching, globbing, pipes, and unsafe characters: [docs/commands.md](docs/commands.md)
-
+<br />
 
 ## Reference Documentation
 
@@ -62,6 +62,7 @@ Full details on allowed/denied matching, globbing, pipes, and unsafe characters:
 |---|---|
 | [docs/configuration.md](docs/configuration.md) | Netmiko-MCP configuration file settings |
 | [docs/commands.md](docs/commands.md) | Netmiko-MCP allowed commands, denied commands |
+<br />
 
 
 ## MCP Tools
