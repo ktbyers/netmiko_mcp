@@ -2,7 +2,7 @@ import re
 from typing import Any
 from unittest.mock import patch
 
-from netmiko_mcp.security import _build_unsafe_re_class, _to_regex_char, validate_command
+from netmiko_mcp.security import _build_unsafe_re_class, _to_regex_char, glob_to_regex, validate_command
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +75,99 @@ def test_build_unsafe_re_class_blocks_within_string() -> None:
     assert not pattern.fullmatch("show ip interface brief; reboot")
     assert not pattern.fullmatch("show ip interface brief\nreboot")
     assert not pattern.fullmatch("show ip interface brief & reboot")
+
+
+# ---------------------------------------------------------------------------
+# glob_to_regex
+# ---------------------------------------------------------------------------
+
+
+def test_glob_to_regex_exact_match() -> None:
+    """A pattern with no wildcard must match only the exact string."""
+    p = glob_to_regex("show version")
+    assert p.match("show version")
+    assert not p.match("show version extra")
+    assert not p.match("show versio")
+    assert not p.match("")
+
+
+def test_glob_to_regex_trailing_wildcard_matches_arguments() -> None:
+    """'show *' must match 'show' with any safe arguments."""
+    p = glob_to_regex("show *")
+    assert p.match("show version")
+    assert p.match("show ip interface brief")
+    assert p.match("show bgp summary")
+
+
+def test_glob_to_regex_trailing_wildcard_matches_bare_command() -> None:
+    """'show *' must also match 'show' with no arguments (the group is optional)."""
+    p = glob_to_regex("show *")
+    assert p.match("show")
+
+
+def test_glob_to_regex_is_case_insensitive() -> None:
+    """Patterns must match regardless of capitalisation."""
+    p = glob_to_regex("show version")
+    assert p.match("Show Version")
+    assert p.match("SHOW VERSION")
+
+
+def test_glob_to_regex_strips_leading_trailing_whitespace() -> None:
+    """Leading/trailing whitespace in the pattern must be ignored."""
+    p = glob_to_regex("  show version  ")
+    assert p.match("show version")
+
+
+def test_glob_to_regex_mid_pattern_wildcard() -> None:
+    """A wildcard in the middle of a pattern must match safely."""
+    p = glob_to_regex("show ip *")
+    assert p.match("show ip interface brief")
+    assert p.match("show ip route")
+    assert not p.match("show version")
+
+
+# --- bypass attempts --------------------------------------------------------
+
+
+def test_glob_to_regex_wildcard_cannot_match_semicolon() -> None:
+    """The '*' wildcard must never expand across a semicolon."""
+    p = glob_to_regex("show *")
+    assert not p.match("show version; reboot")
+    assert not p.match("show version;reboot")
+
+
+def test_glob_to_regex_wildcard_cannot_match_newline() -> None:
+    """The '*' wildcard must never expand across a newline."""
+    p = glob_to_regex("show *")
+    assert not p.match("show version\nreboot")
+
+
+def test_glob_to_regex_wildcard_cannot_match_carriage_return() -> None:
+    """The '*' wildcard must never expand across a carriage return."""
+    p = glob_to_regex("show *")
+    assert not p.match("show version\rreboot")
+
+
+def test_glob_to_regex_wildcard_cannot_match_ampersand() -> None:
+    """The '*' wildcard must never expand across an ampersand."""
+    p = glob_to_regex("show *")
+    assert not p.match("show version && reboot")
+    assert not p.match("show version &")
+
+
+def test_glob_to_regex_regex_special_chars_in_pattern_are_neutralised() -> None:
+    """Regex special characters in the literal part of a pattern must be treated
+    as plain text, not as regex operators."""
+    p = glob_to_regex("show version (detail)")
+    assert p.match("show version (detail)")
+    assert not p.match("show version Xdetail)")
+
+
+def test_glob_to_regex_wildcard_does_not_match_empty_with_mandatory_prefix() -> None:
+    """A pattern like 'show *' must not match an unrelated command."""
+    p = glob_to_regex("show *")
+    assert not p.match("configure terminal")
+    assert not p.match("debug ip packet")
 
 
 @patch("netmiko_mcp.security.load_commands")

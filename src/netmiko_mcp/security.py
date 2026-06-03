@@ -55,7 +55,7 @@ def glob_to_regex(glob_pattern: str) -> re.Pattern:
     """
     Convert a simple glob pattern containing '*' into a compiled regular expression.
     To prevent command injection, the wildcard '*' is compiled to match any character
-    EXCEPT those defined in settings.unsafe_chars (newlines, semicolons, ampersands by default).
+    EXCEPT those defined in settings.unsafe_chars.
 
     It also intelligently handles spaces preceding asterisks (e.g., 'show version *'
     will match 'show version' with or without arguments).
