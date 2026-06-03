@@ -15,7 +15,8 @@ By default the server looks for:
 
 Override the path by setting the `NETMIKO_MCP_CONFIG` environment variable **before** the
 server starts.
-
+<br />
+<br />
 
 ## Settings Reference
 
@@ -31,7 +32,8 @@ defaults.
 | `allow_pipe` | `bool` | `false` | `NETMIKO_MCP_ALLOW_PIPE` | Enable pipe operators (`\|`) in commands. See [commands.md — Pipe Support](commands.md#pipe-support). |
 | `unsafe_chars` | `list[str]` | `[";", "\n", "\r", "&"]` | `NETMIKO_MCP_UNSAFE_CHARS` | Characters unconditionally rejected before any validation. See [commands.md — Unsafe Characters](commands.md#unsafe-characters). |
 | `pipe_modifiers` | `list[str]` | `["include", "exclude", "section", "begin", "count"]` | `NETMIKO_MCP_PIPE_MODIFIERS` | Permitted keywords after a pipe operator. See [commands.md — Pipe Support](commands.md#pipe-support). |
-
+<br />
+<br />
 
 ## Setting Details
 
@@ -113,7 +115,8 @@ Environment variable override accepts a JSON array:
 ```
 NETMIKO_MCP_PIPE_MODIFIERS='["include", "exclude", "section", "begin", "count", "grep"]'
 ```
-
+<br />
+<br />
 
 ## Complete Example
 
@@ -137,10 +140,11 @@ pipe_modifiers:
   - "begin"
   - "count"
 
-# Injection protection (defaults shown — rarely need changing)
+# Injection protection (defaults shown)
 unsafe_chars: [";", "\n", "\r", "&"]
 ```
-
+<br />
+<br />
 
 ## Settings Priority
 
