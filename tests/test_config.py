@@ -15,6 +15,7 @@ def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.command_file == "~/commands.yml"
     assert config.allow_pipe is False
     assert config.unsafe_chars == [";", "\n", "\r", "&"]
+    assert config.pipe_modifiers == ["include", "exclude", "section", "begin", "count"]
 
 
 def test_mcp_config_validation() -> None:
@@ -52,6 +53,7 @@ async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NETMIKO_MCP_COMMAND_FILE", "/env/commands.yml")
     monkeypatch.setenv("NETMIKO_MCP_ALLOW_PIPE", "true")
     monkeypatch.setenv("NETMIKO_MCP_UNSAFE_CHARS", '[";" , "|", "!"]')
+    monkeypatch.setenv("NETMIKO_MCP_PIPE_MODIFIERS", '["include", "exclude", "grep"]')
 
     config = McpConfig()
     assert config.inventory_type == "netmiko_tools"
@@ -59,6 +61,22 @@ async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.command_file == "/env/commands.yml"
     assert config.allow_pipe is True
     assert config.unsafe_chars == [";", "|", "!"]
+    assert config.pipe_modifiers == ["include", "exclude", "grep"]
+
+
+@pytest.mark.anyio
+async def test_mcp_config_yaml_pipe_modifiers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that pipe_modifiers set in a config file is respected."""
+    cfg_file = tmp_path / "test-config.yml"
+    cfg_file.write_text(
+        'pipe_modifiers: ["include", "exclude", "grep", "json"]\n', encoding="utf-8"
+    )
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+
+    config = McpConfig()
+    assert config.pipe_modifiers == ["include", "exclude", "grep", "json"]
 
 
 @pytest.mark.anyio

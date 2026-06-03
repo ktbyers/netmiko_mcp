@@ -25,7 +25,7 @@ The Netmiko CLI tool inventory format is detailed [HERE](https://pynet.twb-tech.
 In your commands.yml, you must specify which commands are allowed (see LINK):
 
 ```yaml
----                                                                                                                              
+---
 # Netmiko MCP Command Whitelist
 
 # By default, no commands are allowed.
@@ -33,7 +33,8 @@ In your commands.yml, you must specify which commands are allowed (see LINK):
 allowed_commands:
   - "show version"
 
-# Explicitly denied commands/substrings (these override allowed_commands)
+# Explicitly denied commands (these override allowed_commands).
+# Uses the same exact/glob matching as allowed_commands.
 denied_commands: []
 ```
 
@@ -41,13 +42,13 @@ The above commands.yml file should allow only "show version" and no other comman
 
 ## MCP Configuration
 
-The Netmiko MCP Server has a YAML-based configuration file. requires configuration to understand where your inventory lives and what commands are permitted.
+The Netmiko MCP Server has a YAML-based configuration file that controls where your inventory lives, what commands are permitted, and how pipe operators behave.
 
 ### 1. Global Configuration File
 By default, the server looks for a configuration file at **`~/.netmiko-mcp.yml`** (in your home directory).
 You can override this location by setting the **`NETMIKO_MCP_CONFIG`** environment variable.
 
-Create a `~/.netmiko-mcp.yml` file with the following minimum required settings:
+Create a `~/.netmiko-mcp.yml` file with the following settings:
 
 ```yaml
 ---
@@ -57,11 +58,14 @@ inventory_type: "netmiko_tools"
 # inventory_file: "~/.netmiko.yml"
 # Optional: Explicitly point to your commands.yml whitelist (Defaults to ~/commands.yml)
 command_file: "~/commands.yml"
-# Optional: Allow safe pipe operators (e.g. | include, | exclude). Defaults to false.
+# Optional: Allow pipe operators (e.g. | include, | exclude). Defaults to false.
 allow_pipe: true
 # Optional: Characters unconditionally blocked in any command before validation.
 # Defaults to the four characters below. Override if your platform requires different separators.
 unsafe_chars: [";", "\n", "\r", "&"]
+# Optional: Pipe operators permitted when allow_pipe is true.
+# Defaults to the five IOS/IOS-XE operators below. Add NX-OS or others as needed.
+pipe_modifiers: ["include", "exclude", "section", "begin", "count"]
 ```
 
 *Note: Environment variables prefixed with `NETMIKO_MCP_` (e.g., `NETMIKO_MCP_ALLOW_PIPE=false`) will always override the values inside the YAML file.*
@@ -71,8 +75,13 @@ Because `inventory_type` is set to `netmiko_tools`, the server natively uses the
 - Create your `~/.netmiko.yml` file containing your devices and encrypted credentials.
 - Ensure you have the `NETMIKO_TOOLS_KEY` environment variable exported in the shell where your MCP client runs so the server can decrypt the credentials securely.
 
-### 3. Security Whitelist
+### 3. Security Whitelist (`~/commands.yml`)
 Create a `~/commands.yml` file to restrict what the LLM is allowed to do. By default, the server strictly denies *all* commands unless they are explicitly whitelisted.
+
+Both `allowed_commands` and `denied_commands` use the same matching rules:
+- A **plain string** (e.g. `"reload"`) matches only that exact command.
+- A **glob** (e.g. `"reload *"`) matches the bare command or any command starting with that prefix followed by arguments.
+- `denied_commands` always takes precedence over `allowed_commands`.
 
 ```yaml
 ---
@@ -81,13 +90,15 @@ allowed_commands:
   - "show version *"
   - "show ip interface brief"
 
-# Commands that are instantly blocked regardless of whitelist
+# Commands denied regardless of the whitelist.
+# "reload" matches only the bare command "reload".
+# "configure *" matches "configure terminal", "configure replace", etc.
 denied_commands:
-  - "configure terminal"
+  - "configure *"
   - "reload"
 ```
 
-### 4. Unsafe Characters
+### 4. Unsafe Characters (`unsafe_chars`)
 The `unsafe_chars` setting defines characters that are **unconditionally rejected** in any command string before any whitelist or glob matching takes place. This is the first line of defence against command injection.
 
 Default:
@@ -102,17 +113,35 @@ NETMIKO_MCP_UNSAFE_CHARS='[";", "\n", "\r", "&", "|"]'
 
 > **Note:** Only add to this list — do not remove the defaults unless you fully understand the security implications.
 
-### 5. Pipe Support
+### 5. Pipe Support (`allow_pipe` and `pipe_modifiers`)
 By default, pipe operators (`|`) are **disabled**. Set `allow_pipe: true` in `~/.netmiko-mcp.yml` (or `NETMIKO_MCP_ALLOW_PIPE=true`) to enable them.
 
-When enabled, only safe read-only filter operators are permitted after the pipe. The base command is still validated against your `allowed_commands` whitelist.
+When enabled, the base command is still validated against `allowed_commands`. The first keyword after the pipe is checked against `pipe_modifiers` — anything not in that list is blocked.
 
-**Allowed pipe operators:**
+**`pipe_modifiers`** controls which operators are permitted. Default (IOS/IOS-XE):
+```yaml
+pipe_modifiers: ["include", "exclude", "section", "begin", "count"]
+```
 
-| Platform | Operators |
-|---|---|
-| IOS / IOS-XE | `include`, `exclude`, `section`, `begin`, `count` (and single-letter shortcuts `i`, `e`, `s`, `b`, `c`) |
-| NX-OS (text) | `grep`, `egrep`, `head`, `last`, `less`, `no-more`, `sort`, `uniq`, `wc`, `nz`, `end` |
-| NX-OS (structured) | `json`, `json-pretty`, `xml`, `xmlin`, `xmlout`, `human` |
+Extend for NX-OS or other platforms in `~/.netmiko-mcp.yml`:
+```yaml
+pipe_modifiers:
+  - "include"
+  - "exclude"
+  - "section"
+  - "begin"
+  - "count"
+  - "grep"
+  - "egrep"
+  - "json"
+  - "json-pretty"
+  - "xml"
+  - "no-more"
+```
 
-**Always blocked** (even with `allow_pipe: true`): `redirect`, `append`, `tee`, `awk`, `sed`, `cut`, `tr`, `vsh`, `email`, `diff`, and any other operator not in the list above.
+Or via environment variable (JSON array):
+```
+NETMIKO_MCP_PIPE_MODIFIERS='["include", "exclude", "section", "begin", "count", "grep"]'
+```
+
+Anything not in `pipe_modifiers` is **always blocked** — there is no separate blocklist.

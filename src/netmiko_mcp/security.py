@@ -51,23 +51,40 @@ def _build_unsafe_re_class(chars: list[str]) -> str:
 _UNSAFE_RE_CLASS = _build_unsafe_re_class(settings.unsafe_chars)
 
 
-def glob_to_regex(glob_pattern: str) -> re.Pattern:
+def glob_to_regex(glob_pattern: str, block_unsafe: bool = True) -> re.Pattern:
     """
     Convert a simple glob pattern containing '*' into a compiled regular expression.
-    To prevent command injection, the wildcard '*' is compiled to match any character
-    EXCEPT those defined in settings.unsafe_chars.
+
+    When block_unsafe=True (the default, used for allow checks), the wildcard '*'
+    is restricted to match any character EXCEPT those in settings.unsafe_chars,
+    preventing command injection through wildcard expansion.
+
+    When block_unsafe=False (used for deny checks), the wildcard matches any
+    character — a deny pattern should be as broad as possible to catch more.
 
     It also intelligently handles spaces preceding asterisks (e.g., 'show version *'
     will match 'show version' with or without arguments).
     """
+    wildcard = _UNSAFE_RE_CLASS if block_unsafe else "."
     escaped = re.escape(glob_pattern.strip())
-    # Match escaped space followed by escaped asterisk '\ \*'
-    # and convert to an optional group of whitespace and safe characters
-    escaped = escaped.replace(r"\ \*", rf"(?:\s+{_UNSAFE_RE_CLASS}*)?")
-    # Convert any remaining solo asterisks to 0 or more safe characters
-    escaped = escaped.replace(r"\*", rf"{_UNSAFE_RE_CLASS}*")
+    escaped = escaped.replace(r"\ \*", rf"(?:\s+{wildcard}*)?")
+    escaped = escaped.replace(r"\*", rf"{wildcard}*")
 
     return re.compile("^" + escaped + "$", re.IGNORECASE)
+
+
+def deny_check(command: str, denied_commands: list[str]) -> bool:
+    """Return True if the command matches any entry in denied_commands.
+
+    Every entry is evaluated via glob_to_regex — the same logic as the allow
+    check. A plain string (e.g. 'reload') matches only that exact command.
+    A glob (e.g. 'reload *') matches any command starting with 'reload'.
+    Denied always takes precedence over allowed.
+    """
+    for denied in denied_commands:
+        if glob_to_regex(denied.strip(), block_unsafe=False).match(command):
+            return True
+    return False
 
 
 def load_commands() -> dict[str, Any]:
@@ -89,85 +106,47 @@ def validate_command(command: str) -> bool:
     2. Base command (before any pipe) must match a glob/exact string in 'allowed_commands'.
     3. If a pipe is present, 'allow_pipe' must be True, and the pipe modifier
        must be a safe operational filter (e.g. include, exclude, section, begin, count).
+    4. Must NOT contain any unsafe characters as defined in settings.unsafe_chars.
     """
     commands = load_commands()
 
     allowed_commands = commands.get("allowed_commands", DEFAULT_ALLOWED_COMMANDS)
     denied_commands = commands.get("denied_commands", DEFAULT_DENIED_COMMANDS)
 
-    # Strictly reject command separator characters in the raw input
-    # before any whitespace normalization or splitting occurs.
+    # Reject any command containing an unsafe character.
     if any(char in command for char in settings.unsafe_chars):
         return False
 
-    # Normalize whitespace
-    command = " ".join(command.split())
-
-    # 1. Deny Check: If it contains any forbidden substring/glob pattern, reject immediately
-    for denied in denied_commands:
-        denied_str = denied.strip()
-        if "*" in denied_str:
-            pattern = glob_to_regex(denied_str)
-            if pattern.match(command):
-                return False
-        else:
-            if denied_str in command:
-                return False
+    # Test command against the denied_commands list.
+    if deny_check(command, denied_commands):
+        return False
 
     # Extract base command and potential pipe segment
     parts = command.split("|", 1)
     base_command = parts[0].strip()
 
-    # 2. Pipe Check: Validate if a pipe exists
+    # Pipe Check: Validate if a pipe exists
     if len(parts) > 1:
         if not settings.allow_pipe:
             return False
 
-        # Ensure the pipe modifier is a safe, standard filter.
-        # We explicitly block dangerous redirects, file manipulations, or shell escapes
-        # (e.g., redirect, append, tee, email, awk, sed, vsh).
         pipe_modifier = parts[1].strip().lower()
-        safe_modifiers = (
-            # Standard IOS/IOS-XE
-            "include",
-            "exclude",
-            "section",
-            "begin",
-            "count",
-            "i",
-            "e",
-            "s",
-            "b",
-            "c",
-            # Additional NX-OS safe operational filters
-            "grep",
-            "egrep",
-            "head",
-            "last",
-            "less",
-            "no-more",
-            "sort",
-            "uniq",
-            "wc",
-            "json",
-            "json-pretty",
-            "xml",
-            "xmlin",
-            "xmlout",
-            "human",
-            "end",
-            "nz",
-        )
-
-        # Check if the first word after the pipe is in our safe list
-        modifier_keyword = pipe_modifier.split()[0] if pipe_modifier else ""
-        if modifier_keyword not in safe_modifiers:
+        # Multiple pipes not allowed.
+        if "|" in pipe_modifier:
             return False
 
-    # 3. Allow Check: The base command must match an allowed command pattern
+        if pipe_modifier:
+            modifier_keyword = pipe_modifier.split()[0]
+            if modifier_keyword not in settings.pipe_modifiers:
+                return False
+
+    # Test command against the allowed_commands list.
     for allowed in allowed_commands:
-        pattern = glob_to_regex(allowed)
-        if pattern.match(base_command):
+        if "*" in allowed:
+            pattern = glob_to_regex(allowed)
+            if pattern.match(base_command):
+                return True
+        elif base_command == allowed.strip():
             return True
 
     # If it matches no allowed prefix, deny it

@@ -2,7 +2,12 @@ import re
 from typing import Any
 from unittest.mock import patch
 
-from netmiko_mcp.security import _build_unsafe_re_class, _to_regex_char, glob_to_regex, validate_command
+from netmiko_mcp.security import (
+    _build_unsafe_re_class,
+    _to_regex_char,
+    glob_to_regex,
+    validate_command,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +175,34 @@ def test_glob_to_regex_wildcard_does_not_match_empty_with_mandatory_prefix() -> 
     assert not p.match("debug ip packet")
 
 
+# --- block_unsafe=False (deny check mode) -----------------------------------
+
+
+def test_glob_to_regex_block_unsafe_false_matches_unsafe_chars() -> None:
+    """With block_unsafe=False the wildcard must match unsafe characters."""
+    p = glob_to_regex("reload *", block_unsafe=False)
+    assert p.match("reload in 5")
+    assert p.match("reload cancel")
+
+
+def test_glob_to_regex_block_unsafe_false_wildcard_broader_than_default() -> None:
+    """block_unsafe=False must match strings that block_unsafe=True would reject."""
+    blocked = glob_to_regex("reload *", block_unsafe=True)
+    broad = glob_to_regex("reload *", block_unsafe=False)
+    # Default (block_unsafe=True) rejects a command containing a semicolon
+    assert not blocked.match("reload ;bad")
+    # Deny mode (block_unsafe=False) matches it
+    assert broad.match("reload ;bad")
+
+
+def test_glob_to_regex_block_unsafe_false_exact_pattern_unchanged() -> None:
+    """block_unsafe=False must not affect exact patterns (no wildcard)."""
+    p = glob_to_regex("reload", block_unsafe=False)
+    assert p.match("reload")
+    assert not p.match("reload in 5")
+    assert not p.match("show version")
+
+
 @patch("netmiko_mcp.security.load_commands")
 def test_validate_command_default_allowed(mock_load: Any) -> None:
     """Test that default behavior strictly denies everything if no YAML is loaded."""
@@ -216,6 +249,8 @@ def test_validate_command_custom_yaml(mock_load: Any) -> None:
 def test_validate_command_pipes_disabled(mock_load: Any, mock_settings: Any) -> None:
     """Test that pipes are rejected when allow_pipe is False."""
     mock_settings.allow_pipe = False
+    mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
+    mock_settings.pipe_modifiers = ["include", "exclude", "section", "begin", "count"]
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
     # Base command passes
@@ -229,9 +264,35 @@ def test_validate_command_pipes_disabled(mock_load: Any, mock_settings: Any) -> 
 def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any) -> None:
     """Test that safe pipes are permitted when allow_pipe is True."""
     mock_settings.allow_pipe = True
+    mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
+    # Simulate a user who has added IOS and NX-OS modifiers to their config
+    mock_settings.pipe_modifiers = [
+        "include",
+        "exclude",
+        "section",
+        "begin",
+        "count",
+        "grep",
+        "egrep",
+        "head",
+        "last",
+        "less",
+        "no-more",
+        "sort",
+        "uniq",
+        "wc",
+        "json",
+        "json-pretty",
+        "xml",
+        "xmlin",
+        "xmlout",
+        "human",
+        "end",
+        "nz",
+    ]
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
-    # Standard safe pipes
+    # Default IOS/IOS-XE modifiers
     assert validate_command("show version | include uptime") is True
     assert validate_command("show version | exclude test") is True
     assert validate_command("show version | section ospf") is True
@@ -261,6 +322,8 @@ def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any)
 def test_validate_command_pipes_enabled_dangerous(mock_load: Any, mock_settings: Any) -> None:
     """Test that dangerous pipes are rejected even when allow_pipe is True."""
     mock_settings.allow_pipe = True
+    mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
+    mock_settings.pipe_modifiers = ["include", "exclude", "section", "begin", "count"]
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
     # Dangerous redirects
