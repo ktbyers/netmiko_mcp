@@ -125,18 +125,4 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   on device X", "Collect interface stats from group Y") are not implemented. These would
   guide the LLM through multi-step diagnostic sequences reliably.
 
----
 
-## Testing
-
-- **No tests for `inventory.py`** — `get_device_params` and `get_sanitized_inventory` have
-  zero unit test coverage.
-
-- **No tests for `connection.py`** — `run_show_command` has no unit tests (only live
-  integration tests protected by `RUN_LIVE_TESTS`). The security check branch, inventory
-  error branch, and exception branches should all have mocked unit tests.
-
-- **No tests for `load_commands()` file-not-found and IOError paths** — The silent
-  fallback to `{}` on missing file and the `sys.exit()` on IOError are untested.
-
-- **No tests for `_set_inventory_env_var()`** — The env var mutation logic is untested.

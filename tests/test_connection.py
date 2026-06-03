@@ -91,3 +91,29 @@ def test_run_show_command_timeout_error(
 
     result = run_show_command("rtr1", "show version")
     assert result == "Connection Error: Connection to device 'rtr1' timed out."
+
+
+@patch("netmiko_mcp.connection.validate_command")
+def test_run_show_command_security_block(mock_validate: MagicMock) -> None:
+    """Test that a blocked command returns a Security Error string."""
+    mock_validate.return_value = False
+
+    result = run_show_command("rtr1", "reload")
+    assert result == "Security Error: Command 'reload' is not permitted."
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+def test_run_show_command_unexpected_exception(
+    mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
+) -> None:
+    """Test that an unexpected exception is caught and returned as an Execution Error string."""
+    mock_validate.return_value = True
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.side_effect = RuntimeError("unexpected SSH negotiation failure")
+
+    result = run_show_command("rtr1", "show version")
+    assert isinstance(result, str)
+    assert result.startswith("Execution Error:")
+    assert "unexpected SSH negotiation failure" in result

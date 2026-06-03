@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -6,6 +7,7 @@ from netmiko_mcp.security import (
     _build_unsafe_re_class,
     _to_regex_char,
     glob_to_regex,
+    load_commands,
     validate_command,
 )
 
@@ -201,6 +203,34 @@ def test_glob_to_regex_block_unsafe_false_exact_pattern_unchanged() -> None:
     assert p.match("reload")
     assert not p.match("reload in 5")
     assert not p.match("show version")
+
+
+# ---------------------------------------------------------------------------
+# load_commands
+# ---------------------------------------------------------------------------
+
+
+def test_load_commands_file_not_found(tmp_path: Path) -> None:
+    """load_commands returns {} when the command_file path does not exist."""
+    non_existent = tmp_path / "no_such_commands.yml"
+    with patch("netmiko_mcp.security.settings") as mock_settings:
+        mock_settings.command_file = str(non_existent)
+        result = load_commands()
+    assert result == {}
+
+
+def test_load_commands_valid_file(tmp_path: Path) -> None:
+    """load_commands returns the parsed YAML dict when the file exists."""
+    cfg = tmp_path / "commands.yml"
+    cfg.write_text(
+        'allowed_commands: ["show version"]\ndenied_commands: ["reload"]\n',
+        encoding="utf-8",
+    )
+    with patch("netmiko_mcp.security.settings") as mock_settings:
+        mock_settings.command_file = str(cfg)
+        result = load_commands()
+    assert result["allowed_commands"] == ["show version"]
+    assert result["denied_commands"] == ["reload"]
 
 
 @patch("netmiko_mcp.security.load_commands")
