@@ -32,6 +32,21 @@
 - `uv run --frozen pytest -v` must 100% pass before committing. Note: Live integration tests are protected via `@pytest.mark.skipif(not os.environ.get("RUN_LIVE_TESTS"), ...)`.
 - **Comment Style:** Avoid using numbered or bulleted lists in inline code comments (e.g., `# 1. This part` or `# 2. Some other part`). Write comments as descriptive paragraphs or clear, individual sentences without numeric or alphabetic step indicators.
 
+## Documentation Style
+
+- **Avoid absolute, black-and-white statements.** Do not write things like "this documents
+  ALL settings", "the server denies **all** commands by default", or "this will always block X".
+  Real-world software has edge cases, bugs, and failure modes. Use measured language that
+  acknowledges this — prefer "should", "is intended to", "by default attempts to" over
+  definitive absolutes. For example: "by default the server should deny all commands" rather
+  than "by default the server denies all commands".
+- **Do not over-promise security guarantees.** Security controls are best-effort. Document
+  what the design intent is, not an absolute guarantee.
+- When documenting MCP client integration, only document what has been **tested and
+  confirmed to work**. Each MCP client (Claude Code, Claude Desktop, Cursor, etc.) handles
+  server registration and env var inheritance differently. Use a separate doc per client
+  under `docs/clients/` rather than a generic example that may not apply.
+
 ## Documentation & Examples
 
 - **NEVER** include `NETMIKO_TOOLS_KEY` or any other secret/credential in example JSON
