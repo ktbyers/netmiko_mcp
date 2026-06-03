@@ -29,6 +29,7 @@ command_file: "~/commands.yml"
 
 Additional details on the Netmiko-MCP configuration file and corresponding environment variables: [docs/configuration.md](docs/configuration.md)
 <br />
+<br />
 
 ### Step 2 — Create the device inventory
 
@@ -37,6 +38,7 @@ Currently, device inventory is limited to Netmiko Tools' [device inventory](http
 Create the `~/.netmiko.yml` device inventory. This file contains device dictionaries and groups of devices. It also supports encryption for keys and secrets.
 
 Netmiko Tools AI [skill file](https://github.com/ktbyers/netmiko_mcp/blob/main/skills/netmiko-tools-yml/SKILL.md)
+<br />
 <br />
 
 ### Step 3 — Create the commands whitelist
@@ -54,6 +56,7 @@ denied_commands: []
 ```
 
 Full details on allowed/denied matching, globbing, pipes, and unsafe characters: [docs/commands.md](docs/commands.md)
+<br />
 <br />
 
 ## Reference Documentation
