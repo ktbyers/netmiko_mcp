@@ -9,10 +9,10 @@
 
 Setup requires three things: an MCP configuration file, a device inventory, and a commands whitelist.
 
-First, set the `NETMIKO_MCP_CONFIG` environment variable to point at the configuration file you are about to create:
+First, set the `NETMIKO_MCP_CONFIG` environment variable to point at the configuration file you are about to create. Add the following to your `~/.bashrc` (bash) or `~/.zshrc` (zsh):
 
-```
-export NETMIKO_MCP_CONFIG=~/.netmiko-mcp.yml
+```bash
+export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"
 ```
 
 ### Step 1 — Create the MCP configuration file
