@@ -2,6 +2,8 @@
 
 > **⚠️ WARNING:** You can make serious, incredibly detrimental mistakes by using this tool. This tool could cause massive outages in your environment. You, and you alone, are solely responsible for using this tool. Don't say I didn't warn you.
 
+> That said, I have tried to make reasonable defaults and to limit what the MCP server allows by default. It would be highly advisable to start with read-only show commands executed against test or lab devices. Verify the behaviour and build your confidence from there before considering any expansion of scope.
+
 ## Getting Started
 
 Create a Netmiko MCP Configuration file (see [MCP Configuration](#mcp-configuration)). In this file you should specify the following:
