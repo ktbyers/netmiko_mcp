@@ -44,6 +44,7 @@ Only `netmiko_tools` is currently supported. The value must be an exact match.
 ```yaml
 inventory_type: "netmiko_tools"
 ```
+<br />
 
 ### `inventory_file`
 
@@ -63,6 +64,7 @@ inventory_file: "~/.netmiko.yml"
 
 The server requires `NETMIKO_TOOLS_KEY` to be set in the environment so it can decrypt
 `__encrypt__` fields in the inventory. Set it in your MCP client's `env` block.
+<br />
 
 ### `command_file`
 
@@ -72,6 +74,7 @@ format and behavior are documented in [commands.md](commands.md).
 ```yaml
 command_file: "~/commands.yml"
 ```
+<br />
 
 ### `allow_pipe`
 
@@ -82,6 +85,7 @@ in [commands.md — Pipe Support](commands.md#pipe-support).
 ```yaml
 allow_pipe: false
 ```
+<br />
 
 ### `unsafe_chars`
 
@@ -100,6 +104,7 @@ Environment variable override accepts a JSON array:
 ```
 NETMIKO_MCP_UNSAFE_CHARS='[";", "\n", "\r", "&", "|"]'
 ```
+<br />
 
 ### `pipe_modifiers`
 
