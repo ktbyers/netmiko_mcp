@@ -3,7 +3,7 @@
 The Netmiko MCP server is configured via a YAML file. This document covers the supported
 settings, their default values, and the corresponding environment variables.
 <br />
-
+<br />
 
 ## File Location
 
