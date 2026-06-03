@@ -57,8 +57,11 @@ inventory_type: "netmiko_tools"
 # inventory_file: "~/.netmiko.yml"
 # Optional: Explicitly point to your commands.yml whitelist (Defaults to ~/commands.yml)
 command_file: "~/commands.yml"
-# Optional: Allow safe piping logic (e.g. | include). Defaults to false.
+# Optional: Allow safe pipe operators (e.g. | include, | exclude). Defaults to false.
 allow_pipe: true
+# Optional: Characters unconditionally blocked in any command before validation.
+# Defaults to the four characters below. Override if your platform requires different separators.
+unsafe_chars: [";", "\n", "\r", "&"]
 ```
 
 *Note: Environment variables prefixed with `NETMIKO_MCP_` (e.g., `NETMIKO_MCP_ALLOW_PIPE=false`) will always override the values inside the YAML file.*
@@ -83,3 +86,33 @@ denied_commands:
   - "configure terminal"
   - "reload"
 ```
+
+### 4. Unsafe Characters
+The `unsafe_chars` setting defines characters that are **unconditionally rejected** in any command string before any whitelist or glob matching takes place. This is the first line of defence against command injection.
+
+Default:
+```yaml
+unsafe_chars: [";", "\n", "\r", "&"]
+```
+
+Override in `~/.netmiko-mcp.yml` or via environment variable (JSON array):
+```
+NETMIKO_MCP_UNSAFE_CHARS='[";", "\n", "\r", "&", "|"]'
+```
+
+> **Note:** Only add to this list — do not remove the defaults unless you fully understand the security implications.
+
+### 5. Pipe Support
+By default, pipe operators (`|`) are **disabled**. Set `allow_pipe: true` in `~/.netmiko-mcp.yml` (or `NETMIKO_MCP_ALLOW_PIPE=true`) to enable them.
+
+When enabled, only safe read-only filter operators are permitted after the pipe. The base command is still validated against your `allowed_commands` whitelist.
+
+**Allowed pipe operators:**
+
+| Platform | Operators |
+|---|---|
+| IOS / IOS-XE | `include`, `exclude`, `section`, `begin`, `count` (and single-letter shortcuts `i`, `e`, `s`, `b`, `c`) |
+| NX-OS (text) | `grep`, `egrep`, `head`, `last`, `less`, `no-more`, `sort`, `uniq`, `wc`, `nz`, `end` |
+| NX-OS (structured) | `json`, `json-pretty`, `xml`, `xmlin`, `xmlout`, `human` |
+
+**Always blocked** (even with `allow_pipe: true`): `redirect`, `append`, `tee`, `awk`, `sed`, `cut`, `tr`, `vsh`, `email`, `diff`, and any other operator not in the list above.

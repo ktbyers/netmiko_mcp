@@ -14,6 +14,7 @@ def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.inventory_file is None
     assert config.command_file == "~/commands.yml"
     assert config.allow_pipe is False
+    assert config.unsafe_chars == [";", "\n", "\r", "&"]
 
 
 def test_mcp_config_validation() -> None:
@@ -50,12 +51,27 @@ async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NETMIKO_MCP_INVENTORY_FILE", "/env/path.yml")
     monkeypatch.setenv("NETMIKO_MCP_COMMAND_FILE", "/env/commands.yml")
     monkeypatch.setenv("NETMIKO_MCP_ALLOW_PIPE", "true")
+    monkeypatch.setenv("NETMIKO_MCP_UNSAFE_CHARS", '[";" , "|", "!"]')
 
     config = McpConfig()
     assert config.inventory_type == "netmiko_tools"
     assert config.inventory_file == "/env/path.yml"
     assert config.command_file == "/env/commands.yml"
     assert config.allow_pipe is True
+    assert config.unsafe_chars == [";", "|", "!"]
+
+
+@pytest.mark.anyio
+async def test_mcp_config_yaml_unsafe_chars(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that unsafe_chars set in a config file is respected."""
+    cfg_file = tmp_path / "test-config.yml"
+    cfg_file.write_text('unsafe_chars: [";", "\\n", "\\r", "&", "|"]\n', encoding="utf-8")
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+
+    config = McpConfig()
+    assert config.unsafe_chars == [";", "\n", "\r", "&", "|"]
 
 
 @pytest.mark.anyio

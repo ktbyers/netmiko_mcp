@@ -21,6 +21,7 @@ inventory_type: "netmiko_tools"          # Optional (Defaults to netmiko_tools. 
 # inventory_file: "~/.netmiko.yml"       # Optional. If omitted, uses native Netmiko search paths (NETMIKO_TOOLS_CFG env var -> ./.netmiko.yml -> ~/.netmiko.yml)
 command_file: "~/commands.yml"           # Optional (Defaults to ~/commands.yml. Path to security rules)
 allow_pipe: true                         # Optional (Defaults to false. Enables safe read-only pipe operators — see Pipe Support below)
+unsafe_chars: [";", "\n", "\r", "&"]    # Optional (Defaults to these four. Characters unconditionally blocked before any validation — see Unsafe Characters below)
 ```
 
 ## Security Whitelist (`~/commands.yml`)
@@ -39,6 +40,24 @@ denied_commands:
   - "configure *"
   - "reload"
 ```
+
+## Unsafe Characters (`unsafe_chars`)
+
+`unsafe_chars` defines the set of characters that are **unconditionally rejected** in any command string before whitelist matching or glob evaluation. It is the first line of defence against command injection.
+
+**Default:** `[";", "\n", "\r", "&"]`
+
+Override in `~/.netmiko-mcp.yml`:
+```yaml
+unsafe_chars: [";", "\n", "\r", "&", "|"]
+```
+
+Or via environment variable (JSON array):
+```
+NETMIKO_MCP_UNSAFE_CHARS='[";", "\n", "\r", "&", "|"]'
+```
+
+> Only add to this list — do not remove the defaults unless you fully understand the security implications.
 
 ## Pipe Support (`allow_pipe`)
 

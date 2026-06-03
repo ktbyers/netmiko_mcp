@@ -1,7 +1,80 @@
+import re
 from typing import Any
 from unittest.mock import patch
 
-from netmiko_mcp.security import validate_command
+from netmiko_mcp.security import _build_unsafe_re_class, _to_regex_char, validate_command
+
+
+# ---------------------------------------------------------------------------
+# _to_regex_char
+# ---------------------------------------------------------------------------
+
+
+def test_to_regex_char_newline() -> None:
+    """Newline must be converted to its escaped form for use inside a regex class."""
+    assert _to_regex_char("\n") == "\\n"
+
+
+def test_to_regex_char_carriage_return() -> None:
+    """Carriage return must be converted to its escaped form."""
+    assert _to_regex_char("\r") == "\\r"
+
+
+def test_to_regex_char_semicolon() -> None:
+    """Semicolon is printable and must pass through unchanged."""
+    assert _to_regex_char(";") == ";"
+
+
+def test_to_regex_char_ampersand() -> None:
+    """Ampersand is printable and must pass through unchanged."""
+    assert _to_regex_char("&") == "&"
+
+
+def test_to_regex_char_printable_passthrough() -> None:
+    """Arbitrary printable characters must pass through unchanged."""
+    for c in ("a", "Z", "|", " ", "0", "-"):
+        assert _to_regex_char(c) == c
+
+
+# ---------------------------------------------------------------------------
+# _build_unsafe_re_class
+# ---------------------------------------------------------------------------
+
+
+def test_build_unsafe_re_class_default_string() -> None:
+    """Default unsafe chars must produce the exact expected character class string."""
+    result = _build_unsafe_re_class([";", "\n", "\r", "&"])
+    assert result == "[^;\\n\\r&]"
+
+
+def test_build_unsafe_re_class_blocks_default_chars() -> None:
+    """The compiled class must reject each of the four default unsafe characters."""
+    pattern = re.compile(_build_unsafe_re_class([";", "\n", "\r", "&"]))
+    for unsafe in (";", "\n", "\r", "&"):
+        assert not pattern.fullmatch(unsafe), f"Expected {unsafe!r} to be blocked"
+
+
+def test_build_unsafe_re_class_allows_safe_chars() -> None:
+    """The compiled class must accept characters that are not in the unsafe list."""
+    pattern = re.compile(_build_unsafe_re_class([";", "\n", "\r", "&"]))
+    for safe in ("a", "Z", "0", " ", "-", "|", ".", "/"):
+        assert pattern.fullmatch(safe), f"Expected {safe!r} to be allowed"
+
+
+def test_build_unsafe_re_class_custom_chars() -> None:
+    """Additional chars beyond the defaults must also be blocked when added."""
+    pattern = re.compile(_build_unsafe_re_class([";", "\n", "\r", "&", "|"]))
+    assert not pattern.fullmatch("|")
+    assert pattern.fullmatch("a")
+
+
+def test_build_unsafe_re_class_blocks_within_string() -> None:
+    """Unsafe chars embedded inside a longer string must prevent a full match."""
+    pattern = re.compile(_build_unsafe_re_class([";", "\n", "\r", "&"]) + "*")
+    assert pattern.fullmatch("show ip interface brief")
+    assert not pattern.fullmatch("show ip interface brief; reboot")
+    assert not pattern.fullmatch("show ip interface brief\nreboot")
+    assert not pattern.fullmatch("show ip interface brief & reboot")
 
 
 @patch("netmiko_mcp.security.load_commands")
@@ -12,13 +85,18 @@ def test_validate_command_default_allowed(mock_load: Any) -> None:
     assert validate_command("show version") is False
 
 
-def test_validate_command_default_denied() -> None:
-    """Test that default dangerous substrings are rejected."""
-    # Piping is dangerous
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_default_denied(mock_load: Any, mock_settings: Any) -> None:
+    """Test that commands are denied by default when no whitelist is configured."""
+    mock_load.return_value = {}  # Simulate missing or empty commands file
+    mock_settings.allow_pipe = False
+    mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
+
+    # Pipes are blocked when allow_pipe is False
     assert validate_command("show run | include password") is False
-    # Clear is forbidden
+    # Nothing is allowed without a whitelist
     assert validate_command("clear ip ospf process") is False
-    # Debug is forbidden
     assert validate_command("debug ip packet") is False
 
 

@@ -17,6 +17,7 @@ Rules:
 
 Questions:
 1. How to handle the command abbreviation issue?
+2. Should we support explicit regular expressions in allowed/denied list?
 """
 
 import re
@@ -26,18 +27,35 @@ from typing import Any
 from netmiko_mcp.config import settings
 from netmiko.utilities import load_yaml_file
 
-# Default fallback if no custom configuration is provided
+# Default fallback if no custom configuration is provided.
 # We default to strictly denying everything. Users MUST provide a YAML configuration
 # file to allow commands.
 DEFAULT_ALLOWED_COMMANDS: list[str] = []
 DEFAULT_DENIED_COMMANDS: list[str] = []
 
 
+def _to_regex_char(c: str) -> str:
+    """Return the regex character class representation of a single character.
+    Non-printable characters (e.g. newline, carriage return) are converted to
+    their escaped forms (e.g. \\n, \\r) so they are valid inside a [...] class.
+    """
+    return c.encode("unicode_escape").decode() if not c.isprintable() else c
+
+
+def _build_unsafe_re_class(chars: list[str]) -> str:
+    """Build a regex negated character class from a list of unsafe characters."""
+    escaped = "".join(_to_regex_char(c) for c in chars)
+    return f"[^{escaped}]"
+
+
+_UNSAFE_RE_CLASS = _build_unsafe_re_class(settings.unsafe_chars)
+
+
 def glob_to_regex(glob_pattern: str) -> re.Pattern:
     """
     Convert a simple glob pattern containing '*' into a compiled regular expression.
     To prevent command injection, the wildcard '*' is compiled to match any character
-    EXCEPT command separators (newlines, semicolons, ampersands).
+    EXCEPT those defined in settings.unsafe_chars (newlines, semicolons, ampersands by default).
 
     It also intelligently handles spaces preceding asterisks (e.g., 'show version *'
     will match 'show version' with or without arguments).
@@ -45,9 +63,9 @@ def glob_to_regex(glob_pattern: str) -> re.Pattern:
     escaped = re.escape(glob_pattern.strip())
     # Match escaped space followed by escaped asterisk '\ \*'
     # and convert to an optional group of whitespace and safe characters
-    escaped = escaped.replace(r"\ \*", r"(?:\s+[^;\n\r&]*)?")
+    escaped = escaped.replace(r"\ \*", rf"(?:\s+{_UNSAFE_RE_CLASS}*)?")
     # Convert any remaining solo asterisks to 0 or more safe characters
-    escaped = escaped.replace(r"\*", r"[^;\n\r&]*")
+    escaped = escaped.replace(r"\*", rf"{_UNSAFE_RE_CLASS}*")
 
     return re.compile("^" + escaped + "$", re.IGNORECASE)
 
@@ -79,7 +97,7 @@ def validate_command(command: str) -> bool:
 
     # Strictly reject command separator characters in the raw input
     # before any whitespace normalization or splitting occurs.
-    if any(char in command for char in (";", "\n", "\r", "&")):
+    if any(char in command for char in settings.unsafe_chars):
         return False
 
     # Normalize whitespace

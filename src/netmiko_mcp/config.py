@@ -25,6 +25,7 @@ class McpConfig(BaseSettings):
     inventory_file: str | None = Field(default=None)
     command_file: str = Field(default="~/commands.yml")
     allow_pipe: bool = Field(default=False)
+    unsafe_chars: list[str] = Field(default=[";", "\n", "\r", "&"])
 
     @classmethod
     def settings_customise_sources(
