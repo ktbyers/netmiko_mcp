@@ -4,11 +4,16 @@
 
 > I have tried to make reasonable defaults and to limit what the Netmiko-MCP server allows (by default). It is highly advisable to start with ONLY show commands executed against ONLY test or lab devices. You should also strongly consider additional security mechanisms completely outside of the LLM and Netmiko- MCP (for example, a tightly-controlled AAA solution). LLMs and LLM-agents inherently have a lot of variance and are difficult to predict and control.
 
----
 
 ## Getting Started
 
 Setup requires three things: an MCP configuration file, a device inventory, and a commands whitelist.
+
+First, set the `NETMIKO_MCP_CONFIG` environment variable to point at the configuration file you are about to create:
+
+```
+export NETMIKO_MCP_CONFIG=~/.netmiko-mcp.yml
+```
 
 ### Step 1 — Create the MCP configuration file
 
