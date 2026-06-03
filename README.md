@@ -15,7 +15,7 @@ First, set the `NETMIKO_MCP_CONFIG` environment variable to point at the configu
 export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"
 ```
 
-### Step 1 — Create the MCP configuration file
+### Step 1 — Create the Netmiko-MCP configuration file
 
 Create `~/.netmiko-mcp.yml`:
 
@@ -26,14 +26,17 @@ inventory_file: "~/.netmiko.yml"
 command_file: "~/commands.yml"
 ```
 
-Full details on every setting and its environment variable override: [docs/configuration.md](docs/configuration.md)
+Additional details on the Netmiko-MCP configuration file and corresponding environment variables: [docs/configuration.md](docs/configuration.md)
+
 
 ### Step 2 — Create the device inventory
 
-Create `~/.netmiko.yml` containing your devices and encrypted credentials. The inventory
-format is documented [here](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory).
-There is also an AI [skill file](https://github.com/ktbyers/netmiko_mcp/blob/main/skills/netmiko-tools-yml/SKILL.md)
-available for assistance.
+Currently, device inventory is limited to Netmiko Tools' [device inventory](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory). It is likely this will be expanded in the future to support additional inventory sources.
+
+Create the `~/.netmiko.yml` device inventory. This file contains device dictionaries and groups of devices. It also supports encryption for keys and secrets.
+
+Netmiko Tools AI [skill file](https://github.com/ktbyers/netmiko_mcp/blob/main/skills/netmiko-tools-yml/SKILL.md)
+
 
 ### Step 3 — Create the commands whitelist
 
@@ -51,35 +54,14 @@ denied_commands: []
 
 Full details on allowed/denied matching, globbing, pipes, and unsafe characters: [docs/commands.md](docs/commands.md)
 
-### Step 4 — Register with your MCP client
 
-Add the server to your MCP client configuration (e.g. Claude Code or Claude Desktop).
-Set `NETMIKO_MCP_CONFIG` and `NETMIKO_TOOLS_KEY` in the client's `env` block:
-
-```json
-{
-  "mcpServers": {
-    "netmiko-mcp": {
-      "command": "netmiko-mcp",
-      "env": {
-        "NETMIKO_MCP_CONFIG": "/Users/yourname/.netmiko-mcp.yml",
-        "NETMIKO_TOOLS_KEY": "<your-decryption-key>"
-      }
-    }
-  }
-}
-```
-
----
-
-## Documentation
+## Reference Documentation
 
 | Document | Description |
 |---|---|
-| [docs/configuration.md](docs/configuration.md) | Full reference for `~/.netmiko-mcp.yml` — all settings, defaults, and env var overrides |
-| [docs/commands.md](docs/commands.md) | Full reference for `commands.yml` — allowed/denied matching, globbing, pipes, unsafe characters, and examples |
+| [docs/configuration.md](docs/configuration.md) | Netmiko-MCP configuration file settings |
+| [docs/commands.md](docs/commands.md) | Netmiko-MCP allowed commands, denied commands |
 
----
 
 ## MCP Tools
 
