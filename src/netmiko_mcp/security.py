@@ -139,6 +139,8 @@ def validate_command(command: str) -> bool:
             modifier_keyword = pipe_modifier.split()[0]
             if modifier_keyword not in settings.pipe_modifiers:
                 return False
+        else:
+            return False
 
     # Test command against the allowed_commands list.
     for allowed in allowed_commands:
@@ -146,7 +148,7 @@ def validate_command(command: str) -> bool:
             pattern = glob_to_regex(allowed)
             if pattern.match(base_command):
                 return True
-        elif base_command == allowed.strip():
+        elif base_command.lower() == allowed.strip().lower():
             return True
 
     # If it matches no allowed prefix, deny it
