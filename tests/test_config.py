@@ -5,8 +5,10 @@ from pydantic_core import ValidationError
 from netmiko_mcp.config import McpConfig
 
 
-def test_mcp_config_defaults() -> None:
+def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that McpConfig loads with the correct default values."""
+    # Isolate from any real ~/.netmiko-mcp.yml on the host
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", "/nonexistent/path.yml")
     config = McpConfig()
     assert config.inventory_type == "netmiko_tools"
     assert config.inventory_file is None

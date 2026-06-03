@@ -18,25 +18,26 @@ inventory_file: "/path/to/netmiko_inventory.yml"
 command_file: "/path/to/commands.yml"
 ```
 
-See [Netmiko Tools Inventory Format](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory)
-
 Set the **`NETMIKO_MCP_CONFIG`** environment variable and point this at the Netmiko MCP Configuration file that you just created.
+
+The Netmiko CLI tool inventory format is detailed [HERE](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory). Additionally, there is AI [skill file](https://github.com/ktbyers/netmiko_mcp/blob/main/skills/netmiko-tools-yml/SKILL.md) available.
 
 In your commands.yml, you must specify which commands are allowed (see LINK):
 
 ```yaml
- ---                                                                                                                              
- # Netmiko MCP Command Whitelist                                                                                                  
+---                                                                                                                              
+# Netmiko MCP Command Whitelist
 
- # By default, no commands are allowed.
-                                                                                                                                  
- allowed_commands:                                                                                                                
-   - "show version"
+# By default, no commands are allowed.
 
- # Explicitly denied commands/substrings (these override allowed_commands)                                                        
- denied_commands:                                                                                                                 
-   - "configure *"
+allowed_commands:
+  - "show version"
+
+# Explicitly denied commands/substrings (these override allowed_commands)
+denied_commands: []
 ```
+
+The above commands.yml file should allow only "show version" and no other commands to be executed.
 
 ## MCP Configuration
 

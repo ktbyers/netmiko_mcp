@@ -18,8 +18,6 @@ class McpConfig(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="NETMIKO_MCP_",
-        env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 
@@ -39,6 +37,9 @@ class McpConfig(BaseSettings):
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         """
         Define the exact priority order for settings sources.
+        Environment variables (NETMIKO_MCP_*) always take precedence over the YAML
+        config file. Use environment variables or your MCP client's env injection.
+        A .env file is not supported.
         """
         config_path_str = os.environ.get("NETMIKO_MCP_CONFIG")
         if config_path_str:
@@ -46,14 +47,11 @@ class McpConfig(BaseSettings):
         else:
             config_path = Path.home() / ".netmiko-mcp.yml"
 
-        # If the YAML file exists, we register it as the lowest priority settings source.
-        # This guarantees that environment variables and .env files will always take
-        # precedence over any values defined inside the physical YAML file.
         yaml_source = None
         if config_path.is_file():
             yaml_source = YamlConfigSettingsSource(settings_cls, yaml_file=config_path)
 
-        sources = [init_settings, env_settings, dotenv_settings]
+        sources = [init_settings, env_settings]
         if yaml_source:
             sources.append(yaml_source)
 
