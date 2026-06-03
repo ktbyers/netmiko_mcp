@@ -65,6 +65,7 @@ inventory_file: "~/.netmiko.yml"
 The server requires `NETMIKO_TOOLS_KEY` to be set in the environment so it can decrypt
 `__encrypt__` fields in the inventory. Set it in your MCP client's `env` block.
 <br />
+<br />
 
 ### `command_file`
 
