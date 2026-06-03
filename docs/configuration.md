@@ -1,7 +1,7 @@
 # Netmiko MCP — Configuration File
 
-The Netmiko MCP server is configured via a central YAML file. This document covers every
-supported setting, its default value, and the corresponding environment variable override.
+The Netmiko MCP server is configured via a YAML file. This document covers the supported
+settings, their default values, and the corresponding environment variables.
 
 
 ## File Location
@@ -12,22 +12,12 @@ By default the server looks for:
 ~/.netmiko-mcp.yml
 ```
 
-Override the path by setting the `NETMIKO_MCP_CONFIG` environment variable **before** the
-server starts. The recommended way to do this is via your MCP client's `env` block rather
-than your shell profile, since the server is typically launched by the client process:
+Override the path by setting `NETMIKO_MCP_CONFIG` in your shell rc file so it is available
+whenever a new shell session starts. Add the following to your `~/.bashrc` (bash) or
+`~/.zshrc` (zsh):
 
-```json
-{
-  "mcpServers": {
-    "netmiko-mcp": {
-      "command": "netmiko-mcp",
-      "env": {
-        "NETMIKO_MCP_CONFIG": "/path/to/your/netmiko-mcp.yml",
-        "NETMIKO_TOOLS_KEY": "<your-decryption-key>"
-      }
-    }
-  }
-}
+```bash
+export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"
 ```
 
 

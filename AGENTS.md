@@ -32,6 +32,19 @@
 - `uv run --frozen pytest -v` must 100% pass before committing. Note: Live integration tests are protected via `@pytest.mark.skipif(not os.environ.get("RUN_LIVE_TESTS"), ...)`.
 - **Comment Style:** Avoid using numbered or bulleted lists in inline code comments (e.g., `# 1. This part` or `# 2. Some other part`). Write comments as descriptive paragraphs or clear, individual sentences without numeric or alphabetic step indicators.
 
+## Documentation & Examples
+
+- **NEVER** include `NETMIKO_TOOLS_KEY` or any other secret/credential in example JSON
+  snippets, MCP client config examples, or documentation. Embedding encryption keys in
+  config files is a serious security anti-pattern.
+- **Do NOT** document MCP client configuration using a JSON `env` block as the mechanism
+  for setting `NETMIKO_MCP_CONFIG` or `NETMIKO_TOOLS_KEY`. Claude Code does not configure
+  MCP servers that way. Instead, direct users to set these in their shell rc file
+  (`~/.bashrc` or `~/.zshrc`) using `export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"`.
+- **GitHub Actions:** Always pin actions to full-length commit SHA hashes, never version
+  tags. Verify every SHA via the GitHub API before committing. Annotated tags must be
+  dereferenced to the underlying commit SHA.
+
 ## Configuration & Paths
 - **Global Config:** The MCP Server uses `pydantic-settings` centralized in `src/netmiko_mcp/config.py`. It reads natively from `~/.netmiko-mcp.yml` (and other custom profiles) with strict precedence handling managed via the `settings_customise_sources` classmethod. Environment variables prefixed with `NETMIKO_MCP_` always take precedence over keys in the physical YAML config.
 - **Paths:** Always use the `pathlib.Path` module for file operations instead of `os.path`.
