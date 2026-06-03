@@ -2,21 +2,23 @@
 
 > **WARNING:** You can make serious, incredibly detrimental mistakes by using this tool. This tool could cause massive outages in your environment. You, and you alone, are solely responsible for using this tool. Don't say I didn't warn you.
 
-## Getting Started (TLDR)
+## Getting Started
 
-Create a Netmiko MCP Configuration file (see [MCP Configuration](#mcp-configuration)). In this you should specify the following:
+Create a Netmiko MCP Configuration file (see [MCP Configuration](#mcp-configuration)). In this file you should specify the following:
 
 ```yaml
 ---
-# Netmiko Tools Inventory Format (currently: only inventory format supported)
+# Netmiko Tools Inventory Format (only inventory format currently supported)
 inventory_type: netmiko_tools
 
-# See [Netmiko Tools Inventory Format](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory)
+# Netmiko Tools Inventory File Location
 inventory_file: "/path/to/netmiko_inventory.yml"
 
 # Define allowed_commands and denied_commands (see LINK)
 command_file: "/path/to/commands.yml"
 ```
+
+See [Netmiko Tools Inventory Format](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory)
 
 Set the **`NETMIKO_MCP_CONFIG`** environment variable and point this at the Netmiko MCP Configuration file that you just created.
 
