@@ -33,6 +33,9 @@ jobs:
       - name: Run mypy
         run: uv run --frozen mypy src tests
 
+      - name: Run bandit security scan
+        run: uv run --frozen bandit -r src/
+
   unit-tests:
     name: "Unit Tests (Python ${{ matrix.python-version }})"
     runs-on: ubuntu-24.04

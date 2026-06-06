@@ -29,6 +29,7 @@ netmiko-mcp = "netmiko_mcp.server:main"
 
 [dependency-groups]
 dev = [
+    "bandit>=1.9.4",
     "mypy>=2.1.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
