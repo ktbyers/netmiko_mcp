@@ -55,4 +55,9 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pytest
+        run: uv run --frozen pytest -v --cov=netmiko_mcp --cov-report=term-missing --cov-fail-under=98
+        if: matrix.python-version == '3.13'
+
+      - name: Run pytest (no coverage)
         run: uv run --frozen pytest -v
+        if: matrix.python-version != '3.13'
