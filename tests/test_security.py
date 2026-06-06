@@ -130,7 +130,7 @@ def test_glob_to_regex_trailing_wildcard_with_multiword_prefix() -> None:
     p = glob_to_regex("show ip *")
     assert p.match("show ip interface brief")
     assert p.match("show ip route")
-    assert p.match("show ip")          # bare — wildcard group is optional
+    assert p.match("show ip")  # bare — wildcard group is optional
     assert not p.match("show version")  # wrong prefix
     assert not p.match("show ipv6 route")  # 'ipv6' != 'ip'
 
