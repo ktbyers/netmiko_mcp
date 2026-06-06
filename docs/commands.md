@@ -25,9 +25,9 @@ denied_commands:
 Both lists are optional. An empty or missing `allowed_commands` means nothing is permitted.
 
 An empty or missing `denied_commands` means no extra command blocking. Even with an empty
-`denied_commands` list, the command must still pass the and be allowed by allowed_commands.
-Additional it must still pass through additional checks like [unsafe characters](#unsafe-characters)
-and [allow pipe](configuration.md).
+`denied_commands` list, the command must still pass allowed_commands check. Additionally,
+it must also pass through checks like [unsafe characters](#unsafe-characters) and
+[allow pipe](configuration.md).
 <br />
 <br />
 
@@ -36,8 +36,8 @@ and [allow pipe](configuration.md).
 Both `allowed_commands` and `denied_commands` use identical matching rules:
 
 - A **plain string** matches only that exact command (case-insensitive, anchored at both ends).
-- A **glob pattern** containing `*` matches the command prefix with optional arguments.
-- `denied_commands` **always takes precedence** over `allowed_commands`. If a command
+- A **glob pattern** containing `*` matches the command prefix plus additional text.
+- `denied_commands` **always takes precedence** over `allowed_commands`. If a pattern
   matches both lists, it is denied.
 <br />
 <br />
@@ -53,18 +53,18 @@ allowed_commands:
 |---|---|
 | `show version` | ✅ allowed |
 | `SHOW VERSION` | ✅ allowed (case-insensitive) |
-| `show version detail` | ❌ denied — extra arguments not matched |
+| `show version detail` | ❌ denied — extra text not matched |
 | `show versio` | ❌ denied — must be exact |
 
 > **Note:** Command abbreviations are not supported. `sh ver` will not match
-> `show version`. Users and the LLM must send fully-expanded commands.
+> `show version`. Users and the LLM should send fully-expanded commands.
 <br />
 <br />
 
 ### Glob matching
 
 A `*` at the end of a pattern matches the bare command **or** the command followed by any
-arguments (excluding [unsafe characters](#unsafe-characters)).
+additional text (excluding [unsafe characters](#unsafe-characters)).
 
 ```yaml
 allowed_commands:
@@ -123,9 +123,11 @@ allowed_commands:
 
 ## `denied_commands`
 
-An explicit denylist that overrides `allowed_commands`. Uses the same exact/glob matching.
-Useful for blocking specific destructive commands even if a broader glob would otherwise
-allow them.
+An explicit denylist that has precedence over `allowed_commands`. Uses the same 
+exact/glob matching. Useful for blocking specific destructive commands even if a 
+broader glob would otherwise allow them.
+<br />
+<br />
 
 ### Behavior
 
@@ -194,6 +196,8 @@ By default, pipe operators (`|`) are **disabled**. Enable them in your
 ```yaml
 allow_pipe: true
 ```
+<br />
+<br />
 
 ### `pipe_modifiers`
 
@@ -217,6 +221,8 @@ show version | grep IOS             ❌ denied — "grep" not in default pipe_mo
 show running-config | include int   ❌ denied — base command not in allowed_commands
 show version | awk '{print $1}'     ❌ denied — "awk" not in pipe_modifiers
 ```
+<br />
+<br />
 
 
 ## Globbing Reference
@@ -233,6 +239,8 @@ spanning a command separator even if the unsafe character check were somehow byp
 | `"show *"` | `show version`, `show ip route`, `show` | `sh ver`, `configure terminal` |
 | `"debug *"` | `debug`, `debug ip packet`, `debug ip ospf adj` | `show debug` |
 | `"show ip route *"` | `show ip route`, `show ip route 10.0.0.0` | `show ip interface` |
+<br />
+<br />
 
 ### Interaction between `allowed_commands` and `denied_commands` globs
 
@@ -241,16 +249,18 @@ allowed_commands:
   - "show *"          # allow all show commands
 
 denied_commands:
-  - "show running-config"   # carve out this specific one
-  - "show startup-config"   # and this one
+  - "show r*"   # Deny show run variants (tricky due to command abbreviations)
+  - "show s*"   # Deny show start variants (tricky due to command abbreviations)
 ```
 
 | Command | Outcome |
 |---|---|
 | `show version` | ✅ allowed by `show *` |
 | `show ip interface brief` | ✅ allowed by `show *` |
-| `show running-config` | ❌ denied — exact deny overrides the glob allow |
-| `show startup-config` | ❌ denied — exact deny overrides the glob allow |
+| `show running-config` | ❌ denied — deny overrides the glob allow |
+| `show startup-config` | ❌ denied — deny overrides the glob allow |
+<br />
+<br />
 
 
 ## Validation Pipeline
@@ -266,16 +276,15 @@ Every command passes through these checks in order. The first failure stops proc
                               or if nothing follows the pipe
 4. allowed_commands check   — rejects if the base command matches no allowed pattern
 ```
+<br />
+<br />
 
 
 ## Full Example
 
-A production-style `commands.yml` for a read-only monitoring use case:
-
 ```yaml
 ---
 # ~/commands.yml
-# Read-only monitoring — IOS/IOS-XE and NX-OS
 
 allowed_commands:
   # System state
@@ -306,12 +315,8 @@ allowed_commands:
   # Logs
   - "show logging *"
 
-  # NX-OS
-  - "show vpc *"
-  - "show port-channel *"
-
 denied_commands:
-  # Never allow config or destructive commands even if a broad glob matched
-  - "show running-config"
-  - "show startup-config"
+  # Never allow show run or show start (tricky because of command abbreviations).
+  - "show r*"
+  - "show st*"
 ```
