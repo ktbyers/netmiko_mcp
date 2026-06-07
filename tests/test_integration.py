@@ -183,32 +183,38 @@ async def test_group_command_save_output_true(mcp_client: ClientSession) -> None
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_group_command_threading(mcp_client: ClientSession) -> None:
-    """Concurrent execution of two devices should be faster than sequential."""
-    # Time a single device for baseline
+async def test_group_command_threading(
+    mcp_client: ClientSession,
+    mcp_client_sequential: ClientSession,
+) -> None:
+    """Parallel execution (max_workers=10) should be significantly faster than sequential
+    (max_workers=1) across the cisco group of 4 devices.
+    """
+    # Sequential run (max_workers=1) — devices connect one at a time
     start = time.monotonic()
-    await mcp_client.call_tool(
-        "send_show_command",
-        arguments={"device_name": "cisco1", "command": "show version"},
+    await mcp_client_sequential.call_tool(
+        "send_show_command_to_group",
+        arguments={"device_or_group": "cisco", "command": "show version", "save_output": False},
     )
-    single_elapsed = time.monotonic() - start
+    sequential_elapsed = time.monotonic() - start
 
-    # Time both devices concurrently
+    # Parallel run (max_workers=10) — all devices connect concurrently
     start = time.monotonic()
     result = await mcp_client.call_tool(
         "send_show_command_to_group",
-        arguments={"device_or_group": "all", "command": "show version", "save_output": False},
+        arguments={"device_or_group": "cisco", "command": "show version", "save_output": False},
     )
-    group_elapsed = time.monotonic() - start
+    parallel_elapsed = time.monotonic() - start
 
     output = json.loads(getattr(result.content[0], "text", ""))
-    assert "cisco1" in output and "cisco2" in output
+    assert len(output) >= 2, "Expected at least 2 devices in cisco group"
 
-    # Both devices concurrently should take less than 1.5x the single device time.
-    # This proves parallelism — sequential would take ~2x the single device time.
-    assert group_elapsed < single_elapsed * 1.5, (
-        f"Group ({group_elapsed:.2f}s) not faster than 1.5x single ({single_elapsed:.2f}s) — "
-        f"threading may not be working"
+    # With 4 devices, sequential should be significantly slower than parallel.
+    # Require at least 1.5x speedup as a conservative threshold — accounts for
+    # network variability while still proving concurrent execution.
+    assert parallel_elapsed < sequential_elapsed / 1.5, (
+        f"Parallel ({parallel_elapsed:.2f}s) not 1.5x faster than sequential "
+        f"({sequential_elapsed:.2f}s) — threading may not be working correctly"
     )
 
 

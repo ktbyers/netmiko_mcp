@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -288,3 +289,58 @@ def test_run_show_command_on_group_save_output(
     saved_path = Path(result["rtr1"].replace("Saved to: ", ""))
     assert saved_path.exists()
     assert saved_path.read_text(encoding="utf-8") == "IOS output"
+
+
+@patch("netmiko_mcp.connection.settings")
+@patch("netmiko_mcp.connection.run_show_command")
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.get_device_names")
+def test_run_show_command_on_group_textfsm_propagated(
+    mock_names: MagicMock,
+    mock_validate: MagicMock,
+    mock_run: MagicMock,
+    mock_settings: MagicMock,
+) -> None:
+    """use_textfsm=True must be passed through to every run_show_command call."""
+    mock_validate.return_value = True
+    mock_names.return_value = ["rtr1", "rtr2", "rtr3"]
+    mock_settings.max_workers = 10
+    mock_run.return_value = [{"intf": "Gi0/0", "status": "up"}]
+
+    run_show_command_on_group("cisco", "show ip int brief", use_textfsm=True)
+
+    assert mock_run.call_count == 3
+    for call in mock_run.call_args_list:
+        _name, _cmd, tf = call.args
+        assert tf is True, f"Expected use_textfsm=True but got {tf}"
+
+
+def test_run_show_command_on_group_max_workers_enforced() -> None:
+    """max_workers=1 forces sequential execution, measurably slower than max_workers=4."""
+    delay = 0.2
+    devices = ["rtr1", "rtr2", "rtr3", "rtr4"]
+
+    def slow_run(name: str, cmd: str, tf: bool) -> str:
+        time.sleep(delay)
+        return f"output from {name}"
+
+    timings: dict[int, float] = {}
+
+    for workers in [1, 4]:
+        with (
+            patch("netmiko_mcp.connection.settings") as ms,
+            patch("netmiko_mcp.connection.validate_command", return_value=True),
+            patch("netmiko_mcp.connection.get_device_names", return_value=devices),
+            patch("netmiko_mcp.connection.run_show_command", side_effect=slow_run),
+        ):
+            ms.max_workers = workers
+            start = time.monotonic()
+            run_show_command_on_group("cisco", "show version")
+            timings[workers] = time.monotonic() - start
+
+    # max_workers=1: sequential, ~4 * delay = ~0.8s
+    # max_workers=4: parallel,  ~1 * delay = ~0.2s
+    # Assert parallel is at least 2x faster as a conservative threshold.
+    assert timings[4] < timings[1] / 2, (
+        f"max_workers=4 ({timings[4]:.2f}s) not 2x faster than max_workers=1 ({timings[1]:.2f}s)"
+    )
