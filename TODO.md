@@ -43,10 +43,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   `~/.netmiko-mcp.yml` requires a full server restart to take effect. Consider a reload
   mechanism or at minimum document this clearly.
 
-- **No startup validation of `command_file` path** — The server starts successfully even if
-  `command_file` points to a non-existent path. It silently denies all commands. Should
-  warn at startup if the file is missing.
-
 ---
 
 ## Connection & Performance (`connection.py` / `ARCHITECTURE.md`)

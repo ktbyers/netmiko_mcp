@@ -1,7 +1,9 @@
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from netmiko_mcp.config import settings
 from netmiko_mcp.connection import run_show_command
 from netmiko_mcp.inventory import get_sanitized_inventory
 
@@ -40,8 +42,23 @@ def ping() -> str:
     return "pong"
 
 
+def _validate_startup() -> None:
+    """Validate required configuration before starting the server.
+
+    Raises SystemExit with a clear message if the command_file does not exist,
+    preventing the server from running in a state where all commands are silently denied.
+    """
+    command_file = Path(settings.command_file).expanduser()
+    if not command_file.is_file():
+        raise SystemExit(
+            f"Startup Error: command_file '{settings.command_file}' does not exist. "
+            f"Create this file with your allowed_commands before starting the server."
+        )
+
+
 def main() -> None:
     """Entry point for the Netmiko MCP server."""
+    _validate_startup()
     mcp.run(transport="stdio")
 
 

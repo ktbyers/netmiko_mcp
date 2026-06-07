@@ -1,7 +1,46 @@
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from netmiko_mcp.server import list_devices, mcp, ping, send_show_command
+import pytest
+
+from netmiko_mcp.server import _validate_startup, list_devices, mcp, ping, send_show_command
+
+
+# ---------------------------------------------------------------------------
+# _validate_startup
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_missing_command_file(mock_settings: Any, tmp_path: Path) -> None:
+    """Server should refuse to start if command_file does not exist."""
+    mock_settings.command_file = str(tmp_path / "nonexistent.yml")
+    with pytest.raises(SystemExit, match="Startup Error"):
+        _validate_startup()
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_valid_command_file(mock_settings: Any, tmp_path: Path) -> None:
+    """Server should start successfully when command_file exists."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text("allowed_commands: []\n", encoding="utf-8")
+    mock_settings.command_file = str(cmd_file)
+    _validate_startup()  # should not raise
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_error_message_contains_path(mock_settings: Any, tmp_path: Path) -> None:
+    """The startup error message should include the configured path."""
+    bad_path = str(tmp_path / "missing.yml")
+    mock_settings.command_file = bad_path
+    with pytest.raises(SystemExit, match=bad_path):
+        _validate_startup()
+
+
+# ---------------------------------------------------------------------------
+# MCP tools
+# ---------------------------------------------------------------------------
 
 
 def test_ping_tool() -> None:
