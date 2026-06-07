@@ -36,6 +36,14 @@ jobs:
       - name: Run bandit security scan
         run: uv run --frozen bandit -r src/
 
+      - name: Run pip-audit dependency scan
+        run: >
+          uv run --frozen pip-audit
+          --ignore-vuln CVE-2026-44405
+        # CVE-2026-44405: paramiko 4.0.0 allows SHA-1. This is intentional —
+        # paramiko 5.x removed SHA-1 support which breaks connectivity to legacy
+        # network devices. netmiko constrains paramiko<5.0 for the same reason.
+
   unit-tests:
     name: "Unit Tests (Python ${{ matrix.python-version }})"
     runs-on: ubuntu-24.04
