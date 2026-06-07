@@ -6,9 +6,11 @@ import pytest
 
 from netmiko_mcp.server import (
     _validate_startup,
+    list_device_outputs,
     list_devices,
     mcp,
     ping,
+    read_device_output,
     send_show_command,
     send_show_command_to_group,
 )
@@ -86,3 +88,21 @@ def test_send_show_command_to_group_tool(mock_run_group: Any) -> None:
     result = send_show_command_to_group("core", "show version")
     assert result == {"rtr1": "IOS output", "rtr2": "IOS output"}
     mock_run_group.assert_called_once_with("core", "show version", False, False)
+
+
+@patch("netmiko_mcp.server._list_device_outputs")
+def test_list_device_outputs_tool(mock_list: Any) -> None:
+    """Test that list_device_outputs delegates to the connection module."""
+    mock_list.return_value = {"cisco1": ["show_version_20260607.txt"]}
+    result = list_device_outputs("cisco")
+    assert result == {"cisco1": ["show_version_20260607.txt"]}
+    mock_list.assert_called_once_with("cisco")
+
+
+@patch("netmiko_mcp.server._read_device_output")
+def test_read_device_output_tool(mock_read: Any) -> None:
+    """Test that read_device_output delegates to the connection module."""
+    mock_read.return_value = "IOS output content"
+    result = read_device_output("cisco1", "show_version_20260607.txt")
+    assert result == "IOS output content"
+    mock_read.assert_called_once_with("cisco1", "show_version_20260607.txt")

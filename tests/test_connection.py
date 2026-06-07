@@ -7,6 +7,8 @@ from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutExc
 from netmiko_mcp.connection import (
     _sanitize_command_for_filename,
     _save_device_output,
+    list_device_outputs,
+    read_device_output,
     run_show_command,
     run_show_command_on_group,
 )
@@ -380,3 +382,137 @@ def test_run_show_command_on_group_max_workers_enforced() -> None:
     assert timings[4] < timings[1] / 2, (
         f"max_workers=4 ({timings[4]:.2f}s) not 2x faster than max_workers=1 ({timings[1]:.2f}s)"
     )
+
+
+# ---------------------------------------------------------------------------
+# list_device_outputs
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.settings")
+@patch("netmiko_mcp.connection.get_device_names")
+def test_list_device_outputs_single_device(
+    mock_names: MagicMock, mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """Single device with saved files returns them sorted newest-first."""
+    mock_names.return_value = ["cisco1"]
+    mock_settings.save_output_dir = str(tmp_path)
+    device_dir = tmp_path / "cisco1"
+    device_dir.mkdir()
+    (device_dir / "show_version_20260607_120000.txt").write_text("old")
+    (device_dir / "show_version_20260607_130000.txt").write_text("new")
+
+    result = list_device_outputs("cisco1")
+    assert result == {
+        "cisco1": [
+            "show_version_20260607_130000.txt",
+            "show_version_20260607_120000.txt",
+        ]
+    }
+
+
+@patch("netmiko_mcp.connection.settings")
+@patch("netmiko_mcp.connection.get_device_names")
+def test_list_device_outputs_no_saved_dir(
+    mock_names: MagicMock, mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """Device with no saved directory returns empty list."""
+    mock_names.return_value = ["cisco1"]
+    mock_settings.save_output_dir = str(tmp_path)
+    result = list_device_outputs("cisco1")
+    assert result == {"cisco1": []}
+
+
+@patch("netmiko_mcp.connection.settings")
+@patch("netmiko_mcp.connection.get_device_names")
+def test_list_device_outputs_empty_dir(
+    mock_names: MagicMock, mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """Device directory exists but is empty returns empty list."""
+    mock_names.return_value = ["cisco1"]
+    mock_settings.save_output_dir = str(tmp_path)
+    (tmp_path / "cisco1").mkdir()
+    result = list_device_outputs("cisco1")
+    assert result == {"cisco1": []}
+
+
+@patch("netmiko_mcp.connection.settings")
+@patch("netmiko_mcp.connection.get_device_names")
+def test_list_device_outputs_group(
+    mock_names: MagicMock, mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """Group resolves to multiple devices, each listed independently."""
+    mock_names.return_value = ["cisco1", "cisco2", "cisco3"]
+    mock_settings.save_output_dir = str(tmp_path)
+    for device in ["cisco1", "cisco2"]:
+        d = tmp_path / device
+        d.mkdir()
+        (d / "show_version_20260607_120000.txt").write_text("output")
+
+    result = list_device_outputs("cisco")
+    assert result["cisco1"] == ["show_version_20260607_120000.txt"]
+    assert result["cisco2"] == ["show_version_20260607_120000.txt"]
+    assert result["cisco3"] == []
+
+
+@patch("netmiko_mcp.connection.get_device_names")
+def test_list_device_outputs_inventory_error(mock_names: MagicMock) -> None:
+    """Invalid group name returns an error dict."""
+    mock_names.side_effect = ValueError("Group 'bad' not found")
+    result = list_device_outputs("bad")
+    assert "error" in result
+    assert "Inventory Error" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# read_device_output
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_success(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """Valid filename returns the file content."""
+    mock_settings.save_output_dir = str(tmp_path)
+    device_dir = tmp_path / "cisco1"
+    device_dir.mkdir()
+    (device_dir / "show_version_20260607_120000.txt").write_text(
+        "IOS output here", encoding="utf-8"
+    )
+
+    result = read_device_output("cisco1", "show_version_20260607_120000.txt")
+    assert result == "IOS output here"
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_path_traversal_slash(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """Filename containing a slash is blocked."""
+    mock_settings.save_output_dir = str(tmp_path)
+    result = read_device_output("cisco1", "../../../etc/passwd")
+    assert result.startswith("Security Error")
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_path_traversal_dotdot(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """Filename containing '..' is blocked."""
+    mock_settings.save_output_dir = str(tmp_path)
+    result = read_device_output("cisco1", "..")
+    assert result.startswith("Security Error")
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_file_not_found(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """Non-existent file returns a clear error message."""
+    mock_settings.save_output_dir = str(tmp_path)
+    (tmp_path / "cisco1").mkdir()
+    result = read_device_output("cisco1", "nonexistent.txt")
+    assert "not found" in result
+    assert "cisco1" in result
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_device_not_found(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """Non-existent device directory returns a clear error message."""
+    mock_settings.save_output_dir = str(tmp_path)
+    result = read_device_output("nonexistent_device", "show_version.txt")
+    assert "No saved output found" in result
+    assert "nonexistent_device" in result

@@ -4,7 +4,12 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from netmiko_mcp.config import settings
-from netmiko_mcp.connection import run_show_command, run_show_command_on_group
+from netmiko_mcp.connection import (
+    list_device_outputs as _list_device_outputs,
+    read_device_output as _read_device_output,
+    run_show_command,
+    run_show_command_on_group,
+)
 from netmiko_mcp.inventory import get_sanitized_inventory
 
 # Initialize the FastMCP server
@@ -57,6 +62,36 @@ def send_show_command_to_group(
         A dict mapping each device name to its output (or saved file path).
     """
     return run_show_command_on_group(device_or_group, command, use_textfsm, save_output)
+
+
+@mcp.tool()
+def list_device_outputs(device_or_group: str) -> dict[str, Any]:
+    """
+    List saved output files for a device, group, or all devices.
+
+    Args:
+        device_or_group: A device name, group name, or 'all'.
+
+    Returns:
+        A dict mapping each device name to a list of saved filenames (newest first).
+        Devices with no saved output are included with an empty list.
+    """
+    return _list_device_outputs(device_or_group)
+
+
+@mcp.tool()
+def read_device_output(device_name: str, filename: str) -> str:
+    """
+    Read a previously saved output file for a specific device.
+
+    Args:
+        device_name: The device name whose output directory to read from.
+        filename: The exact filename as returned by list_device_outputs.
+
+    Returns:
+        The file content as a string, or an error message.
+    """
+    return _read_device_output(device_name, filename)
 
 
 @mcp.tool()

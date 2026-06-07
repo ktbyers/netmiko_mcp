@@ -254,6 +254,47 @@ async def test_group_command_textfsm(mcp_client: ClientSession) -> None:
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
+async def test_list_and_read_device_output_roundtrip(mcp_client: ClientSession) -> None:
+    """Full round-trip: save output, list it, read it back and verify content."""
+    # Step 1 — save output for the cisco group
+    save_result = await mcp_client.call_tool(
+        "send_show_command_to_group",
+        arguments={"device_or_group": "cisco", "command": "show version", "save_output": True},
+    )
+    saved = json.loads(getattr(save_result.content[0], "text", ""))
+    assert all(str(v).startswith("Saved to:") for v in saved.values()), (
+        f"Expected all values to be file paths: {saved}"
+    )
+
+    # Step 2 — list saved files for the group
+    list_result = await mcp_client.call_tool(
+        "list_device_outputs",
+        arguments={"device_or_group": "cisco"},
+    )
+    listing = json.loads(getattr(list_result.content[0], "text", ""))
+    for device in saved:
+        assert device in listing, f"{device} missing from listing"
+        assert len(listing[device]) >= 1, f"{device} has no listed files"
+
+    # Step 3 — read back the most recent file for each device
+    for device, files in listing.items():
+        filename = files[0]  # newest first
+        read_result = await mcp_client.call_tool(
+            "read_device_output",
+            arguments={"device_name": device, "filename": filename},
+        )
+        content = getattr(read_result.content[0], "text", "")
+        assert (
+            "Cisco IOS Software" in content
+            or "Cisco Internetwork Operating System Software" in content
+        ), f"{device}: read content does not look like IOS output"
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
+)
 async def test_group_command_security_block(mcp_client: ClientSession) -> None:
     """A blocked command hard-stops without connecting to any device.
     Uses 'show running-config' which is not in the allowed_commands list —

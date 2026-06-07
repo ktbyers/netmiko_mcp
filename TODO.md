@@ -29,10 +29,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   pool/cache with a configurable TTL (e.g. 60 seconds of inactivity) would dramatically
   improve response times for multi-step LLM interactions.
 
-- **No concurrency** `[ARCH §2]` - Commands to multiple devices are sequential. A
-  threading or async approach would allow the LLM to fan out queries across devices
-  simultaneously.
-
 - **No stale session detection** `[ARCH §2]` - No mechanism to detect, purge, or
   re-establish SSH connections that have silently dropped.
 
@@ -55,12 +51,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 ---
 
 ## Server Tools (`server.py`)
-
-- **Retriever tool** — `read_device_output(device_name, filename)` to read back a
-  previously saved file written by `send_show_command_to_group` with `save_output=True`.
-
-- **List outputs tool** — `list_device_outputs(device_name)` to list available saved
-  output files for a device under `save_output_dir`.
 
 - **No read-write / config mode** `[ARCH §1]` - `send_config_set` is intentionally absent.
   A separate opt-in `send_config_command` tool behind a `allow_config: false` config flag

@@ -94,6 +94,72 @@ def _save_device_output(device_name: str, command: str, output: Any) -> str:
     return str(file_path)
 
 
+def list_device_outputs(device_or_group: str) -> dict[str, Any]:
+    """List saved output files for a device, group, or all devices.
+
+    Args:
+        device_or_group: A device name, group name, or 'all'.
+
+    Returns:
+        A dict mapping each device name to a list of saved filenames (newest first).
+        Devices with no saved output are included with an empty list.
+    """
+    try:
+        device_names = get_device_names(device_or_group)
+    except ValueError as e:
+        return {"error": f"Inventory Error: {str(e)}"}
+
+    base_dir = Path(settings.save_output_dir).expanduser()
+    result: dict[str, Any] = {}
+
+    for device_name in device_names:
+        device_dir = base_dir / device_name
+        if not device_dir.is_dir():
+            result[device_name] = []
+        else:
+            result[device_name] = sorted(
+                [f.name for f in device_dir.glob("*.txt")],
+                reverse=True,
+            )
+
+    return result
+
+
+def read_device_output(device_name: str, filename: str) -> str:
+    """Read a previously saved output file for a specific device.
+
+    The filename is validated to prevent path traversal attacks — only plain
+    filenames (no slashes or '..' components) are accepted.
+
+    Args:
+        device_name: The device name whose output directory to read from.
+        filename: The exact filename as returned by list_device_outputs.
+
+    Returns:
+        The file content as a string, or an error message.
+    """
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return f"Security Error: Invalid filename '{filename}'."
+
+    base_dir = Path(settings.save_output_dir).expanduser()
+    device_dir = base_dir / device_name
+    file_path = device_dir / filename
+
+    # Belt-and-suspenders: ensure resolved path stays within device_dir
+    try:
+        if not file_path.resolve().is_relative_to(device_dir.resolve()):
+            return f"Security Error: Invalid filename '{filename}'."
+    except Exception:  # pragma: no cover
+        return f"Security Error: Invalid filename '{filename}'."
+
+    if not device_dir.is_dir():
+        return f"Error: No saved output found for device '{device_name}'."
+    if not file_path.is_file():
+        return f"Error: File '{filename}' not found for device '{device_name}'."
+
+    return file_path.read_text(encoding="utf-8")
+
+
 def run_show_command_on_group(
     device_or_group: str,
     command: str,
