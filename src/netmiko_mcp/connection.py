@@ -71,14 +71,26 @@ def _sanitize_command_for_filename(command: str) -> str:
 
 
 def _save_device_output(device_name: str, command: str, output: Any) -> str:
-    """Save command output to a per-device file and return the absolute file path."""
-    device_dir = Path(settings.save_output_dir).expanduser() / device_name
-    device_dir.mkdir(parents=True, exist_ok=True)
+    """Save command output to a per-device file and return the absolute file path.
+
+    Directories are created with mode 0o700 (owner read/write/execute only) to
+    prevent other users on the system from reading potentially sensitive network
+    device output.
+    """
+    base_dir = Path(settings.save_output_dir).expanduser()
+    base_dir.mkdir(parents=True, exist_ok=True)
+    base_dir.chmod(0o700)
+
+    device_dir = base_dir / device_name
+    device_dir.mkdir(exist_ok=True)
+    device_dir.chmod(0o700)
+
     cmd_name = _sanitize_command_for_filename(command)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     file_path = device_dir / f"{cmd_name}_{timestamp}.txt"
     content = json.dumps(output, indent=2) if isinstance(output, (list, dict)) else str(output)
     file_path.write_text(content, encoding="utf-8")
+    file_path.chmod(0o600)
     return str(file_path)
 
 

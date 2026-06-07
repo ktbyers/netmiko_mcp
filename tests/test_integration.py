@@ -167,9 +167,10 @@ async def test_group_command_save_output_true(mcp_client: ClientSession) -> None
             "Cisco IOS Software" in content
             or "Cisco Internetwork Operating System Software" in content
         ), f"{device}: saved file does not contain IOS output"
-        # Verify file is under the configured save_output_dir
-        assert str(file_path).startswith("/tmp/netmiko_mcp_integration_test"), (
-            f"{device}: file not in expected save_output_dir"
+        # Verify file is under the default save_output_dir (~/.netmiko_mcp_tmp)
+        expected_base = str(Path("~/.netmiko_mcp_tmp").expanduser())
+        assert str(file_path).startswith(expected_base), (
+            f"{device}: file not in expected save_output_dir ({expected_base})"
         )
         # Verify device name is used as subdirectory
         assert file_path.parent.name == device, (

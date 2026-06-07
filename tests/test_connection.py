@@ -166,6 +166,20 @@ def test_save_device_output_creates_file(mock_settings: MagicMock, tmp_path: Pat
 
 
 @patch("netmiko_mcp.connection.settings")
+def test_save_device_output_permissions(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """Test that directories and files are created with restrictive permissions."""
+    mock_settings.save_output_dir = str(tmp_path / "output")
+    file_path = _save_device_output("cisco1", "show version", "IOS output")
+    saved = Path(file_path)
+    # File: owner read/write only (0o600)
+    assert oct(saved.stat().st_mode & 0o777) == oct(0o600)
+    # Device subdirectory: owner only (0o700)
+    assert oct(saved.parent.stat().st_mode & 0o777) == oct(0o700)
+    # Base output directory: owner only (0o700)
+    assert oct(saved.parent.parent.stat().st_mode & 0o777) == oct(0o700)
+
+
+@patch("netmiko_mcp.connection.settings")
 def test_save_device_output_json_for_structured(mock_settings: MagicMock, tmp_path: Path) -> None:
     """Test that list/dict output is serialized to JSON in the saved file."""
     mock_settings.save_output_dir = str(tmp_path)
