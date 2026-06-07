@@ -4,13 +4,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ---
 
-## Documentation
-
-- **Finish reviewing and editing `docs/commands.md`** — content was drafted but needs a
-  full review pass for accuracy, tone, and completeness.
-
----
-
 ## Security (`security.py`)
 
 - **Audit logging** `[FIX in docstring]` — Every attempted command must be logged with a
@@ -21,10 +14,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 - **`load_commands()` caches nothing** — The commands YAML file is read and parsed from disk
   on every single call to `validate_command()`. This should be cached (e.g. with
   `functools.lru_cache` or a module-level dict invalidated on file mtime change).
-
-- **`load_yaml_file` calls `sys.exit()` on `IOError`** — If the commands file exists but
-  cannot be read (permissions, corruption), the entire server process dies. Should raise a
-  recoverable exception instead and return a safe default (deny all).
 
 - **Command abbreviation handling** `[open question in docstring]` — `sh ip int br` is not
   the same as `show ip interface brief` to the validator even though network devices accept
