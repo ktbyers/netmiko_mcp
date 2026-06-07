@@ -217,10 +217,17 @@ async def test_group_command_threading(mcp_client: ClientSession) -> None:
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
 async def test_group_command_security_block(mcp_client: ClientSession) -> None:
-    """A blocked command hard-stops without connecting to any device."""
+    """A blocked command hard-stops without connecting to any device.
+    Uses 'show running-config' which is not in the allowed_commands list —
+    harmless if it somehow slipped through, unlike destructive commands.
+    """
     result = await mcp_client.call_tool(
         "send_show_command_to_group",
-        arguments={"device_or_group": "all", "command": "reload", "save_output": False},
+        arguments={
+            "device_or_group": "all",
+            "command": "show running-config",
+            "save_output": False,
+        },
     )
     output = json.loads(getattr(result.content[0], "text", ""))
     assert "error" in output
