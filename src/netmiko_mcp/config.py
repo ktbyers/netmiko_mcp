@@ -27,6 +27,8 @@ class McpConfig(BaseSettings):
     allow_pipe: bool = Field(default=False)
     unsafe_chars: list[str] = Field(default=[";", "\n", "\r", "&"])
     pipe_modifiers: list[str] = Field(default=["include", "exclude", "section", "begin", "count"])
+    max_workers: int = Field(default=10)
+    save_output_dir: str = Field(default="~/.netmiko_mcp_tmp")
 
     @classmethod
     def settings_customise_sources(

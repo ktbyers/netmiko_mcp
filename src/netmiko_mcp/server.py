@@ -4,7 +4,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from netmiko_mcp.config import settings
-from netmiko_mcp.connection import run_show_command
+from netmiko_mcp.connection import run_show_command, run_show_command_on_group
 from netmiko_mcp.inventory import get_sanitized_inventory
 
 # Initialize the FastMCP server
@@ -34,6 +34,29 @@ def send_show_command(
         use_textfsm: Set to True to attempt parsing the output into structured JSON data using ntc-templates.
     """
     return run_show_command(device_name, command, use_textfsm)
+
+
+@mcp.tool()
+def send_show_command_to_group(
+    device_or_group: str,
+    command: str,
+    use_textfsm: bool = False,
+    save_output: bool = False,
+) -> dict[str, Any]:
+    """
+    Connect to a group of devices concurrently and execute a show command on each.
+
+    Args:
+        device_or_group: A device group name or device name from the inventory.
+        command: The CLI command to execute on all devices (e.g. 'show version').
+        use_textfsm: If True, attempt to return parsed structured JSON data.
+        save_output: If True, save per-device output to files and return file paths
+                     instead of raw output.
+
+    Returns:
+        A dict mapping each device name to its output (or saved file path).
+    """
+    return run_show_command_on_group(device_or_group, command, use_textfsm, save_output)
 
 
 @mcp.tool()

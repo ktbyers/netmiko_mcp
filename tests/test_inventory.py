@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import patch
 import pytest
 
-from netmiko_mcp.inventory import get_device_params, get_sanitized_inventory
+from netmiko_mcp.inventory import get_device_names, get_device_params, get_sanitized_inventory
 
 
 @patch("netmiko_mcp.inventory.obtain_devices")
@@ -79,6 +79,25 @@ def test_get_sanitized_inventory_handles_error(mock_obtain: Any) -> None:
 
     assert "error" in result
     assert result["error"] == "Device or group not found"
+
+
+@patch("netmiko_mcp.inventory.obtain_devices")
+def test_get_device_names_success(mock_obtain: Any) -> None:
+    """Test that get_device_names returns a list of device names."""
+    mock_obtain.return_value = {
+        "rtr1": {"host": "1.1.1.1"},
+        "rtr2": {"host": "2.2.2.2"},
+    }
+    result = get_device_names("core")
+    assert result == ["rtr1", "rtr2"]
+
+
+@patch("netmiko_mcp.inventory.obtain_devices")
+def test_get_device_names_error(mock_obtain: Any) -> None:
+    """Test that get_device_names raises ValueError when group is not found."""
+    mock_obtain.return_value = "Group not found"
+    with pytest.raises(ValueError, match="Group not found"):
+        get_device_names("nonexistent")
 
 
 @patch("netmiko_mcp.inventory.settings")

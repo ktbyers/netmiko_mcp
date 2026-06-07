@@ -36,6 +36,18 @@ def get_device_params(device_name: str) -> Dict[str, Any]:
     return devices[device_name]
 
 
+def get_device_names(device_or_group: str) -> list[str]:
+    """
+    Return a list of device names for a device or group from the inventory.
+    Raises ValueError if the device or group is not found.
+    """
+    _set_inventory_env_var()
+    devices = obtain_devices(device_or_group)
+    if isinstance(devices, str):
+        raise ValueError(devices)
+    return list(devices.keys())
+
+
 def get_sanitized_inventory(device_or_group: str) -> str:
     """
     Retrieve device inventory by group-name, all, or device-name.

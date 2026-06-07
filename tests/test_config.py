@@ -16,6 +16,8 @@ def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.allow_pipe is False
     assert config.unsafe_chars == [";", "\n", "\r", "&"]
     assert config.pipe_modifiers == ["include", "exclude", "section", "begin", "count"]
+    assert config.max_workers == 10
+    assert config.save_output_dir == "~/.netmiko_mcp_tmp"
 
 
 def test_mcp_config_validation() -> None:
@@ -54,6 +56,8 @@ async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NETMIKO_MCP_ALLOW_PIPE", "true")
     monkeypatch.setenv("NETMIKO_MCP_UNSAFE_CHARS", '[";" , "|", "!"]')
     monkeypatch.setenv("NETMIKO_MCP_PIPE_MODIFIERS", '["include", "exclude", "grep"]')
+    monkeypatch.setenv("NETMIKO_MCP_MAX_WORKERS", "20")
+    monkeypatch.setenv("NETMIKO_MCP_SAVE_OUTPUT_DIR", "/tmp/mcp_out")
 
     config = McpConfig()
     assert config.inventory_type == "netmiko_tools"
@@ -62,6 +66,22 @@ async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.allow_pipe is True
     assert config.unsafe_chars == [";", "|", "!"]
     assert config.pipe_modifiers == ["include", "exclude", "grep"]
+    assert config.max_workers == 20
+    assert config.save_output_dir == "/tmp/mcp_out"
+
+
+@pytest.mark.anyio
+async def test_mcp_config_yaml_max_workers_and_save_output_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that max_workers and save_output_dir set in a config file are respected."""
+    cfg_file = tmp_path / "test-config.yml"
+    cfg_file.write_text("max_workers: 25\nsave_output_dir: /tmp/custom_out\n", encoding="utf-8")
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+
+    config = McpConfig()
+    assert config.max_workers == 25
+    assert config.save_output_dir == "/tmp/custom_out"
 
 
 @pytest.mark.anyio

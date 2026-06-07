@@ -4,7 +4,14 @@ from unittest.mock import patch
 
 import pytest
 
-from netmiko_mcp.server import _validate_startup, list_devices, mcp, ping, send_show_command
+from netmiko_mcp.server import (
+    _validate_startup,
+    list_devices,
+    mcp,
+    ping,
+    send_show_command,
+    send_show_command_to_group,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -70,3 +77,12 @@ def test_send_show_command_tool(mock_run_show: Any) -> None:
         {"intf": "Gi0/0", "status": "up"}
     ]
     mock_run_show.assert_called_once_with("rtr1", "show ip int brief", True)
+
+
+@patch("netmiko_mcp.server.run_show_command_on_group")
+def test_send_show_command_to_group_tool(mock_run_group: Any) -> None:
+    """Test that send_show_command_to_group delegates to the connection module."""
+    mock_run_group.return_value = {"rtr1": "IOS output", "rtr2": "IOS output"}
+    result = send_show_command_to_group("core", "show version")
+    assert result == {"rtr1": "IOS output", "rtr2": "IOS output"}
+    mock_run_group.assert_called_once_with("core", "show version", False, False)
