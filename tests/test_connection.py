@@ -255,6 +255,30 @@ def test_run_show_command_on_group_success(
 @patch("netmiko_mcp.connection.run_show_command")
 @patch("netmiko_mcp.connection.validate_command")
 @patch("netmiko_mcp.connection.get_device_names")
+def test_run_show_command_on_group_all_devices_fail(
+    mock_names: MagicMock,
+    mock_validate: MagicMock,
+    mock_run: MagicMock,
+    mock_settings: MagicMock,
+) -> None:
+    """When every device raises an exception every result is an Execution Error string."""
+    mock_validate.return_value = True
+    mock_names.return_value = ["rtr1", "rtr2", "rtr3"]
+    mock_settings.max_workers = 10
+    mock_run.side_effect = RuntimeError("connection refused")
+
+    result = run_show_command_on_group("cisco", "show version")
+
+    assert len(result) == 3
+    for device in ["rtr1", "rtr2", "rtr3"]:
+        assert device in result
+        assert "Execution Error" in result[device]
+
+
+@patch("netmiko_mcp.connection.settings")
+@patch("netmiko_mcp.connection.run_show_command")
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.get_device_names")
 def test_run_show_command_on_group_partial_failure(
     mock_names: MagicMock,
     mock_validate: MagicMock,

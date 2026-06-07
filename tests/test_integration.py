@@ -223,6 +223,37 @@ async def test_group_command_threading(
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
+async def test_group_command_textfsm(mcp_client: ClientSession) -> None:
+    """use_textfsm=True returns structured JSON for each device in the group."""
+    result = await mcp_client.call_tool(
+        "send_show_command_to_group",
+        arguments={
+            "device_or_group": "cisco",
+            "command": "show version",
+            "use_textfsm": True,
+            "save_output": False,
+        },
+    )
+
+    assert len(result.content) == 1
+    output = json.loads(getattr(result.content[0], "text", ""))
+
+    assert len(output) >= 2, "Expected at least 2 devices in cisco group"
+    for device, data in output.items():
+        assert isinstance(data, list), (
+            f"{device}: expected parsed list from textfsm but got {type(data).__name__}"
+        )
+        assert len(data) > 0, f"{device}: textfsm returned empty list"
+        assert isinstance(data[0], dict), (
+            f"{device}: expected list of dicts from textfsm but got list of {type(data[0]).__name__}"
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
+)
 async def test_group_command_security_block(mcp_client: ClientSession) -> None:
     """A blocked command hard-stops without connecting to any device.
     Uses 'show running-config' which is not in the allowed_commands list —
