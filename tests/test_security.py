@@ -214,15 +214,18 @@ def test_glob_to_regex_block_unsafe_false_exact_pattern_unchanged() -> None:
 
 def test_load_commands_file_not_found(tmp_path: Path) -> None:
     """load_commands returns {} when the command_file path does not exist."""
+    load_commands.cache_clear()
     non_existent = tmp_path / "no_such_commands.yml"
     with patch("netmiko_mcp.security.settings") as mock_settings:
         mock_settings.command_file = str(non_existent)
         result = load_commands()
+    load_commands.cache_clear()
     assert result == {}
 
 
 def test_load_commands_valid_file(tmp_path: Path) -> None:
     """load_commands returns the parsed YAML dict when the file exists."""
+    load_commands.cache_clear()
     cfg = tmp_path / "commands.yml"
     cfg.write_text(
         'allowed_commands: ["show version"]\ndenied_commands: ["reload"]\n',
@@ -231,8 +234,25 @@ def test_load_commands_valid_file(tmp_path: Path) -> None:
     with patch("netmiko_mcp.security.settings") as mock_settings:
         mock_settings.command_file = str(cfg)
         result = load_commands()
+    load_commands.cache_clear()
     assert result["allowed_commands"] == ["show version"]
     assert result["denied_commands"] == ["reload"]
+
+
+def test_load_commands_result_is_cached(tmp_path: Path) -> None:
+    """load_commands should only read the file once across multiple calls."""
+    load_commands.cache_clear()
+    cfg = tmp_path / "commands.yml"
+    cfg.write_text('allowed_commands: ["show version"]\n', encoding="utf-8")
+    with patch("netmiko_mcp.security.settings") as mock_settings:
+        mock_settings.command_file = str(cfg)
+        with patch("netmiko_mcp.security.load_yaml_file") as mock_yaml:
+            mock_yaml.return_value = {"allowed_commands": ["show version"]}
+            load_commands()
+            load_commands()
+            load_commands()
+    load_commands.cache_clear()
+    mock_yaml.assert_called_once()
 
 
 @patch("netmiko_mcp.security.load_commands")

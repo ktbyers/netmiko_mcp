@@ -11,10 +11,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   match, unsafe char, pipe violation, etc.). Required for compliance and incident response.
   Logging should go to a configurable destination (local file, syslog).
 
-- **`load_commands()` caches nothing** — The commands YAML file is read and parsed from disk
-  on every single call to `validate_command()`. This should be cached (e.g. with
-  `functools.lru_cache` or a module-level dict invalidated on file mtime change).
-
 - **Command abbreviation handling** `[open question in docstring]` — `sh ip int br` is not
   the same as `show ip interface brief` to the validator even though network devices accept
   both. No resolution yet — document this limitation clearly for users and consider whether
@@ -23,14 +19,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 - **Explicit regex support** `[open question in docstring]` — Should `allowed_commands` and
   `denied_commands` support raw regular expressions in addition to globs? Currently only
   `*` glob syntax is supported.
-
----
-
-## Configuration (`config.py`)
-
-- **`settings` is a module-level singleton** — Loaded once at import time. Any change to
-  `~/.netmiko-mcp.yml` requires a full server restart to take effect. Consider a reload
-  mechanism or at minimum document this clearly.
 
 ---
 

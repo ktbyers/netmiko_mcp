@@ -21,6 +21,7 @@ Questions:
 """
 
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -87,9 +88,12 @@ def deny_check(command: str, denied_commands: list[str]) -> bool:
     return False
 
 
+@lru_cache(maxsize=1)
 def load_commands() -> dict[str, Any]:
     """
     Load the command whitelist/blacklist from the command_file defined in global config.
+    Result is cached after the first call. A server restart is required to pick up
+    changes to commands.yml.
     """
     file_path = Path(settings.command_file).expanduser()
     if file_path.is_file():
