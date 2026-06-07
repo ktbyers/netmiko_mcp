@@ -208,6 +208,18 @@ def test_run_show_command_on_group_security_block(mock_validate: MagicMock) -> N
 
 @patch("netmiko_mcp.connection.validate_command")
 @patch("netmiko_mcp.connection.get_device_names")
+def test_run_show_command_on_group_empty_device_list(
+    mock_names: MagicMock, mock_validate: MagicMock
+) -> None:
+    """An empty device list returns an empty dict without attempting any connections."""
+    mock_validate.return_value = True
+    mock_names.return_value = []
+    result = run_show_command_on_group("empty_group", "show version")
+    assert result == {}
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.get_device_names")
 def test_run_show_command_on_group_inventory_error(
     mock_names: MagicMock, mock_validate: MagicMock
 ) -> None:
