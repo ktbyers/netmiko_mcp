@@ -6,8 +6,8 @@ Rules:
    The whitelist is empty be default.
 2. The blacklist (denied_commands) has precedence over the whitelist so if both
    blacklist and whitelist match a given command, then the command is denied.
-3. Pipes are denied by default. [THIS WILL BE EXPANDED TO ENCOMPASS ADDITIONAL
-   WAYS OF DOING MULTIPLE COMMANDS: FIX].
+3. Pipes are denied by default. Multi-command injection vectors (e.g. `;`, `\n`, `\r`,
+   `&`) are blocked via the unsafe_chars check before any other validation.
 4. Every attempted and executed command must be logged for audit and compliance.
    This should include the reason for acceptance or rejection. [FIX]
 5. Configuration changes are disallowed by default, both at the Netmiko-level

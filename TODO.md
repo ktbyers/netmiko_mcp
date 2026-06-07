@@ -35,11 +35,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   `denied_commands` support raw regular expressions in addition to globs? Currently only
   `*` glob syntax is supported.
 
-- **Rule 3 comment cleanup** `[FIX tag in docstring]` — The module docstring still carries
-  a `[FIX]` tag on Rule 3 about expanding pipe protection to cover other multi-command
-  vectors. The raw unsafe chars check now handles `;`, `\n`, `\r`, `&` — the docstring
-  should be updated to reflect what is actually implemented.
-
 ---
 
 ## Configuration (`config.py`)
