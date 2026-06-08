@@ -182,3 +182,61 @@ async def test_inventory_type_precedence(tmp_path: Path, monkeypatch: pytest.Mon
     monkeypatch.setenv("NETMIKO_MCP_INVENTORY_TYPE", "netmiko_tools")
     config = McpConfig()
     assert config.inventory_type == "netmiko_tools"
+
+
+def test_mcp_config_audit_log_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Audit log fields should have correct default values."""
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", "/nonexistent/path.yml")
+    config = McpConfig()
+    assert config.audit_log_enabled is True
+    assert config.audit_log_destination == "file"
+    assert config.audit_log_file == "~/.netmiko_mcp_audit.log"
+    assert config.audit_log_max_bytes == 10_485_760
+    assert config.audit_log_backup_count == 5
+    assert config.audit_log_syslog_address == "/dev/log"
+    assert config.audit_log_syslog_facility == "local0"
+    assert config.audit_log_read_transcript is False
+    assert config.audit_log_transcript_dir == "~/.netmiko_mcp_transcripts"
+    assert config.audit_log_retention_days == 30
+
+
+@pytest.mark.anyio
+async def test_mcp_config_audit_log_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Audit log fields should be overridable via NETMIKO_MCP_AUDIT_LOG_* env vars."""
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_ENABLED", "false")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_DESTINATION", "syslog")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_FILE", "/var/log/mcp_audit.log")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_MAX_BYTES", "5242880")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_BACKUP_COUNT", "10")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_SYSLOG_ADDRESS", "192.168.1.1:514")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_SYSLOG_FACILITY", "local1")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_READ_TRANSCRIPT", "true")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_TRANSCRIPT_DIR", "/tmp/transcripts")
+    monkeypatch.setenv("NETMIKO_MCP_AUDIT_LOG_RETENTION_DAYS", "7")
+
+    config = McpConfig()
+    assert config.audit_log_enabled is False
+    assert config.audit_log_destination == "syslog"
+    assert config.audit_log_file == "/var/log/mcp_audit.log"
+    assert config.audit_log_max_bytes == 5_242_880
+    assert config.audit_log_backup_count == 10
+    assert config.audit_log_syslog_address == "192.168.1.1:514"
+    assert config.audit_log_syslog_facility == "local1"
+    assert config.audit_log_read_transcript is True
+    assert config.audit_log_transcript_dir == "/tmp/transcripts"
+    assert config.audit_log_retention_days == 7
+
+
+@pytest.mark.anyio
+async def test_mcp_config_audit_log_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Audit log fields should be configurable from the YAML config file."""
+    cfg_file = tmp_path / "test-config.yml"
+    cfg_file.write_text(
+        "audit_log_enabled: false\naudit_log_destination: both\naudit_log_retention_days: 90\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+    config = McpConfig()
+    assert config.audit_log_enabled is False
+    assert config.audit_log_destination == "both"
+    assert config.audit_log_retention_days == 90

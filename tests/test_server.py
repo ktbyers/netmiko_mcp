@@ -57,6 +57,13 @@ def test_ping_tool() -> None:
     assert ping() == "pong"
 
 
+@patch("netmiko_mcp.server.log_tool_invocation")
+def test_ping_tool_logs_invocation(mock_log: Any) -> None:
+    """ping should emit an audit record for the tool invocation."""
+    ping()
+    mock_log.assert_called_once_with(tool="ping", arguments={})
+
+
 def test_mcp_initialization() -> None:
     """Test that the FastMCP server is initialized with the correct name."""
     assert mcp.name == "netmiko-mcp"
@@ -68,6 +75,15 @@ def test_list_devices_tool(mock_get_sanitized: Any) -> None:
     mock_get_sanitized.return_value = '{"rtr1": {"host": "1.1.1.1"}}'
     assert list_devices("rtr1") == '{"rtr1": {"host": "1.1.1.1"}}'
     mock_get_sanitized.assert_called_once_with("rtr1")
+
+
+@patch("netmiko_mcp.server.log_tool_invocation")
+@patch("netmiko_mcp.server.get_sanitized_inventory")
+def test_list_devices_tool_logs_invocation(mock_inv: Any, mock_log: Any) -> None:
+    """list_devices should emit an audit record including the device_or_group argument."""
+    mock_inv.return_value = "{}"
+    list_devices("all")
+    mock_log.assert_called_once_with(tool="list_devices", arguments={"device_or_group": "all"})
 
 
 @patch("netmiko_mcp.server.run_show_command")
@@ -99,6 +115,17 @@ def test_list_device_outputs_tool(mock_list: Any) -> None:
     mock_list.assert_called_once_with("cisco")
 
 
+@patch("netmiko_mcp.server.log_tool_invocation")
+@patch("netmiko_mcp.server._list_device_outputs")
+def test_list_device_outputs_tool_logs_invocation(mock_list: Any, mock_log: Any) -> None:
+    """list_device_outputs should emit an audit record including device_or_group."""
+    mock_list.return_value = {}
+    list_device_outputs("cisco")
+    mock_log.assert_called_once_with(
+        tool="list_device_outputs", arguments={"device_or_group": "cisco"}
+    )
+
+
 @patch("netmiko_mcp.server._read_device_output")
 def test_read_device_output_tool(mock_read: Any) -> None:
     """Test that read_device_output delegates to the connection module."""
@@ -106,3 +133,35 @@ def test_read_device_output_tool(mock_read: Any) -> None:
     result = read_device_output("cisco1", "show_version_20260607.txt")
     assert result == "IOS output content"
     mock_read.assert_called_once_with("cisco1", "show_version_20260607.txt")
+
+
+@patch("netmiko_mcp.server.log_tool_invocation")
+@patch("netmiko_mcp.server._read_device_output")
+def test_read_device_output_tool_logs_invocation(mock_read: Any, mock_log: Any) -> None:
+    """read_device_output should emit an audit record with device_name and filename."""
+    mock_read.return_value = "content"
+    read_device_output("cisco1", "show_version_20260607.txt")
+    mock_log.assert_called_once_with(
+        tool="read_device_output",
+        arguments={"device_name": "cisco1", "filename": "show_version_20260607.txt"},
+    )
+
+
+@patch("netmiko_mcp.server.configure_audit_logger")
+@patch("netmiko_mcp.server.settings")
+def test_main_calls_configure_audit_logger(mock_settings: Any, mock_configure: Any) -> None:
+    """main() should call configure_audit_logger before starting the server."""
+    from netmiko_mcp.server import main
+    import tempfile
+    import os
+
+    with tempfile.NamedTemporaryFile(suffix=".yml", delete=False) as f:
+        f.write(b"allowed_commands: []\n")
+        tmp = f.name
+    try:
+        mock_settings.command_file = tmp
+        with patch("netmiko_mcp.server.mcp"):
+            main()
+        mock_configure.assert_called_once()
+    finally:
+        os.unlink(tmp)

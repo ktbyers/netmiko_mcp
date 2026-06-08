@@ -1,9 +1,15 @@
 import time
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 
+from netmiko_mcp.audit import (
+    REASON_ALLOWED,
+    REASON_DENY_MATCH,
+)
+from netmiko_mcp.security import ValidationResult
 from netmiko_mcp.connection import (
     _sanitize_command_for_filename,
     _save_device_output,
@@ -21,7 +27,7 @@ def test_run_show_command_success(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that a command is executed successfully and returns output."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 
     # Mock the context manager behavior of ConnectHandler
@@ -43,7 +49,7 @@ def test_run_show_command_textfsm(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that textfsm parsed data is correctly serialized to JSON."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1"}
 
     mock_net_connect = MagicMock()
@@ -65,7 +71,7 @@ def test_run_show_command_inventory_error(
     mock_get_params: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an inventory failure is caught and returned as a string."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.side_effect = ValueError("Device not found")
 
     result = run_show_command("bad_router", "show version")
@@ -79,7 +85,7 @@ def test_run_show_command_auth_error(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an authentication failure is caught and returned as a string."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.side_effect = NetmikoAuthenticationException("Auth failed")
 
@@ -94,7 +100,7 @@ def test_run_show_command_timeout_error(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that a timeout failure is caught and returned as a string."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.side_effect = NetmikoTimeoutException("Timeout")
 
@@ -105,7 +111,7 @@ def test_run_show_command_timeout_error(
 @patch("netmiko_mcp.connection.validate_command")
 def test_run_show_command_security_block(mock_validate: MagicMock) -> None:
     """Test that a blocked command returns a Security Error string."""
-    mock_validate.return_value = False
+    mock_validate.return_value = ValidationResult(allowed=False, reason=REASON_DENY_MATCH)
 
     result = run_show_command("rtr1", "reload")
     assert result == "Security Error: Command 'reload' is not permitted."
@@ -118,7 +124,7 @@ def test_run_show_command_unexpected_exception(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an unexpected exception is caught and returned as an Execution Error string."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.side_effect = RuntimeError("unexpected SSH negotiation failure")
 
@@ -202,7 +208,7 @@ def test_save_device_output_json_for_structured(mock_settings: MagicMock, tmp_pa
 @patch("netmiko_mcp.connection.validate_command")
 def test_run_show_command_on_group_security_block(mock_validate: MagicMock) -> None:
     """Test that a blocked command returns a security error without connecting."""
-    mock_validate.return_value = False
+    mock_validate.return_value = ValidationResult(allowed=False, reason=REASON_DENY_MATCH)
     result = run_show_command_on_group("core", "reload")
     assert "error" in result
     assert "Security Error" in result["error"]
@@ -214,7 +220,7 @@ def test_run_show_command_on_group_empty_device_list(
     mock_names: MagicMock, mock_validate: MagicMock
 ) -> None:
     """An empty device list returns an empty dict without attempting any connections."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_names.return_value = []
     result = run_show_command_on_group("empty_group", "show version")
     assert result == {}
@@ -226,7 +232,7 @@ def test_run_show_command_on_group_inventory_error(
     mock_names: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an inventory error is returned cleanly."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_names.side_effect = ValueError("Group 'bad' not found")
     result = run_show_command_on_group("bad", "show version")
     assert "error" in result
@@ -244,10 +250,10 @@ def test_run_show_command_on_group_success(
     mock_settings: MagicMock,
 ) -> None:
     """Test successful concurrent execution across multiple devices."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_names.return_value = ["rtr1", "rtr2"]
     mock_settings.max_workers = 10
-    mock_run.side_effect = lambda name, cmd, tf: f"output from {name}"
+    mock_run.side_effect = lambda name, cmd, tf, **kw: f"output from {name}"
     result = run_show_command_on_group("core", "show version")
     assert result["rtr1"] == "output from rtr1"
     assert result["rtr2"] == "output from rtr2"
@@ -264,7 +270,7 @@ def test_run_show_command_on_group_all_devices_fail(
     mock_settings: MagicMock,
 ) -> None:
     """When every device raises an exception every result is an Execution Error string."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_names.return_value = ["rtr1", "rtr2", "rtr3"]
     mock_settings.max_workers = 10
     mock_run.side_effect = RuntimeError("connection refused")
@@ -288,11 +294,11 @@ def test_run_show_command_on_group_partial_failure(
     mock_settings: MagicMock,
 ) -> None:
     """Test that one device failing does not prevent results from other devices."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_names.return_value = ["rtr1", "rtr2"]
     mock_settings.max_workers = 10
 
-    def side_effect(name: str, cmd: str, tf: bool) -> str:
+    def side_effect(name: str, cmd: str, tf: bool, **kw: Any) -> str:
         if name == "rtr2":
             raise RuntimeError("connection dropped")
         return "output from rtr1"
@@ -315,7 +321,7 @@ def test_run_show_command_on_group_save_output(
     tmp_path: Path,
 ) -> None:
     """Test that save_output=True writes files and returns file paths."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_names.return_value = ["rtr1"]
     mock_settings.max_workers = 10
     mock_settings.save_output_dir = str(tmp_path)
@@ -340,7 +346,7 @@ def test_run_show_command_on_group_textfsm_propagated(
     mock_settings: MagicMock,
 ) -> None:
     """use_textfsm=True must be passed through to every run_show_command call."""
-    mock_validate.return_value = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_names.return_value = ["rtr1", "rtr2", "rtr3"]
     mock_settings.max_workers = 10
     mock_run.return_value = [{"intf": "Gi0/0", "status": "up"}]
@@ -358,7 +364,7 @@ def test_run_show_command_on_group_max_workers_enforced() -> None:
     delay = 0.2
     devices = ["rtr1", "rtr2", "rtr3", "rtr4"]
 
-    def slow_run(name: str, cmd: str, tf: bool) -> str:
+    def slow_run(name: str, cmd: str, tf: bool, **kw: Any) -> str:
         time.sleep(delay)
         return f"output from {name}"
 
@@ -367,7 +373,10 @@ def test_run_show_command_on_group_max_workers_enforced() -> None:
     for workers in [1, 4]:
         with (
             patch("netmiko_mcp.connection.settings") as ms,
-            patch("netmiko_mcp.connection.validate_command", return_value=True),
+            patch(
+                "netmiko_mcp.connection.validate_command",
+                return_value=ValidationResult(allowed=True, reason=REASON_ALLOWED),
+            ),
             patch("netmiko_mcp.connection.get_device_names", return_value=devices),
             patch("netmiko_mcp.connection.run_show_command", side_effect=slow_run),
         ):
@@ -516,3 +525,57 @@ def test_read_device_output_device_not_found(mock_settings: MagicMock, tmp_path:
     result = read_device_output("nonexistent_device", "show_version.txt")
     assert "No saved output found" in result
     assert "nonexistent_device" in result
+
+
+@patch("netmiko_mcp.connection.save_channel_transcript")
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_transcript_captured(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+    mock_transcript: MagicMock,
+) -> None:
+    """When audit_log_read_transcript is True, save_channel_transcript should be called."""
+    mock_settings.audit_log_read_transcript = True
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
+
+    mock_net_connect = MagicMock()
+    mock_net_connect.send_command.return_value = "IOS output"
+    mock_connect.return_value.__enter__.return_value = mock_net_connect
+
+    result = run_show_command("rtr1", "show version")
+
+    assert result == "IOS output"
+    mock_transcript.assert_called_once()
+    call_args = mock_transcript.call_args
+    assert call_args.args[1] == "rtr1"  # device_name
+
+
+@patch("netmiko_mcp.connection.save_channel_transcript")
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_no_transcript_when_disabled(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+    mock_transcript: MagicMock,
+) -> None:
+    """When audit_log_read_transcript is False, save_channel_transcript should not be called."""
+    mock_settings.audit_log_read_transcript = False
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
+
+    mock_net_connect = MagicMock()
+    mock_net_connect.send_command.return_value = "IOS output"
+    mock_connect.return_value.__enter__.return_value = mock_net_connect
+
+    run_show_command("rtr1", "show version")
+    mock_transcript.assert_not_called()

@@ -1,6 +1,8 @@
+import io
 import json
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -10,13 +12,30 @@ from netmiko.exceptions import (
     NetmikoTimeoutException,
 )
 
+from netmiko_mcp.audit import (
+    ALLOWED,
+    DENIED,
+    OUTCOME_AUTH_FAILURE,
+    OUTCOME_ERROR,
+    OUTCOME_INVENTORY_ERROR,
+    OUTCOME_SUCCESS,
+    OUTCOME_TIMEOUT,
+    log_command_attempt,
+    log_connection_outcome,
+    save_channel_transcript,
+)
 from netmiko_mcp.config import settings
 from netmiko_mcp.inventory import get_device_names, get_device_params
-from netmiko_mcp.security import validate_command
+from netmiko_mcp.security import ValidationResult, validate_command
 
 
 def run_show_command(
-    device_name: str, command: str, use_textfsm: bool = False
+    device_name: str,
+    command: str,
+    use_textfsm: bool = False,
+    *,
+    _tool_name: str = "send_show_command",
+    _correlation_id: str | None = None,
 ) -> str | list[Any] | dict[str, Any]:
     """
     Connect to a network device and execute a single show command.
@@ -27,36 +46,114 @@ def run_show_command(
         use_textfsm: If True, attempt to return parsed JSON data instead of raw text.
 
     Returns:
-        The text output of the command (or structured data if parsed), or an error message if the connection fails.
+        The text output of the command (or structured data if parsed), or an error
+        message string if validation, inventory lookup, or the connection fails.
+
+    The _tool_name and _correlation_id keyword-only parameters are internal.
+    _tool_name is recorded in audit log entries so group commands are attributed
+    to send_show_command_to_group rather than this function's default. A new
+    UUID correlation_id is generated per call if one is not provided, linking
+    the command_attempt and connection_outcome audit records for the same
+    operation.
     """
-    # Security Check
-    if not validate_command(command):
+    correlation_id = _correlation_id or str(uuid.uuid4())
+
+    # Validate the command and emit the audit record for the decision.
+    result: ValidationResult = validate_command(command)
+    log_command_attempt(
+        correlation_id=correlation_id,
+        tool=_tool_name,
+        device=device_name,
+        command=command,
+        verdict=ALLOWED if result.allowed else DENIED,
+        reason=result.reason,
+    )
+    if not result.allowed:
         return f"Security Error: Command '{command}' is not permitted."
 
-    # Fetch device parameters
+    # Fetch device parameters.
     try:
         params = get_device_params(device_name)
     except ValueError as e:
+        log_connection_outcome(
+            correlation_id=correlation_id,
+            tool=_tool_name,
+            device=device_name,
+            command=command,
+            outcome=OUTCOME_INVENTORY_ERROR,
+            detail=str(e),
+        )
         return f"Inventory Error: {str(e)}"
 
-    # Establish connection and execute command
+    # Optionally set up a BytesIO buffer as the session_log to capture the
+    # channel read transcript. Network devices echo sent commands in the read
+    # stream, so the transcript naturally records what was sent without
+    # needing session_log_record_writes=True. Netmiko's SessionLog no_log
+    # mechanism automatically filters password and secret from the buffer.
+    session_log_buf: io.BytesIO | None = None
+    connect_params: dict[str, Any] = dict(params)
+    if settings.audit_log_read_transcript:
+        session_log_buf = io.BytesIO()
+        connect_params["session_log"] = session_log_buf
+
+    # Establish connection and execute command.
     try:
-        with ConnectHandler(**params) as net_connect:
+        with ConnectHandler(**connect_params) as net_connect:
             output = net_connect.send_command(command, use_textfsm=use_textfsm)
 
-            # If use_textfsm successfully parsed it, it returns a List or Dict.
-            # We return this directly so the MCP framework can serialize it properly
-            # without causing double JSON serialization.
-            if isinstance(output, (list, dict)):
-                return output
+            # use_textfsm falls back to raw text when no template exists. A string
+            # return when use_textfsm=True was requested indicates the fallback.
+            textfsm_parse_failed = use_textfsm and isinstance(output, str)
 
-            return str(output)
+            # If use_textfsm successfully parsed it, it returns a List or Dict.
+            # Return this directly so the MCP framework can serialise it without
+            # causing double JSON serialisation.
+            final_output: str | list[Any] | dict[str, Any]
+            if isinstance(output, (list, dict)):
+                final_output = output
+            else:
+                final_output = str(output)
+
+        if session_log_buf is not None:
+            save_channel_transcript(correlation_id, device_name, session_log_buf.getvalue())
+
+        log_connection_outcome(
+            correlation_id=correlation_id,
+            tool=_tool_name,
+            device=device_name,
+            command=command,
+            outcome=OUTCOME_SUCCESS,
+            textfsm_parse_failed=textfsm_parse_failed,
+        )
+        return final_output
 
     except NetmikoAuthenticationException:
+        log_connection_outcome(
+            correlation_id=correlation_id,
+            tool=_tool_name,
+            device=device_name,
+            command=command,
+            outcome=OUTCOME_AUTH_FAILURE,
+        )
         return f"Connection Error: Authentication failed for device '{device_name}'."
     except NetmikoTimeoutException:
+        log_connection_outcome(
+            correlation_id=correlation_id,
+            tool=_tool_name,
+            device=device_name,
+            command=command,
+            outcome=OUTCOME_TIMEOUT,
+        )
         return f"Connection Error: Connection to device '{device_name}' timed out."
     except Exception as e:
+        log_connection_outcome(
+            correlation_id=correlation_id,
+            tool=_tool_name,
+            device=device_name,
+            command=command,
+            outcome=OUTCOME_ERROR,
+            detail=str(e),
+        )
         return f"Execution Error: An unexpected error occurred: {str(e)}"
 
 
@@ -86,7 +183,7 @@ def _save_device_output(device_name: str, command: str, output: Any) -> str:
     device_dir.chmod(0o700)
 
     cmd_name = _sanitize_command_for_filename(command)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     file_path = device_dir / f"{cmd_name}_{timestamp}.txt"
     content = json.dumps(output, indent=2) if isinstance(output, (list, dict)) else str(output)
     file_path.write_text(content, encoding="utf-8")
@@ -145,7 +242,7 @@ def read_device_output(device_name: str, filename: str) -> str:
     device_dir = base_dir / device_name
     file_path = device_dir / filename
 
-    # Belt-and-suspenders: ensure resolved path stays within device_dir
+    # Belt-and-suspenders: ensure resolved path stays within device_dir.
     try:
         if not file_path.resolve().is_relative_to(device_dir.resolve()):
             return f"Security Error: Invalid filename '{filename}'."
@@ -170,8 +267,11 @@ def run_show_command_on_group(
     Execute a show command on a group of devices concurrently using threading.
 
     The command is validated once before any connections are made. If the command
-    is not permitted, a security error is returned immediately without connecting
-    to any device.
+    is not permitted, an audit record is emitted for the group-level denial and a
+    security error is returned immediately without connecting to any device.
+
+    Per-device audit records (both command_attempt and connection_outcome) are
+    emitted by run_show_command within each thread.
 
     Args:
         device_or_group: A device name or group name from the inventory.
@@ -183,7 +283,19 @@ def run_show_command_on_group(
     Returns:
         A dict mapping each device name to its output (or saved file path).
     """
-    if not validate_command(command):
+    # Pre-validate the command before attempting any connections. If denied, emit
+    # a group-level audit record so the denial is never invisible, then return.
+    result: ValidationResult = validate_command(command)
+    if not result.allowed:
+        correlation_id = str(uuid.uuid4())
+        log_command_attempt(
+            correlation_id=correlation_id,
+            tool="send_show_command_to_group",
+            device=f"GROUP:{device_or_group}",
+            command=command,
+            verdict=DENIED,
+            reason=result.reason,
+        )
         return {"error": f"Security Error: Command '{command}' is not permitted."}
 
     try:
@@ -195,7 +307,13 @@ def run_show_command_on_group(
 
     with ThreadPoolExecutor(max_workers=settings.max_workers) as executor:
         future_to_device = {
-            executor.submit(run_show_command, name, command, use_textfsm): name
+            executor.submit(
+                run_show_command,
+                name,
+                command,
+                use_textfsm,
+                _tool_name="send_show_command_to_group",
+            ): name
             for name in device_names
         }
         for future in as_completed(future_to_device):

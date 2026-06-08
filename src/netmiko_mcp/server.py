@@ -3,6 +3,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from netmiko_mcp.audit import configure_audit_logger, log_tool_invocation
 from netmiko_mcp.config import settings
 from netmiko_mcp.connection import (
     list_device_outputs as _list_device_outputs,
@@ -23,6 +24,7 @@ def list_devices(device_or_group: str = "all") -> str:
     You can query by 'all' (default), a specific 'group-name', or a 'device-name'.
     Returns a JSON string containing device configurations (excluding credentials).
     """
+    log_tool_invocation(tool="list_devices", arguments={"device_or_group": device_or_group})
     return get_sanitized_inventory(device_or_group)
 
 
@@ -76,6 +78,7 @@ def list_device_outputs(device_or_group: str) -> dict[str, Any]:
         A dict mapping each device name to a list of saved filenames (newest first).
         Devices with no saved output are included with an empty list.
     """
+    log_tool_invocation(tool="list_device_outputs", arguments={"device_or_group": device_or_group})
     return _list_device_outputs(device_or_group)
 
 
@@ -91,12 +94,17 @@ def read_device_output(device_name: str, filename: str) -> str:
     Returns:
         The file content as a string, or an error message.
     """
+    log_tool_invocation(
+        tool="read_device_output",
+        arguments={"device_name": device_name, "filename": filename},
+    )
     return _read_device_output(device_name, filename)
 
 
 @mcp.tool()
 def ping() -> str:
     """A simple health check tool to verify the MCP server is responding."""
+    log_tool_invocation(tool="ping", arguments={})
     return "pong"
 
 
@@ -117,6 +125,7 @@ def _validate_startup() -> None:
 def main() -> None:
     """Entry point for the Netmiko MCP server."""
     _validate_startup()
+    configure_audit_logger()
     mcp.run(transport="stdio")
 
 
