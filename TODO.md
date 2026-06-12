@@ -6,13 +6,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ## Security (`security.py`)
 
-- **Transcript retention/cleanup not implemented** - The `save_channel_transcript`
-  docstring states that files beyond `audit_log_retention_days` are removed on each
-  write, but neither the config field nor the cleanup code exist. Transcript files
-  accumulate indefinitely. Needs an `audit_log_retention_days: int` field in
-  `config.py` (default 30) and a cleanup pass inside `save_channel_transcript` that
-  deletes files older than the retention window before writing the new one.
-
 - **Command abbreviation handling** `[open question in docstring]` - `sh ip int br` is not
   the same as `show ip interface brief` to the validator even though network devices accept
   both. No resolution yet - document this limitation clearly for users and consider whether
@@ -33,10 +26,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 - **No stale session detection** `[ARCH §2]` - No mechanism to detect, purge, or
   re-establish SSH connections that have silently dropped.
-
-- **Broad `except Exception` in `run_show_command`** - The catch-all hides unexpected
-  errors that could indicate bugs. Should be narrowed or at minimum log the full traceback
-  before returning the error string to the LLM.
 
 ---
 
@@ -94,9 +83,4 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 - **No MCP Resources** `[ARCH §5]` - The device inventory could be exposed as an MCP
   Resource (read-only data) rather than only as a Tool call. This would let clients
   discover available devices without consuming tool-call budget.
-
-- **No MCP Prompts** `[ARCH §5]` - Pre-packaged workflow prompts (e.g. "Troubleshoot OSPF
-  on device X", "Collect interface stats from group Y") are not implemented. These would
-  guide the LLM through multi-step diagnostic sequences reliably.
-
 

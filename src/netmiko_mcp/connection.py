@@ -1,16 +1,26 @@
 import io
 import json
+import logging
+import traceback
 import uuid
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from netmiko import ConnectHandler
+from netmiko.base_connection import BaseConnection
 from netmiko.exceptions import (
     NetmikoAuthenticationException,
+    NetmikoBaseException,
     NetmikoTimeoutException,
+    ReadException,
+    ReadTimeout,
+    WriteException,
 )
+from paramiko.ssh_exception import SSHException
 
 from netmiko_mcp.audit import (
     ALLOWED,
@@ -18,8 +28,13 @@ from netmiko_mcp.audit import (
     OUTCOME_AUTH_FAILURE,
     OUTCOME_ERROR,
     OUTCOME_INVENTORY_ERROR,
+    OUTCOME_NETMIKO_ERROR,
+    OUTCOME_READ_ERROR,
+    OUTCOME_READ_TIMEOUT,
+    OUTCOME_SSH_ERROR,
     OUTCOME_SUCCESS,
     OUTCOME_TIMEOUT,
+    OUTCOME_WRITE_ERROR,
     log_command_attempt,
     log_connection_outcome,
     save_channel_transcript,
@@ -27,6 +42,39 @@ from netmiko_mcp.audit import (
 from netmiko_mcp.config import settings
 from netmiko_mcp.inventory import get_device_names, get_device_params
 from netmiko_mcp.security import ValidationResult, validate_command
+
+_logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _managed_connection(
+    connect_params: dict[str, Any],
+) -> Generator[BaseConnection, None, None]:
+    """Manage the SSH connection lifecycle for a single command execution.
+
+    Establishes the Netmiko SSH connection and yields it to the caller.
+    All connection-phase exceptions propagate to the caller without being
+    caught here — run_show_command handles them in its outer except clauses
+    where the correlation ID and audit context are available.
+
+    On clean exit the session is disconnected. On any exception from the
+    caller's block the connection is also disconnected and the exception
+    re-raised. Discarding rather than recycling on error is intentional:
+    channel state after a failed command is undefined, and a future connection
+    pool should never receive a connection whose prompt may be dirty.
+
+    When connection pooling is implemented this function is the right place
+    to swap close-on-exit for return-to-pool-on-exit, without touching
+    run_show_command.
+    """
+    net_connect = ConnectHandler(**connect_params)
+    try:
+        yield net_connect
+    except Exception:
+        net_connect.disconnect()
+        raise
+    else:
+        net_connect.disconnect()
 
 
 def run_show_command(
@@ -96,36 +144,107 @@ def run_show_command(
         session_log_buf = io.BytesIO()
         connect_params["session_log"] = session_log_buf
 
-    # Establish connection and execute command.
+    # Connection phase (Block 1): _managed_connection establishes the SSH
+    # session. Any exception raised by ConnectHandler before the yield
+    # propagates out of the with statement and is caught by the outer except
+    # clauses below. These are connection-level failures — auth rejection,
+    # TCP timeout, SSH key exchange error, etc.
     try:
-        with ConnectHandler(**connect_params) as net_connect:
-            output = net_connect.send_command(command, use_textfsm=use_textfsm)
+        with _managed_connection(connect_params) as net_connect:
+            # Command phase (Block 2): the connection is established. Exceptions
+            # here are distinct from connection failures — the SSH session is
+            # healthy but something went wrong during command execution or output
+            # reading. Each case is caught, logged, and returned individually so
+            # the LLM receives a precise error rather than a generic message.
+            try:
+                output = net_connect.send_command(command, use_textfsm=use_textfsm)
 
-            # use_textfsm falls back to raw text when no template exists. A string
-            # return when use_textfsm=True was requested indicates the fallback.
-            textfsm_parse_failed = use_textfsm and isinstance(output, str)
+                # use_textfsm falls back to raw text when no template exists. A string
+                # return when use_textfsm=True was requested indicates the fallback.
+                textfsm_parse_failed = use_textfsm and isinstance(output, str)
 
-            # If use_textfsm successfully parsed it, it returns a List or Dict.
-            # Return this directly so the MCP framework can serialise it without
-            # causing double JSON serialisation.
-            final_output: str | list[Any] | dict[str, Any]
-            if isinstance(output, (list, dict)):
-                final_output = output
-            else:
-                final_output = str(output)
+                # If use_textfsm successfully parsed it, it returns a List or Dict.
+                # Return this directly so the MCP framework can serialise it without
+                # causing double JSON serialisation.
+                final_output: str | list[Any] | dict[str, Any]
+                if isinstance(output, (list, dict)):
+                    final_output = output
+                else:
+                    final_output = str(output)
 
-        if session_log_buf is not None:
-            save_channel_transcript(correlation_id, device_name, session_log_buf.getvalue())
+            except ReadTimeout:
+                log_connection_outcome(
+                    correlation_id=correlation_id,
+                    tool=_tool_name,
+                    device=device_name,
+                    command=command,
+                    outcome=OUTCOME_READ_TIMEOUT,
+                )
+                return (
+                    f"Connection Error: Device '{device_name}' stopped responding "
+                    f"while reading command output."
+                )
+            except ReadException as e:
+                log_connection_outcome(
+                    correlation_id=correlation_id,
+                    tool=_tool_name,
+                    device=device_name,
+                    command=command,
+                    outcome=OUTCOME_READ_ERROR,
+                    detail=str(e),
+                )
+                return f"Connection Error: Failed to read output from '{device_name}': {str(e)}"
+            except WriteException as e:
+                log_connection_outcome(
+                    correlation_id=correlation_id,
+                    tool=_tool_name,
+                    device=device_name,
+                    command=command,
+                    outcome=OUTCOME_WRITE_ERROR,
+                    detail=str(e),
+                )
+                return f"Connection Error: Failed to send command to '{device_name}': {str(e)}"
+            except NetmikoBaseException as e:
+                log_connection_outcome(
+                    correlation_id=correlation_id,
+                    tool=_tool_name,
+                    device=device_name,
+                    command=command,
+                    outcome=OUTCOME_NETMIKO_ERROR,
+                    detail=str(e),
+                )
+                return f"Connection Error: {str(e)}"
+            except Exception as e:
+                # Unexpected exception during command execution — almost certainly
+                # a bug. Log the full traceback so developers can locate the source.
+                _logger.error(
+                    "Unexpected error executing command '%s' on '%s': %s",
+                    command,
+                    device_name,
+                    traceback.format_exc(),
+                )
+                log_connection_outcome(
+                    correlation_id=correlation_id,
+                    tool=_tool_name,
+                    device=device_name,
+                    command=command,
+                    outcome=OUTCOME_ERROR,
+                    detail=str(e),
+                )
+                return f"Execution Error: An unexpected error occurred: {str(e)}"
 
-        log_connection_outcome(
-            correlation_id=correlation_id,
-            tool=_tool_name,
-            device=device_name,
-            command=command,
-            outcome=OUTCOME_SUCCESS,
-            textfsm_parse_failed=textfsm_parse_failed,
-        )
-        return final_output
+            if session_log_buf is not None:
+                save_channel_transcript(correlation_id, device_name, session_log_buf.getvalue())
+
+            log_connection_outcome(
+                correlation_id=correlation_id,
+                tool=_tool_name,
+                device=device_name,
+                command=command,
+                outcome=OUTCOME_SUCCESS,
+                textfsm_parse_failed=textfsm_parse_failed,
+            )
+            return final_output
 
     except NetmikoAuthenticationException:
         log_connection_outcome(
@@ -145,7 +264,34 @@ def run_show_command(
             outcome=OUTCOME_TIMEOUT,
         )
         return f"Connection Error: Connection to device '{device_name}' timed out."
+    except SSHException as e:
+        log_connection_outcome(
+            correlation_id=correlation_id,
+            tool=_tool_name,
+            device=device_name,
+            command=command,
+            outcome=OUTCOME_SSH_ERROR,
+            detail=str(e),
+        )
+        return f"Connection Error: SSH protocol error for '{device_name}': {str(e)}"
+    except NetmikoBaseException as e:
+        log_connection_outcome(
+            correlation_id=correlation_id,
+            tool=_tool_name,
+            device=device_name,
+            command=command,
+            outcome=OUTCOME_NETMIKO_ERROR,
+            detail=str(e),
+        )
+        return f"Connection Error: {str(e)}"
     except Exception as e:
+        # Unexpected exception during connection establishment — almost certainly
+        # a bug or an unknown OS/network error. Log the full traceback.
+        _logger.error(
+            "Unexpected error connecting to '%s': %s",
+            device_name,
+            traceback.format_exc(),
+        )
         log_connection_outcome(
             correlation_id=correlation_id,
             tool=_tool_name,

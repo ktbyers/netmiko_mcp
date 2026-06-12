@@ -3,7 +3,16 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
+import pytest
+from netmiko.exceptions import (
+    NetmikoAuthenticationException,
+    NetmikoBaseException,
+    NetmikoTimeoutException,
+    ReadException,
+    ReadTimeout,
+    WriteException,
+)
+from paramiko.ssh_exception import SSHException
 
 from netmiko_mcp.audit import (
     REASON_ALLOWED,
@@ -11,6 +20,7 @@ from netmiko_mcp.audit import (
 )
 from netmiko_mcp.security import ValidationResult
 from netmiko_mcp.connection import (
+    _managed_connection,
     _sanitize_command_for_filename,
     _save_device_output,
     list_device_outputs,
@@ -35,10 +45,11 @@ def test_run_show_command_success(
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 
-    # Mock the context manager behavior of ConnectHandler
+    # _managed_connection calls ConnectHandler directly (not as a context manager)
+    # so net_connect is mock_connect.return_value, not .__enter__.return_value.
     mock_net_connect = MagicMock()
     mock_net_connect.send_command.return_value = "GigabitEthernet0/0 up up"
-    mock_connect.return_value.__enter__.return_value = mock_net_connect
+    mock_connect.return_value = mock_net_connect
 
     result = run_show_command("rtr1", "show ip int brief")
 
@@ -60,7 +71,7 @@ def test_run_show_command_textfsm(
     mock_net_connect = MagicMock()
     # Simulate textfsm returning a list of dicts
     mock_net_connect.send_command.return_value = [{"intf": "Gi0/0", "status": "up"}]
-    mock_connect.return_value.__enter__.return_value = mock_net_connect
+    mock_connect.return_value = mock_net_connect
 
     result = run_show_command("rtr1", "show ip int brief", use_textfsm=True)
 
@@ -551,7 +562,7 @@ def test_run_show_command_transcript_captured(
 
     mock_net_connect = MagicMock()
     mock_net_connect.send_command.return_value = "IOS output"
-    mock_connect.return_value.__enter__.return_value = mock_net_connect
+    mock_connect.return_value = mock_net_connect
 
     result = run_show_command("rtr1", "show version")
 
@@ -580,7 +591,199 @@ def test_run_show_command_no_transcript_when_disabled(
 
     mock_net_connect = MagicMock()
     mock_net_connect.send_command.return_value = "IOS output"
-    mock_connect.return_value.__enter__.return_value = mock_net_connect
+    mock_connect.return_value = mock_net_connect
 
     run_show_command("rtr1", "show version")
     mock_transcript.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _managed_connection
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.ConnectHandler")
+def test_managed_connection_disconnects_on_clean_exit(mock_connect: MagicMock) -> None:
+    """On a clean exit from the with block, disconnect() should be called once."""
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
+
+    with _managed_connection({"host": "1.1.1.1"}):
+        pass
+
+    mock_conn.disconnect.assert_called_once()
+
+
+@patch("netmiko_mcp.connection.ConnectHandler")
+def test_managed_connection_disconnects_on_exception(mock_connect: MagicMock) -> None:
+    """When the with block raises, disconnect() should still be called and the exception re-raised."""
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with _managed_connection({"host": "1.1.1.1"}):
+            raise RuntimeError("boom")
+
+    mock_conn.disconnect.assert_called_once()
+
+
+@patch("netmiko_mcp.connection.ConnectHandler")
+def test_managed_connection_propagates_connection_exception(mock_connect: MagicMock) -> None:
+    """An exception raised by ConnectHandler before yield should propagate to the caller."""
+    mock_connect.side_effect = NetmikoTimeoutException("TCP timeout")
+
+    with pytest.raises(NetmikoTimeoutException):
+        with _managed_connection({"host": "1.1.1.1"}):
+            pass  # pragma: no cover
+
+
+# ---------------------------------------------------------------------------
+# run_show_command — connection-phase exceptions (Block 1)
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+def test_run_show_command_ssh_error(
+    mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
+) -> None:
+    """SSHException during connection should return a Connection Error string."""
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.side_effect = SSHException("key exchange failed")
+
+    result = run_show_command("rtr1", "show version")
+    assert "Connection Error" in result
+    assert "SSH protocol error" in result
+    assert "rtr1" in result
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+def test_run_show_command_netmiko_base_error_on_connect(
+    mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
+) -> None:
+    """NetmikoBaseException during connection should return a Connection Error string."""
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.side_effect = NetmikoBaseException("connection refused")
+
+    result = run_show_command("rtr1", "show version")
+    assert "Connection Error" in result
+    assert "connection refused" in result
+
+
+# ---------------------------------------------------------------------------
+# run_show_command — command-phase exceptions (Block 2)
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_read_timeout(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+) -> None:
+    """ReadTimeout during send_command should return a 'stopped responding' error string."""
+    mock_settings.audit_log_read_transcript = False
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.return_value.send_command.side_effect = ReadTimeout("read timed out")
+
+    result = run_show_command("rtr1", "show version")
+    assert "Connection Error" in result
+    assert "stopped responding" in result
+    assert "rtr1" in result
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_read_error(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+) -> None:
+    """ReadException during send_command should return a 'Failed to read' error string."""
+    mock_settings.audit_log_read_transcript = False
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.return_value.send_command.side_effect = ReadException("channel closed")
+
+    result = run_show_command("rtr1", "show version")
+    assert "Connection Error" in result
+    assert "Failed to read" in result
+    assert "rtr1" in result
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_write_error(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+) -> None:
+    """WriteException during send_command should return a 'Failed to send' error string."""
+    mock_settings.audit_log_read_transcript = False
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.return_value.send_command.side_effect = WriteException("write failed")
+
+    result = run_show_command("rtr1", "show version")
+    assert "Connection Error" in result
+    assert "Failed to send" in result
+    assert "rtr1" in result
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_netmiko_base_error_on_command(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+) -> None:
+    """NetmikoBaseException during send_command should return a Connection Error string."""
+    mock_settings.audit_log_read_transcript = False
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.return_value.send_command.side_effect = NetmikoBaseException("session error")
+
+    result = run_show_command("rtr1", "show version")
+    assert "Connection Error" in result
+    assert "session error" in result
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_unexpected_command_phase_exception(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+) -> None:
+    """A bare Exception raised by send_command (a likely bug) should return an Execution Error."""
+    mock_settings.audit_log_read_transcript = False
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.return_value.send_command.side_effect = RuntimeError("internal bug")
+
+    result = run_show_command("rtr1", "show version")
+    assert isinstance(result, str)
+    assert result.startswith("Execution Error:")
+    assert "internal bug" in result
