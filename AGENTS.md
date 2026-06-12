@@ -60,6 +60,21 @@
   tags. Verify every SHA via the GitHub API before committing. Annotated tags must be
   dereferenced to the underlying commit SHA.
 
+## Git Commits
+
+- **Always review `git diff` and `git status` before staging or committing.** Read every
+  changed file in the diff and confirm the changes are intentional and correct.
+- **NEVER commit keys, secrets, passwords, tokens, or any other highly confidential
+  information.** This includes API keys, bearer tokens, encryption keys, device passwords,
+  TACACS/RADIUS secrets, private keys, and certificate material — in any form, whether
+  plaintext, base64-encoded, or otherwise obfuscated.
+- Secrets belong exclusively in environment variables or a secrets manager. They should
+  never appear in source files, config files, documentation, test fixtures, or commit
+  messages.
+- If a secret is ever accidentally staged, unstage it immediately with `git restore --staged`
+  before committing. If it has already been committed, treat the secret as compromised and
+  rotate it — git history rewrites are insufficient on their own.
+
 ## Configuration & Paths
 - **Global Config:** The MCP Server uses `pydantic-settings` centralized in `src/netmiko_mcp/config.py`. It reads natively from `~/.netmiko-mcp.yml` (and other custom profiles) with strict precedence handling managed via the `settings_customise_sources` classmethod. Environment variables prefixed with `NETMIKO_MCP_` always take precedence over keys in the physical YAML config.
 - **Paths:** Always use the `pathlib.Path` module for file operations instead of `os.path`.
