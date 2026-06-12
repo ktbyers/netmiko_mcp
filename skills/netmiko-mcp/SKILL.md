@@ -23,6 +23,11 @@ command_file: "~/commands.yml"           # Optional (Defaults to ~/commands.yml)
 allow_pipe: true                         # Optional (Defaults to false. Enables pipe operators — see Pipe Support below)
 unsafe_chars: [";", "\n", "\r", "&"]    # Optional (Defaults to these four — see Unsafe Characters below)
 pipe_modifiers: ["include", "exclude", "section", "begin", "count"]  # Optional (Defaults to these five — see Pipe Support below)
+transport: "stdio"                       # Optional (stdio or streamable-http, default: stdio)
+http_host: "127.0.0.1"                  # Optional (HTTP bind address, default: 127.0.0.1)
+http_port: 8000                          # Optional (HTTP listen port, default: 8000)
+http_path: "/mcp"                        # Optional (MCP endpoint path, default: /mcp)
+http_auth_enabled: true                  # Optional (RFC 6750 bearer token auth, default: true)
 ```
 
 ## Security Whitelist (`~/commands.yml`)
@@ -126,100 +131,10 @@ See the `netmiko-tools-yml` skill for a deeper dive into inventory generation an
 
 ---
 
-## Running the Server over Streamable HTTP
+## Related Skills
 
-The server supports two transports: `stdio` (default, for MCP clients that launch the process directly) and `streamable-http` (for running as a persistent HTTP service).
+- **`netmiko-tools-yml`** — Device inventory file format (`.netmiko.yml`), Fernet encryption walkthrough, secrets manager integration, Python API for credential loading
+- **`mcp-client-config`** — Connecting MCP clients (Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code, Kiro) to this server; per-client JSON config blocks and gotchas
+- **`mcp-http-transport`** — Enabling and deploying the Streamable HTTP transport, HTTP bridge options for web clients (ChatGPT, Perplexity), SSE vs Streamable HTTP comparison
 
-### Prerequisites
-
-1. **Install dependencies** (first time only):
-   ```bash
-   cd /home/mcp_http/pi_mcp_http/netmiko_mcp
-   uv sync --python /usr/bin/python3.13
-   ```
-
-2. **Copy required config files** from the reference user using `setup_configs.sh`:
-   ```bash
-   bash setup_configs.sh
-   ```
-   This copies `commands.yml`, `.netmiko-mcp.yml`, and `.netmiko.yml` into place.
-   The server will **hard exit at startup** if `commands.yml` is missing.
-
-### Required Environment Variables
-
-| Variable | Description |
-|---|---|
-| `NETMIKO_MCP_TRANSPORT` | Set to `streamable-http` to enable HTTP mode (default is `stdio`) |
-| `NETMIKO_MCP_HTTP_BEARER_TOKEN` | Secret token for RFC 6750 bearer auth. **Required** when `http_auth_enabled: true` (the default). Server hard exits if missing. |
-| `NETMIKO_MCP_CONFIG` | Path to the YAML config file (default: `~/.netmiko-mcp.yml`) |
-| `NETMIKO_TOOLS_KEY` | Decryption key for the encrypted Netmiko inventory (`~/.netmiko.yml`) |
-
-#### Generating a Bearer Token
-
-```bash
-openssl rand -hex 32
-```
-
-This produces a 64-character cryptographically random hex string. Store it only as an environment variable — never in the YAML config file.
-
-#### Setting the Variables
-
-```bash
-export NETMIKO_MCP_TRANSPORT="streamable-http"
-export NETMIKO_MCP_HTTP_BEARER_TOKEN="<token from openssl rand -hex 32>"
-export NETMIKO_MCP_CONFIG="/home/mcp_http/.netmiko-mcp.yml"
-export NETMIKO_TOOLS_KEY="<your inventory decryption key>"
-```
-
-To persist across sessions, append to `~/.bashrc`:
-```bash
-echo 'export NETMIKO_MCP_TRANSPORT="streamable-http"' >> ~/.bashrc
-echo 'export NETMIKO_MCP_HTTP_BEARER_TOKEN="<your-token>"' >> ~/.bashrc
-echo 'export NETMIKO_MCP_CONFIG="/home/mcp_http/.netmiko-mcp.yml"' >> ~/.bashrc
-echo 'export NETMIKO_TOOLS_KEY="<your-key>"' >> ~/.bashrc
-```
-
-### Optional HTTP Settings
-
-These can be set in `~/.netmiko-mcp.yml` or via environment variables:
-
-```yaml
-http_host: "127.0.0.1"   # Bind address. Use 0.0.0.0 to accept external connections.
-http_port: 8000           # Port (default: 8000)
-http_path: "/mcp"         # MCP endpoint path (default: /mcp)
-http_auth_enabled: true   # Enable bearer token auth (default: true — do not disable)
-```
-
-To accept connections from other machines:
-```bash
-export NETMIKO_MCP_HTTP_HOST="0.0.0.0"
-```
-
-> **TLS:** TLS termination should be handled by a reverse proxy (nginx, Caddy, etc.). The server runs plain HTTP and relies on the proxy for HTTPS.
-
-### Starting the Server
-
-```bash
-cd /home/mcp_http/pi_mcp_http/netmiko_mcp
-.venv/bin/netmiko-mcp
-```
-
-On successful startup, uvicorn will log:
-```
-INFO:     Started server process [...]
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-```
-
-The MCP endpoint is available at:
-```
-http://<host>:8000/mcp
-```
-
-### Connecting an MCP Client
-
-Clients must send requests with the `Authorization` header:
-```
-Authorization: Bearer <your-token>
-```
-
-See `docs/clients/claude-code-http.md` in this repo for Claude Code-specific connection instructions.
+See the `mcp-http-transport` skill for deployment instructions, environment variables, bearer token setup, and client connection details.

@@ -15,7 +15,7 @@ If these files exist at the default paths, no environment variables or extra cli
 | Device inventory | `~/.netmiko.yml` |
 | Commands whitelist | `~/commands.yml` |
 
-Use `NETMIKO_MCP_CONFIG` to point to a non-default config path. Use `NETMIKO_TOOLS_KEY` to pass the inventory decryption passphrase (see Secrets section).
+Use `NETMIKO_MCP_CONFIG` to point to a non-default config path. Use `NETMIKO_TOOLS_KEY` to pass the inventory decryption passphrase — see `netmiko-tools-yml` skill.
 
 ---
 
@@ -50,8 +50,8 @@ uv tool list   # netmiko-mcp should appear
 | Devin Desktop (formerly Windsurf) | ✓ Verified | Agent mode / Cascade required |
 | VS Code + GitHub Copilot | ✓ Verified | Free tier sufficient; use "structured data" phrasing for TextFSM |
 | Kiro | — Not tested | Instructions based on documentation only |
-| ChatGPT | ✗ Not working | Business plan or higher required; HTTP bridge only — see CLIENT_INSTALLATION_GUIDE.md |
-| Perplexity | ✗ Not working | OAuth discovery blocker — see CLIENT_INSTALLATION_GUIDE.md |
+| ChatGPT | ✗ Not working | Business plan or higher required; HTTP bridge only — see `mcp-http-transport` skill |
+| Perplexity | ✗ Not working | OAuth discovery blocker — see `mcp-http-transport` skill |
 
 ---
 
@@ -68,7 +68,7 @@ uv tool list   # netmiko-mcp should appear
 | Cline | ✓ | ✓ | VS Code, JetBrains, Cursor, Zed, Neovim |
 | Gemini CLI | ✓ | ✓ | stdio + SSE + Streamable HTTP; OAuth 2.0 for remote |
 | Perplexity Mac app | ✓ | — | Local stdio via PerplexityXPC helper |
-| ChatGPT | ✗ | ✓ | HTTP bridge required — see CLIENT_INSTALLATION_GUIDE.md |
+| ChatGPT | ✗ | ✓ | HTTP bridge required — see `mcp-http-transport` skill |
 
 ---
 
@@ -320,128 +320,14 @@ Not end-to-end tested as of June 2026. If the server does not load, Kiro’s MCP
 | AWS-focused workflows | Kiro |
 | Existing Copilot user | VS Code + GitHub Copilot (Agent mode) |
 | Web GUI (no local install) | Claude.ai with remote HTTP deployment |
-| ChatGPT user | ChatGPT + supergateway bridge (extra setup — see CLIENT_INSTALLATION_GUIDE.md) |
+| ChatGPT user | ChatGPT + supergateway bridge (extra setup — see `mcp-http-transport` skill) |
 
 ---
 
 ## Secrets and Credential Management
 
-### What does NOT work
+See the `netmiko-tools-yml` skill for the full inventory encryption walkthrough, secrets manager integration examples, comparison table, and credential best practices.
 
-`${ENV_VAR}` interpolation in `.netmiko.yml` does not work. Netmiko uses `yaml.safe_load()` which parses values literally. The string `"${CORE01_PASSWORD}"` is passed directly to `ConnectHandler` as the password.
-
-### Option 1: Netmiko built-in encryption (recommended for individuals/small teams)
-
-Passwords in `~/.netmiko.yml` are replaced with `__encrypt__` ciphertext. The only secret to protect is `NETMIKO_TOOLS_KEY`. The encrypted inventory file is safe to commit.
-
-**Step 1 — Create plaintext inventory with `__meta__` block:**
-```yaml
----
-__meta__:
-  encryption: false
-  encryption_type: fernet
-
-core01:
-  device_type: cisco_ios
-  host: 192.168.1.1
-  username: admin
-  password: plaintext_password_here
-  secret: plaintext_enable_secret_here
-```
-
-**Step 2 — Set passphrase:**
-```bash
-export NETMIKO_TOOLS_KEY="some long and strong passphrase"
-# Make permanent:
-echo 'export NETMIKO_TOOLS_KEY="some long and strong passphrase"' >> ~/.zshrc
-```
-
-**Step 3 — Encrypt:**
-```bash
-# Write to a temp file first, verify, then replace
-uv run netmiko-bulk-encrypt --input_file ~/.netmiko.yml --output_file ~/.netmiko_encrypted.yml
-cat ~/.netmiko_encrypted.yml
-cp ~/.netmiko_encrypted.yml ~/.netmiko.yml && rm ~/.netmiko_encrypted.yml
-```
-
-**Step 4 — Manually update `__meta__`** (bulk-encrypt does NOT do this automatically):
-```yaml
-__meta__:
-  encryption: true   # change false -> true or connections will fail
-  encryption_type: fernet
-```
-
-**Step 5 — Verify:** `list devices` through the MCP server. Auth failures mean `__meta__` is still `false` or `NETMIKO_TOOLS_KEY` doesn’t match.
-
-**Encrypt a single password:**
-```bash
-uv run netmiko-encrypt "the_password_to_encrypt"
-# Output: __encrypt__<salt>:<ciphertext>
-# Paste the full __encrypt__... string as the YAML value
-```
-
-**Trade-offs:**
-- No external dependencies
-- Passphrase is the single point of protection — if lost, credentials cannot be recovered
-- Passphrase must be distributed to every machine running the server
-
-### Option 2: Generate inventory from a secrets manager (recommended for teams/production)
-
-Pull credentials from an external store and write `.netmiko.yml` dynamically at startup. The on-disk file is ephemeral.
-
-**1Password CLI example:**
-```bash
-op item get "core01" --fields username,password --format json \
-  | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-creds = {f['label']: f['value'] for f in d}
-print(f'''---
-core01:
-  device_type: cisco_ios
-  host: 192.168.1.1
-  username: {creds['username']}
-  password: {creds['password']}
-''')
-" > ~/.netmiko.yml
-uv run netmiko-mcp
-```
-
-**AWS Secrets Manager example:**
-```bash
-SECRET=$(aws secretsmanager get-secret-value \
-  --secret-id netmiko/core01 --query SecretString --output text)
-python3 -c "
-import json
-d = json.loads('''$SECRET''')
-print(f'''---
-core01:
-  device_type: cisco_ios
-  host: 192.168.1.1
-  username: {d['username']}
-  password: {d['password']}
-''')
-" > ~/.netmiko.yml
-uv run netmiko-mcp
-```
-
-**Trade-offs:**
-- Credentials never committed to disk long-term
-- Requires secrets manager CLI/SDK on host
-- Generated file exists in plaintext during server runtime — ensure `chmod 600 ~/.netmiko.yml`
-
-### Comparison
-
-| | Built-in encryption | Secrets manager |
-|---|---|---|
-| External dependency | None | Vault / 1Password / AWS / etc. |
-| Secret to protect | `NETMIKO_TOOLS_KEY` | Secrets manager auth token |
-| Plaintext on disk | Never | During server runtime only |
-| Safe to commit | Yes (ciphertext) | No |
-| Best for | Individual / small team | Team / production |
-
-### What to avoid
-
-- Plaintext passwords in `.netmiko.yml` — even in a private repo
-- Credentials hardcoded in MCP client config files (`.cursor/mcp.json`, `claude_desktop_config.json`) — these are often synced or backed up
-- `NETMIKO_TOOLS_KEY` in a `.env` file that is committed — defeats encryption entirely
+**Two things that matter when configuring clients:**
+- `${ENV_VAR}` interpolation in `.netmiko.yml` does **not** work — Netmiko parses values literally
+- Never put `NETMIKO_TOOLS_KEY` or device passwords in client config files (`.cursor/mcp.json`, `claude_desktop_config.json`) — these files are often synced or backed up
