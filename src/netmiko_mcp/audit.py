@@ -24,6 +24,7 @@ import json
 import logging
 import logging.handlers
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -356,3 +357,52 @@ def save_channel_transcript(
 
     file_path.write_text(transcript_text, encoding="utf-8")
     file_path.chmod(0o600)
+
+
+# ---------------------------------------------------------------------------
+# Command audit context.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CommandAuditContext:
+    """Holds the invariant arguments shared by every audit record within a
+    single run_show_command invocation.
+
+    Constructed once per command call and used throughout the function body,
+    eliminating the four repeated keyword arguments from every
+    log_command_attempt and log_connection_outcome call site.
+    """
+
+    correlation_id: str
+    tool: str
+    device: str
+    command: str
+
+    def log_attempt(self, verdict: str, reason: str) -> None:
+        """Emit a command_attempt audit record for this invocation."""
+        log_command_attempt(
+            correlation_id=self.correlation_id,
+            tool=self.tool,
+            device=self.device,
+            command=self.command,
+            verdict=verdict,
+            reason=reason,
+        )
+
+    def log_outcome(
+        self,
+        outcome: str,
+        detail: Optional[str] = None,
+        textfsm_parse_failed: bool = False,
+    ) -> None:
+        """Emit a connection_outcome audit record for this invocation."""
+        log_connection_outcome(
+            correlation_id=self.correlation_id,
+            tool=self.tool,
+            device=self.device,
+            command=self.command,
+            outcome=outcome,
+            detail=detail,
+            textfsm_parse_failed=textfsm_parse_failed,
+        )

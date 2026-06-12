@@ -34,8 +34,7 @@ from netmiko_mcp.audit import (
     OUTCOME_SUCCESS,
     OUTCOME_TIMEOUT,
     OUTCOME_WRITE_ERROR,
-    log_command_attempt,
-    log_connection_outcome,
+    CommandAuditContext,
     save_channel_transcript,
 )
 from netmiko_mcp.config import settings
@@ -102,17 +101,16 @@ def run_show_command(
     operation.
     """
     correlation_id = _correlation_id or str(uuid.uuid4())
-
-    # Validate the command and emit the audit record for the decision.
-    result: ValidationResult = validate_command(command)
-    log_command_attempt(
+    audit_context = CommandAuditContext(
         correlation_id=correlation_id,
         tool=_tool_name,
         device=device_name,
         command=command,
-        verdict=ALLOWED if result.allowed else DENIED,
-        reason=result.reason,
     )
+
+    # Validate the command and emit the audit record for the decision.
+    result: ValidationResult = validate_command(command)
+    audit_context.log_attempt(ALLOWED if result.allowed else DENIED, result.reason)
     if not result.allowed:
         return f"Security Error: Command '{command}' is not permitted."
 
@@ -120,14 +118,7 @@ def run_show_command(
     try:
         params = get_device_params(device_name)
     except ValueError as e:
-        log_connection_outcome(
-            correlation_id=correlation_id,
-            tool=_tool_name,
-            device=device_name,
-            command=command,
-            outcome=OUTCOME_INVENTORY_ERROR,
-            detail=str(e),
-        )
+        audit_context.log_outcome(OUTCOME_INVENTORY_ERROR, detail=str(e))
         return f"Inventory Error: {str(e)}"
 
     # Optionally set up a BytesIO buffer as the session_log to capture the
@@ -170,125 +161,50 @@ def run_show_command(
                     final_output = str(output)
 
             except ReadTimeout:
-                log_connection_outcome(
-                    correlation_id=correlation_id,
-                    tool=_tool_name,
-                    device=device_name,
-                    command=command,
-                    outcome=OUTCOME_READ_TIMEOUT,
-                )
+                audit_context.log_outcome(OUTCOME_READ_TIMEOUT)
                 return (
                     f"Connection Error: Device '{device_name}' stopped responding "
                     f"while reading command output."
                 )
             except ReadException as e:
-                log_connection_outcome(
-                    correlation_id=correlation_id,
-                    tool=_tool_name,
-                    device=device_name,
-                    command=command,
-                    outcome=OUTCOME_READ_ERROR,
-                    detail=str(e),
-                )
+                audit_context.log_outcome(OUTCOME_READ_ERROR, detail=str(e))
                 return f"Connection Error: Failed to read output from '{device_name}': {str(e)}"
             except WriteException as e:
-                log_connection_outcome(
-                    correlation_id=correlation_id,
-                    tool=_tool_name,
-                    device=device_name,
-                    command=command,
-                    outcome=OUTCOME_WRITE_ERROR,
-                    detail=str(e),
-                )
+                audit_context.log_outcome(OUTCOME_WRITE_ERROR, detail=str(e))
                 return f"Connection Error: Failed to send command to '{device_name}': {str(e)}"
             except NetmikoBaseException as e:
-                log_connection_outcome(
-                    correlation_id=correlation_id,
-                    tool=_tool_name,
-                    device=device_name,
-                    command=command,
-                    outcome=OUTCOME_NETMIKO_ERROR,
-                    detail=str(e),
-                )
+                audit_context.log_outcome(OUTCOME_NETMIKO_ERROR, detail=str(e))
                 return f"Connection Error: {str(e)}"
             except Exception as e:
                 # Unexpected exception during command execution — almost certainly
                 # a bug. The full traceback is written to the audit log detail
                 # field so developers can locate the source without a separate
                 # logging pipeline.
-                log_connection_outcome(
-                    correlation_id=correlation_id,
-                    tool=_tool_name,
-                    device=device_name,
-                    command=command,
-                    outcome=OUTCOME_ERROR,
-                    detail=traceback.format_exc(),
-                )
+                audit_context.log_outcome(OUTCOME_ERROR, detail=traceback.format_exc())
                 return f"Execution Error: An unexpected error occurred: {str(e)}"
 
             if session_log_buf is not None:
                 save_channel_transcript(correlation_id, device_name, session_log_buf.getvalue())
-
-            log_connection_outcome(
-                correlation_id=correlation_id,
-                tool=_tool_name,
-                device=device_name,
-                command=command,
-                outcome=OUTCOME_SUCCESS,
-                textfsm_parse_failed=textfsm_parse_failed,
-            )
+            audit_context.log_outcome(OUTCOME_SUCCESS, textfsm_parse_failed=textfsm_parse_failed)
             return final_output
 
     except NetmikoAuthenticationException:
-        log_connection_outcome(
-            correlation_id=correlation_id,
-            tool=_tool_name,
-            device=device_name,
-            command=command,
-            outcome=OUTCOME_AUTH_FAILURE,
-        )
+        audit_context.log_outcome(OUTCOME_AUTH_FAILURE)
         return f"Connection Error: Authentication failed for device '{device_name}'."
     except NetmikoTimeoutException:
-        log_connection_outcome(
-            correlation_id=correlation_id,
-            tool=_tool_name,
-            device=device_name,
-            command=command,
-            outcome=OUTCOME_TIMEOUT,
-        )
+        audit_context.log_outcome(OUTCOME_TIMEOUT)
         return f"Connection Error: Connection to device '{device_name}' timed out."
     except SSHException as e:
-        log_connection_outcome(
-            correlation_id=correlation_id,
-            tool=_tool_name,
-            device=device_name,
-            command=command,
-            outcome=OUTCOME_SSH_ERROR,
-            detail=str(e),
-        )
+        audit_context.log_outcome(OUTCOME_SSH_ERROR, detail=str(e))
         return f"Connection Error: SSH protocol error for '{device_name}': {str(e)}"
     except NetmikoBaseException as e:
-        log_connection_outcome(
-            correlation_id=correlation_id,
-            tool=_tool_name,
-            device=device_name,
-            command=command,
-            outcome=OUTCOME_NETMIKO_ERROR,
-            detail=str(e),
-        )
+        audit_context.log_outcome(OUTCOME_NETMIKO_ERROR, detail=str(e))
         return f"Connection Error: {str(e)}"
     except Exception as e:
         # Unexpected exception during connection establishment — almost certainly
         # a bug or an unknown OS/network error. The full traceback is written to
         # the audit log detail field so developers can locate the source.
-        log_connection_outcome(
-            correlation_id=correlation_id,
-            tool=_tool_name,
-            device=device_name,
-            command=command,
-            outcome=OUTCOME_ERROR,
-            detail=traceback.format_exc(),
-        )
+        audit_context.log_outcome(OUTCOME_ERROR, detail=traceback.format_exc())
         return f"Execution Error: An unexpected error occurred: {str(e)}"
 
 
@@ -423,14 +339,13 @@ def run_show_command_on_group(
     result: ValidationResult = validate_command(command)
     if not result.allowed:
         correlation_id = str(uuid.uuid4())
-        log_command_attempt(
+        audit_context = CommandAuditContext(
             correlation_id=correlation_id,
             tool="send_show_command_to_group",
             device=f"GROUP:{device_or_group}",
             command=command,
-            verdict=DENIED,
-            reason=result.reason,
         )
+        audit_context.log_attempt(DENIED, result.reason)
         return {"error": f"Security Error: Command '{command}' is not permitted."}
 
     try:

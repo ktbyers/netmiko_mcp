@@ -630,3 +630,105 @@ def test_build_syslog_handler_unix_socket() -> None:
             assert call_kwargs is not None
             address_arg = call_kwargs.kwargs.get("address") or call_kwargs.args[0]
             assert address_arg == "/dev/log"
+
+
+# ---------------------------------------------------------------------------
+# CommandAuditContext
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.audit.log_command_attempt")
+def test_command_audit_context_log_attempt(mock_log_attempt: MagicMock) -> None:
+    """log_attempt should delegate to log_command_attempt with all context fields."""
+    from netmiko_mcp.audit import ALLOWED, CommandAuditContext
+
+    audit_context = CommandAuditContext(
+        correlation_id="corr-123",
+        tool="send_show_command",
+        device="rtr1",
+        command="show version",
+    )
+    audit_context.log_attempt(ALLOWED, "ALLOWED")
+
+    mock_log_attempt.assert_called_once_with(
+        correlation_id="corr-123",
+        tool="send_show_command",
+        device="rtr1",
+        command="show version",
+        verdict=ALLOWED,
+        reason="ALLOWED",
+    )
+
+
+@patch("netmiko_mcp.audit.log_connection_outcome")
+def test_command_audit_context_log_outcome_minimal(mock_log_outcome: MagicMock) -> None:
+    """log_outcome with only outcome should call log_connection_outcome with correct defaults."""
+    from netmiko_mcp.audit import OUTCOME_SUCCESS, CommandAuditContext
+
+    audit_context = CommandAuditContext(
+        correlation_id="corr-123",
+        tool="send_show_command",
+        device="rtr1",
+        command="show version",
+    )
+    audit_context.log_outcome(OUTCOME_SUCCESS)
+
+    mock_log_outcome.assert_called_once_with(
+        correlation_id="corr-123",
+        tool="send_show_command",
+        device="rtr1",
+        command="show version",
+        outcome=OUTCOME_SUCCESS,
+        detail=None,
+        textfsm_parse_failed=False,
+    )
+
+
+@patch("netmiko_mcp.audit.log_connection_outcome")
+def test_command_audit_context_log_outcome_with_detail(mock_log_outcome: MagicMock) -> None:
+    """log_outcome with detail should forward it to log_connection_outcome."""
+    from netmiko_mcp.audit import OUTCOME_ERROR, CommandAuditContext
+
+    audit_context = CommandAuditContext(
+        correlation_id="corr-123",
+        tool="send_show_command",
+        device="rtr1",
+        command="show version",
+    )
+    audit_context.log_outcome(OUTCOME_ERROR, detail="Traceback (most recent call last)...")
+
+    mock_log_outcome.assert_called_once_with(
+        correlation_id="corr-123",
+        tool="send_show_command",
+        device="rtr1",
+        command="show version",
+        outcome=OUTCOME_ERROR,
+        detail="Traceback (most recent call last)...",
+        textfsm_parse_failed=False,
+    )
+
+
+@patch("netmiko_mcp.audit.log_connection_outcome")
+def test_command_audit_context_log_outcome_textfsm_parse_failed(
+    mock_log_outcome: MagicMock,
+) -> None:
+    """log_outcome with textfsm_parse_failed=True should forward it to log_connection_outcome."""
+    from netmiko_mcp.audit import OUTCOME_SUCCESS, CommandAuditContext
+
+    audit_context = CommandAuditContext(
+        correlation_id="corr-123",
+        tool="send_show_command",
+        device="rtr1",
+        command="show version",
+    )
+    audit_context.log_outcome(OUTCOME_SUCCESS, textfsm_parse_failed=True)
+
+    mock_log_outcome.assert_called_once_with(
+        correlation_id="corr-123",
+        tool="send_show_command",
+        device="rtr1",
+        command="show version",
+        outcome=OUTCOME_SUCCESS,
+        detail=None,
+        textfsm_parse_failed=True,
+    )
