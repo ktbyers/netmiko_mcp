@@ -127,12 +127,13 @@ class _AuditJsonFormatter(logging.Formatter):
         return json.dumps(data, default=str)
 
 
-class _FailClosedRotatingFileHandler(logging.handlers.RotatingFileHandler):
-    """A RotatingFileHandler that re-raises write errors rather than swallowing them.
+class _FailClosedFileHandler(logging.FileHandler):
+    """A FileHandler that re-raises write errors rather than swallowing them.
 
     Python's default handler behaviour catches exceptions in emit() and routes
     them to handleError(), which prints to stderr. For audit logging this is
     insufficient — a failed write should propagate so the caller fails closed.
+    File rotation is left to the operator (e.g. logrotate).
     """
 
     def handleError(self, record: logging.LogRecord) -> None:
@@ -148,16 +149,11 @@ class _FailClosedSysLogHandler(logging.handlers.SysLogHandler):
         raise RuntimeError(f"Audit syslog write failed: {exc_value}") from exc_value
 
 
-def _build_file_handler(formatter: logging.Formatter) -> _FailClosedRotatingFileHandler:
-    """Construct and return a fail-closed rotating file handler for the audit log."""
+def _build_file_handler(formatter: logging.Formatter) -> _FailClosedFileHandler:
+    """Construct and return a fail-closed file handler for the audit log."""
     log_path = Path(settings.audit_log_file).expanduser()
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    handler = _FailClosedRotatingFileHandler(
-        filename=str(log_path),
-        maxBytes=settings.audit_log_max_bytes,
-        backupCount=settings.audit_log_backup_count,
-        encoding="utf-8",
-    )
+    handler = _FailClosedFileHandler(filename=str(log_path), mode="a", encoding="utf-8")
     if log_path.exists():
         log_path.chmod(0o600)
     handler.setFormatter(formatter)
@@ -322,23 +318,6 @@ def log_tool_invocation(*, tool: str, arguments: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_old_transcripts(transcript_dir: Path) -> None:
-    """Remove transcript files older than audit_log_retention_days.
-
-    Errors deleting individual files are silently ignored to avoid disrupting
-    ongoing operations — stale files are cosmetic, not security-critical.
-    """
-    if settings.audit_log_retention_days <= 0:
-        return
-    cutoff = datetime.now(timezone.utc).timestamp() - (settings.audit_log_retention_days * 86400)
-    for f in transcript_dir.glob("*.txt"):
-        try:
-            if f.stat().st_mtime < cutoff:
-                f.unlink()
-        except OSError:
-            pass
-
-
 def save_channel_transcript(
     correlation_id: str,
     device_name: str,
@@ -372,5 +351,3 @@ def save_channel_transcript(
 
     file_path.write_text(transcript_text, encoding="utf-8")
     file_path.chmod(0o600)
-
-    _cleanup_old_transcripts(transcript_dir)

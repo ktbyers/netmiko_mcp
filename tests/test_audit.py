@@ -25,11 +25,10 @@ from netmiko_mcp.audit import (
     REASON_PIPE_NOT_ALLOWED,
     REASON_UNSAFE_CHAR,
     _AuditJsonFormatter,
-    _FailClosedRotatingFileHandler,
+    _FailClosedFileHandler,
     _FailClosedSysLogHandler,
     _audit_logger,
     _build_file_handler,
-    _cleanup_old_transcripts,
     _emit,
     configure_audit_logger,
     log_command_attempt,
@@ -149,16 +148,15 @@ def test_json_formatter_excludes_standard_logrecord_attrs() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _FailClosedRotatingFileHandler
+# _FailClosedFileHandler
 # ---------------------------------------------------------------------------
 
 
 def test_fail_closed_file_handler_raises_on_error(tmp_path: Path) -> None:
     """handleError should re-raise rather than swallow the write failure."""
-    handler = _FailClosedRotatingFileHandler(
+    handler = _FailClosedFileHandler(
         filename=str(tmp_path / "audit.log"),
-        maxBytes=1_000_000,
-        backupCount=3,
+        mode="a",
         encoding="utf-8",
     )
     record = _make_record({"event": "test"})
@@ -212,15 +210,13 @@ def test_configure_audit_logger_disabled(mock_settings: MagicMock) -> None:
 
 @patch("netmiko_mcp.audit.settings")
 def test_configure_audit_logger_file_destination(mock_settings: MagicMock, tmp_path: Path) -> None:
-    """When destination is 'file', a RotatingFileHandler should be attached."""
+    """When destination is 'file', a FileHandler should be attached."""
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(tmp_path / "audit.log")
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
     logger = _fresh_audit_logger()
     configure_audit_logger()
-    file_handlers = [h for h in logger.handlers if isinstance(h, _FailClosedRotatingFileHandler)]
+    file_handlers = [h for h in logger.handlers if isinstance(h, _FailClosedFileHandler)]
     assert len(file_handlers) >= 1
     logger.handlers = [h for h in logger.handlers if isinstance(h, logging.NullHandler)]
 
@@ -245,13 +241,11 @@ def test_configure_audit_logger_both_destinations(mock_settings: MagicMock, tmp_
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "both"
     mock_settings.audit_log_file = str(tmp_path / "audit.log")
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
     mock_settings.audit_log_syslog_address = "127.0.0.1:514"
     mock_settings.audit_log_syslog_facility = "local0"
     logger = _fresh_audit_logger()
     configure_audit_logger()
-    file_handlers = [h for h in logger.handlers if isinstance(h, _FailClosedRotatingFileHandler)]
+    file_handlers = [h for h in logger.handlers if isinstance(h, _FailClosedFileHandler)]
     syslog_handlers = [h for h in logger.handlers if isinstance(h, _FailClosedSysLogHandler)]
     assert len(file_handlers) >= 1
     assert len(syslog_handlers) >= 1
@@ -293,8 +287,6 @@ def test_fail_closed_propagates_handler_error(mock_settings: MagicMock, tmp_path
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(tmp_path / "audit.log")
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
 
     formatter = _AuditJsonFormatter()
     handler = _build_file_handler(formatter)
@@ -321,8 +313,6 @@ def test_log_command_attempt_writes_json_record(mock_settings: MagicMock, tmp_pa
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(log_file)
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
 
     logger = _fresh_audit_logger()
     formatter = _AuditJsonFormatter()
@@ -363,8 +353,6 @@ def test_log_command_attempt_denied(mock_settings: MagicMock, tmp_path: Path) ->
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(log_file)
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
 
     logger = _fresh_audit_logger()
     formatter = _AuditJsonFormatter()
@@ -403,8 +391,6 @@ def test_log_connection_outcome_success(mock_settings: MagicMock, tmp_path: Path
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(log_file)
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
 
     logger = _fresh_audit_logger()
     formatter = _AuditJsonFormatter()
@@ -441,8 +427,6 @@ def test_log_connection_outcome_auth_failure_includes_detail(
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(log_file)
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
 
     logger = _fresh_audit_logger()
     formatter = _AuditJsonFormatter()
@@ -478,8 +462,6 @@ def test_log_connection_outcome_textfsm_parse_failed(
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(log_file)
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
 
     logger = _fresh_audit_logger()
     formatter = _AuditJsonFormatter()
@@ -517,8 +499,6 @@ def test_log_tool_invocation_ping(mock_settings: MagicMock, tmp_path: Path) -> N
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(log_file)
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
 
     logger = _fresh_audit_logger()
     formatter = _AuditJsonFormatter()
@@ -546,8 +526,6 @@ def test_log_tool_invocation_read_device_output(mock_settings: MagicMock, tmp_pa
     mock_settings.audit_log_enabled = True
     mock_settings.audit_log_destination = "file"
     mock_settings.audit_log_file = str(log_file)
-    mock_settings.audit_log_max_bytes = 1_000_000
-    mock_settings.audit_log_backup_count = 3
 
     logger = _fresh_audit_logger()
     formatter = _AuditJsonFormatter()
@@ -580,7 +558,6 @@ def test_log_tool_invocation_read_device_output(mock_settings: MagicMock, tmp_pa
 def test_save_channel_transcript_creates_file(mock_settings: MagicMock, tmp_path: Path) -> None:
     """save_channel_transcript should write the decoded transcript to a file."""
     mock_settings.audit_log_transcript_dir = str(tmp_path / "transcripts")
-    mock_settings.audit_log_retention_days = 30
 
     raw = b"router1#show version\r\nCisco IOS ...\r\nrouter1#"
     save_channel_transcript("corr-abc", "router1", raw)
@@ -598,7 +575,6 @@ def test_save_channel_transcript_creates_file(mock_settings: MagicMock, tmp_path
 def test_save_channel_transcript_permissions(mock_settings: MagicMock, tmp_path: Path) -> None:
     """Transcript directory should be 0o700 and file should be 0o600."""
     mock_settings.audit_log_transcript_dir = str(tmp_path / "transcripts")
-    mock_settings.audit_log_retention_days = 30
 
     save_channel_transcript("corr-xyz", "router1", b"output")
     transcript_dir = tmp_path / "transcripts"
@@ -613,75 +589,12 @@ def test_save_channel_transcript_sanitises_device_name(
 ) -> None:
     """Unusual characters in device_name should be replaced with underscores."""
     mock_settings.audit_log_transcript_dir = str(tmp_path / "transcripts")
-    mock_settings.audit_log_retention_days = 30
 
     save_channel_transcript("corr-zzz", "router/1:weird", b"output")
     files = list((tmp_path / "transcripts").glob("*.txt"))
     assert len(files) == 1
     assert "/" not in files[0].name
     assert ":" not in files[0].name
-
-
-# ---------------------------------------------------------------------------
-# _cleanup_old_transcripts
-# ---------------------------------------------------------------------------
-
-
-@patch("netmiko_mcp.audit.settings")
-def test_cleanup_removes_old_files(mock_settings: MagicMock, tmp_path: Path) -> None:
-    """Files older than retention_days should be removed."""
-    mock_settings.audit_log_retention_days = 1
-    old_file = tmp_path / "old_transcript.txt"
-    old_file.write_text("old", encoding="utf-8")
-
-    import os
-    import time
-
-    old_mtime = time.time() - (2 * 86400)  # 2 days ago
-    os.utime(old_file, (old_mtime, old_mtime))
-
-    _cleanup_old_transcripts(tmp_path)
-    assert not old_file.exists()
-
-
-@patch("netmiko_mcp.audit.settings")
-def test_cleanup_keeps_recent_files(mock_settings: MagicMock, tmp_path: Path) -> None:
-    """Files within retention_days should not be removed."""
-    mock_settings.audit_log_retention_days = 30
-    recent_file = tmp_path / "recent_transcript.txt"
-    recent_file.write_text("recent", encoding="utf-8")
-
-    _cleanup_old_transcripts(tmp_path)
-    assert recent_file.exists()
-
-
-@patch("netmiko_mcp.audit.settings")
-def test_cleanup_skipped_when_retention_zero(mock_settings: MagicMock, tmp_path: Path) -> None:
-    """When audit_log_retention_days is 0, no files should be deleted."""
-    mock_settings.audit_log_retention_days = 0
-    old_file = tmp_path / "old.txt"
-    old_file.write_text("old", encoding="utf-8")
-
-    import os
-
-    os.utime(old_file, (0, 0))
-    _cleanup_old_transcripts(tmp_path)
-    assert old_file.exists()
-
-
-@patch("netmiko_mcp.audit.settings")
-def test_cleanup_silently_ignores_deletion_errors(mock_settings: MagicMock, tmp_path: Path) -> None:
-    """OSError during file deletion should be silently ignored."""
-    mock_settings.audit_log_retention_days = 1
-    old_file = tmp_path / "old_transcript.txt"
-    old_file.write_text("old", encoding="utf-8")
-
-    import os
-
-    os.utime(old_file, (0, 0))
-
-    with patch.object(old_file.__class__, "unlink", side_effect=OSError("permission denied")):
-        _cleanup_old_transcripts(tmp_path)  # should not raise
 
 
 # ---------------------------------------------------------------------------

@@ -23,10 +23,15 @@ from netmiko_mcp.connection import (
 @patch("netmiko_mcp.connection.validate_command")
 @patch("netmiko_mcp.connection.ConnectHandler")
 @patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
 def test_run_show_command_success(
-    mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
 ) -> None:
     """Test that a command is executed successfully and returns output."""
+    mock_settings.audit_log_read_transcript = False
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 

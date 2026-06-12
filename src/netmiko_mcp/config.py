@@ -34,13 +34,10 @@ class McpConfig(BaseSettings):
     audit_log_enabled: bool = Field(default=True)
     audit_log_destination: Literal["file", "syslog", "both"] = Field(default="file")
     audit_log_file: str = Field(default="~/.netmiko_mcp_audit.log")
-    audit_log_max_bytes: int = Field(default=10_485_760)  # 10 MB
-    audit_log_backup_count: int = Field(default=5)
     audit_log_syslog_address: str = Field(default="/dev/log")
     audit_log_syslog_facility: str = Field(default="local0")
     audit_log_read_transcript: bool = Field(default=False)
     audit_log_transcript_dir: str = Field(default="~/.netmiko_mcp_transcripts")
-    audit_log_retention_days: int = Field(default=30)
 
     @classmethod
     def settings_customise_sources(
