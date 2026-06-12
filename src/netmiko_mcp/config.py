@@ -30,6 +30,13 @@ class McpConfig(BaseSettings):
     max_workers: int = Field(default=10)
     save_output_dir: str = Field(default="~/.netmiko_mcp_tmp")
 
+    # Transport
+    transport: Literal["stdio", "streamable-http"] = Field(default="stdio")
+    http_host: str = Field(default="127.0.0.1")
+    http_port: int = Field(default=8000)
+    http_path: str = Field(default="/mcp")
+    http_auth_enabled: bool = Field(default=True)
+
     # Audit logging
     audit_log_enabled: bool = Field(default=True)
     audit_log_destination: Literal["file", "syslog", "both"] = Field(default="file")

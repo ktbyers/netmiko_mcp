@@ -1,7 +1,10 @@
+import os
 from pathlib import Path
 from typing import Any
 
+import uvicorn
 from mcp.server.fastmcp import FastMCP
+from starlette.types import ASGIApp
 
 from netmiko_mcp.audit import configure_audit_logger, log_tool_invocation
 from netmiko_mcp.config import settings
@@ -11,10 +14,19 @@ from netmiko_mcp.connection import (
     run_show_command,
     run_show_command_on_group,
 )
+from netmiko_mcp.http_auth import BearerTokenMiddleware
 from netmiko_mcp.inventory import get_sanitized_inventory
 
-# Initialize the FastMCP server
-mcp = FastMCP("netmiko-mcp", instructions="MCP Server for Netmiko Network Automation")
+# Initialize the FastMCP server. The HTTP settings (host, port, path) are passed
+# here so that streamable_http_app() uses the operator-configured values when the
+# HTTP transport is selected. They have no effect in stdio mode.
+mcp = FastMCP(
+    "netmiko-mcp",
+    instructions="MCP Server for Netmiko Network Automation",
+    host=settings.http_host,
+    port=settings.http_port,
+    streamable_http_path=settings.http_path,
+)
 
 
 @mcp.tool()
@@ -108,11 +120,31 @@ def ping() -> str:
     return "pong"
 
 
+def _get_bearer_token() -> str:
+    """Retrieve the HTTP bearer token from the environment.
+
+    The token is read from NETMIKO_MCP_HTTP_BEARER_TOKEN. It is intentionally not a
+    pydantic-settings field so it cannot be stored in the YAML config file — secrets
+    belong in the environment only.
+
+    Raises SystemExit if the variable is not set or is empty.
+    """
+    token = os.environ.get("NETMIKO_MCP_HTTP_BEARER_TOKEN", "").strip()
+    if not token:
+        raise SystemExit(
+            "Startup Error: NETMIKO_MCP_HTTP_BEARER_TOKEN must be set as an environment "
+            "variable when running in streamable-http mode with http_auth_enabled: true."
+        )
+    return token
+
+
 def _validate_startup() -> None:
     """Validate required configuration before starting the server.
 
     Raises SystemExit with a clear message if the command_file does not exist,
     preventing the server from running in a state where all commands are silently denied.
+    When transport is streamable-http and http_auth_enabled is true, also validates
+    that NETMIKO_MCP_HTTP_BEARER_TOKEN is set.
     """
     command_file = Path(settings.command_file).expanduser()
     if not command_file.is_file():
@@ -121,12 +153,37 @@ def _validate_startup() -> None:
             f"Create this file with your allowed_commands before starting the server."
         )
 
+    if settings.transport == "streamable-http" and settings.http_auth_enabled:
+        _get_bearer_token()
+
+
+def _run_http() -> None:
+    """Start the MCP server using the Streamable HTTP transport.
+
+    Retrieves the ASGI application from FastMCP, optionally wraps it with RFC 6750
+    bearer token authentication middleware, and hands it to uvicorn.
+
+    TLS termination is intentionally left to a reverse proxy. Running uvicorn
+    with raw TLS in application code is possible but adds certificate lifecycle
+    management complexity that a proxy (nginx, Caddy, etc.) handles better.
+    """
+    app: ASGIApp = mcp.streamable_http_app()
+
+    if settings.http_auth_enabled:
+        token = _get_bearer_token()
+        app = BearerTokenMiddleware(app, token)
+
+    uvicorn.run(app, host=settings.http_host, port=settings.http_port)
+
 
 def main() -> None:
     """Entry point for the Netmiko MCP server."""
     _validate_startup()
     configure_audit_logger()
-    mcp.run(transport="stdio")
+    if settings.transport == "streamable-http":
+        _run_http()
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

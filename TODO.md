@@ -6,16 +6,12 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ## Security (`security.py`)
 
-- **Audit logging** ✅ - Implemented in `audit.py`. Every tool invocation and command
-  attempt is logged as a structured JSON record with a UTC timestamp, correlation ID,
-  tool name, device, command, verdict, and reason. Connection outcomes (success, auth
-  failure, timeout, error) are recorded as a second record linked by correlation ID.
-  Non-device tools (ping, list_devices, list_device_outputs, read_device_output) each
-  emit a tool_invocation record. Optional channel read transcript capture is available
-  via `audit_log_read_transcript: true`. Destination is configurable: local rotating
-  file, syslog, or both. Fail-closed: if logging is enabled and the logger fails, the
-  operation fails. Transcript files are cleaned up after `audit_log_retention_days` (30
-  day default).
+- **Transcript retention/cleanup not implemented** - The `save_channel_transcript`
+  docstring states that files beyond `audit_log_retention_days` are removed on each
+  write, but neither the config field nor the cleanup code exist. Transcript files
+  accumulate indefinitely. Needs an `audit_log_retention_days: int` field in
+  `config.py` (default 30) and a cleanup pass inside `save_channel_transcript` that
+  deletes files older than the retention window before writing the new one.
 
 - **Command abbreviation handling** `[open question in docstring]` - `sh ip int br` is not
   the same as `show ip interface brief` to the validator even though network devices accept
@@ -94,15 +90,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 ---
 
 ## MCP Protocol Features (`server.py` / `ARCHITECTURE.md`)
-
-- **Streamable HTTPS transport** - The server is currently hardcoded to `stdio` transport,
-  which means it is local-only and each MCP client spawns an independent process with no
-  shared state. Supporting the MCP Streamable HTTP transport would enable remote deployment,
-  a shared connection pool across multiple clients, centralized audit logging, and global
-  policy enforcement (blast radius limits, rate limiting). Requires adding TLS and an
-  explicit authentication layer (API key or mTLS) before exposing on any network. Should
-  be pursued after connection pooling is implemented, since a shared warm pool is the
-  primary performance motivation for the HTTP transport.
 
 - **No MCP Resources** `[ARCH §5]` - The device inventory could be exposed as an MCP
   Resource (read-only data) rather than only as a Tool call. This would let clients

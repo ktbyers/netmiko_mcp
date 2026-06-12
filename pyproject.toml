@@ -22,6 +22,7 @@ dependencies = [
     "ntc-templates>=4.1.0",
     "pydantic-settings>=2.14.1",
     "pyyaml>=6.0.3",
+    "uvicorn>=0.48.0",
 ]
 
 [project.scripts]
@@ -30,6 +31,7 @@ netmiko-mcp = "netmiko_mcp.server:main"
 [dependency-groups]
 dev = [
     "bandit>=1.9.4",
+    "httpx>=0.28.0",
     "mypy>=2.1.0",
     "pip-audit>=2.10.0",
     "pytest>=9.0.3",
