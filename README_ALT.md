@@ -21,7 +21,7 @@ This means two things for setup:
 Install using `uv`:
 
 ```bash
-uv tool install netmiko-mcp
+uv tool install git+https://github.com/ktbyers/netmiko_mcp.git
 ```
 
 Or install from source:
@@ -29,10 +29,10 @@ Or install from source:
 ```bash
 git clone https://github.com/ktbyers/netmiko_mcp
 cd netmiko_mcp
-uv pip install -e .
+uv sync
 ```
 
-> **Note:** `uv pip install -e .` installs into the project's local virtual environment, which works for Claude Code but not for clients like Claude Desktop, Cursor, Devin (formerly Windsurf) that launch the server from a different working directory. See [docs/mcp_ai_client_installation_guide.md](docs/mcp_ai_client_installation_guide.md) for details on making the server available globally.
+> **Note:** `uv sync` installs into the project's local virtual environment, which works for Claude Code but not for clients like Claude Desktop, Cursor, Devin (formerly Windsurf) that launch the server from a different working directory. See [docs/mcp_ai_client_installation_guide.md](docs/mcp_ai_client_installation_guide.md) for details on making the server available globally.
 
 ---
 
