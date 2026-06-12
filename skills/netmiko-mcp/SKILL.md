@@ -1,6 +1,6 @@
 ---
 name: netmiko-mcp
-description: Workflows and configuration references for the Netmiko MCP server, including environment variables, global config (netmiko-mcp.yml), and security commands (commands.yml).
+description: Workflows and configuration references for the Netmiko MCP server, including environment variables, global config (netmiko-mcp.yml), security commands (commands.yml), and running the server over Streamable HTTP transport with bearer token authentication.
 ---
 
 # Netmiko MCP Server Architecture & Configuration
@@ -123,3 +123,103 @@ Because the server uses the `netmiko_tools` inventory type, it natively leverage
 - The server requires the `NETMIKO_TOOLS_KEY` environment variable to be exported in the executing shell to perform PBKDF2HMAC decryption of `__encrypt__` fields.
 
 See the `netmiko-tools-yml` skill for a deeper dive into inventory generation and encryption mechanics.
+
+---
+
+## Running the Server over Streamable HTTP
+
+The server supports two transports: `stdio` (default, for MCP clients that launch the process directly) and `streamable-http` (for running as a persistent HTTP service).
+
+### Prerequisites
+
+1. **Install dependencies** (first time only):
+   ```bash
+   cd /home/mcp_http/pi_mcp_http/netmiko_mcp
+   uv sync --python /usr/bin/python3.13
+   ```
+
+2. **Copy required config files** from the reference user using `setup_configs.sh`:
+   ```bash
+   bash setup_configs.sh
+   ```
+   This copies `commands.yml`, `.netmiko-mcp.yml`, and `.netmiko.yml` into place.
+   The server will **hard exit at startup** if `commands.yml` is missing.
+
+### Required Environment Variables
+
+| Variable | Description |
+|---|---|
+| `NETMIKO_MCP_TRANSPORT` | Set to `streamable-http` to enable HTTP mode (default is `stdio`) |
+| `NETMIKO_MCP_HTTP_BEARER_TOKEN` | Secret token for RFC 6750 bearer auth. **Required** when `http_auth_enabled: true` (the default). Server hard exits if missing. |
+| `NETMIKO_MCP_CONFIG` | Path to the YAML config file (default: `~/.netmiko-mcp.yml`) |
+| `NETMIKO_TOOLS_KEY` | Decryption key for the encrypted Netmiko inventory (`~/.netmiko.yml`) |
+
+#### Generating a Bearer Token
+
+```bash
+openssl rand -hex 32
+```
+
+This produces a 64-character cryptographically random hex string. Store it only as an environment variable — never in the YAML config file.
+
+#### Setting the Variables
+
+```bash
+export NETMIKO_MCP_TRANSPORT="streamable-http"
+export NETMIKO_MCP_HTTP_BEARER_TOKEN="<token from openssl rand -hex 32>"
+export NETMIKO_MCP_CONFIG="/home/mcp_http/.netmiko-mcp.yml"
+export NETMIKO_TOOLS_KEY="<your inventory decryption key>"
+```
+
+To persist across sessions, append to `~/.bashrc`:
+```bash
+echo 'export NETMIKO_MCP_TRANSPORT="streamable-http"' >> ~/.bashrc
+echo 'export NETMIKO_MCP_HTTP_BEARER_TOKEN="<your-token>"' >> ~/.bashrc
+echo 'export NETMIKO_MCP_CONFIG="/home/mcp_http/.netmiko-mcp.yml"' >> ~/.bashrc
+echo 'export NETMIKO_TOOLS_KEY="<your-key>"' >> ~/.bashrc
+```
+
+### Optional HTTP Settings
+
+These can be set in `~/.netmiko-mcp.yml` or via environment variables:
+
+```yaml
+http_host: "127.0.0.1"   # Bind address. Use 0.0.0.0 to accept external connections.
+http_port: 8000           # Port (default: 8000)
+http_path: "/mcp"         # MCP endpoint path (default: /mcp)
+http_auth_enabled: true   # Enable bearer token auth (default: true — do not disable)
+```
+
+To accept connections from other machines:
+```bash
+export NETMIKO_MCP_HTTP_HOST="0.0.0.0"
+```
+
+> **TLS:** TLS termination should be handled by a reverse proxy (nginx, Caddy, etc.). The server runs plain HTTP and relies on the proxy for HTTPS.
+
+### Starting the Server
+
+```bash
+cd /home/mcp_http/pi_mcp_http/netmiko_mcp
+.venv/bin/netmiko-mcp
+```
+
+On successful startup, uvicorn will log:
+```
+INFO:     Started server process [...]
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+```
+
+The MCP endpoint is available at:
+```
+http://<host>:8000/mcp
+```
+
+### Connecting an MCP Client
+
+Clients must send requests with the `Authorization` header:
+```
+Authorization: Bearer <your-token>
+```
+
+See `docs/clients/claude-code-http.md` in this repo for Claude Code-specific connection instructions.
