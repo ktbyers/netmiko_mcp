@@ -1,6 +1,5 @@
 import io
 import json
-import logging
 import traceback
 import uuid
 from collections.abc import Generator
@@ -42,8 +41,6 @@ from netmiko_mcp.audit import (
 from netmiko_mcp.config import settings
 from netmiko_mcp.inventory import get_device_names, get_device_params
 from netmiko_mcp.security import ValidationResult, validate_command
-
-_logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -216,20 +213,16 @@ def run_show_command(
                 return f"Connection Error: {str(e)}"
             except Exception as e:
                 # Unexpected exception during command execution — almost certainly
-                # a bug. Log the full traceback so developers can locate the source.
-                _logger.error(
-                    "Unexpected error executing command '%s' on '%s': %s",
-                    command,
-                    device_name,
-                    traceback.format_exc(),
-                )
+                # a bug. The full traceback is written to the audit log detail
+                # field so developers can locate the source without a separate
+                # logging pipeline.
                 log_connection_outcome(
                     correlation_id=correlation_id,
                     tool=_tool_name,
                     device=device_name,
                     command=command,
                     outcome=OUTCOME_ERROR,
-                    detail=str(e),
+                    detail=traceback.format_exc(),
                 )
                 return f"Execution Error: An unexpected error occurred: {str(e)}"
 
@@ -286,19 +279,15 @@ def run_show_command(
         return f"Connection Error: {str(e)}"
     except Exception as e:
         # Unexpected exception during connection establishment — almost certainly
-        # a bug or an unknown OS/network error. Log the full traceback.
-        _logger.error(
-            "Unexpected error connecting to '%s': %s",
-            device_name,
-            traceback.format_exc(),
-        )
+        # a bug or an unknown OS/network error. The full traceback is written to
+        # the audit log detail field so developers can locate the source.
         log_connection_outcome(
             correlation_id=correlation_id,
             tool=_tool_name,
             device=device_name,
             command=command,
             outcome=OUTCOME_ERROR,
-            detail=str(e),
+            detail=traceback.format_exc(),
         )
         return f"Execution Error: An unexpected error occurred: {str(e)}"
 
