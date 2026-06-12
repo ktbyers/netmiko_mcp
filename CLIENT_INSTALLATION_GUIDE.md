@@ -228,20 +228,3 @@ ngrok http 8787
 
 ngrok prints a public HTTPS URL (e.g. `https://abc123.ngrok-free.app`). Use that as the connector endpoint in Perplexity.
 
----
-
-## Sources
-
-**Transport protocol and SSE deprecation**
-- [MCP Transports — MCP Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports)
-- [SSE vs Streamable HTTP: Why MCP Switched — Bright Data](https://brightdata.com/blog/ai/sse-vs-streamable-http)
-- [MCP SSE Is Deprecated — Chanl Blog](https://www.channel.tel/blog/mcp-sse-to-streamable-http-migration)
-- [MCP SSE vs Stdio: Transport Options Explained (2026) — Apigene](https://apigene.ai/blog/mcp-sse-vs-stdio)
-- [MCP Transport: stdio vs Streamable HTTP — TrueFoundry](https://www.truefoundry.com/blog/mcp-stdio-vs-streamable-http-enterprise)
-- [Why MCP's Move Away from SSE Simplifies Security — Auth0](https://auth0.com/blog/mcp-streamable-http/)
-
-**Client installation and configuration**
-- [Building MCP servers for ChatGPT — OpenAI Docs](https://developers.openai.com/api/docs/mcp)
-- [How to Use MCP Servers in ChatGPT](https://www.usecarly.com/blog/chatgpt-mcp/)
-- [supergateway — GitHub](https://github.com/supercorp-ai/supergateway)
-- [PulseMCP client list](https://www.pulsemcp.com/clients)
