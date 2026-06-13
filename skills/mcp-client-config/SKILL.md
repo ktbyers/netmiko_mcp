@@ -278,20 +278,6 @@ Not end-to-end tested as of June 2026. If the server does not load, Kiro’s MCP
 
 ---
 
-## Choosing the Right Client
-
-| Use case | Recommended client |
-|---|---|
-| Development and testing | Claude Code |
-| Daily AI-assisted network ops | Claude Desktop or Cursor |
-| Team or multi-agent workflows | Devin Desktop (ACP layer) |
-| AWS-focused workflows | Kiro |
-| Existing Copilot user | VS Code + GitHub Copilot (Agent mode) |
-| Web GUI (no local install) | Claude.ai with remote HTTP deployment |
-| ChatGPT user | ChatGPT + supergateway bridge (extra setup — see `mcp-http-transport` skill) |
-
----
-
 ## Secrets and Credential Management
 
 See the `netmiko-tools-yml` skill for the full inventory encryption walkthrough, secrets manager integration examples, comparison table, and credential best practices.
