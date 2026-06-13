@@ -70,6 +70,23 @@ Full details on allowed/denied matching, globbing, pipes, and unsafe characters:
 <br />
 
 
+## Supported MCP Clients (June 2026)
+
+| Client | stdio | HTTP | Verified | Notes |
+|---|---|---|---|---|
+| Claude Code | ✓ | ✓ | ✓ | Recommended for development and testing |
+| Claude Desktop | ✓ | ✓ | ✓ | Agent mode; deferred tool loading |
+| Cursor | ✓ | ✓ | ✓ | Agent mode required; HTTP SSE fallback has known bug |
+| Devin Desktop (formerly Windsurf) | ✓ | ✓ | ✓ | Agent mode (Cascade) required |
+| VS Code + GitHub Copilot | ✓ | ✓ | ✓ | Agent mode only; free tier sufficient |
+| Kiro (AWS IDE) | ✓ | ✓ | — | Not tested; based on documentation |
+| Cline | ✓ | ✓ | — | Not tested |
+| Gemini CLI | ✓ | ✓ | — | Not tested |
+| Perplexity Mac app | ✓ | — | — | stdio via PerplexityXPC helper |
+| ChatGPT | ✗ | ✓ | ✗ | Business plan required; HTTP bridge needed; not working |
+| Perplexity web | ✗ | ✓ | ✗ | OAuth 2.1 discovery required; not working |
+<br />
+
 ## MCP Tools
 
 The server exposes three tools to MCP clients:

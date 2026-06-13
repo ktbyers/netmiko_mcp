@@ -40,38 +40,6 @@ uv tool list   # netmiko-mcp should appear
 
 ---
 
-## Verification Status (June 2026)
-
-| Client | Status | Notes |
-|---|---|---|
-| Claude Code | ✓ Verified | Full end-to-end tested |
-| Claude Desktop | ✓ Verified | Full end-to-end tested |
-| Cursor | ✓ Verified | Agent mode required |
-| Devin Desktop (formerly Windsurf) | ✓ Verified | Agent mode / Cascade required |
-| VS Code + GitHub Copilot | ✓ Verified | Free tier sufficient; use "structured data" phrasing for TextFSM |
-| Kiro | — Not tested | Instructions based on documentation only |
-| ChatGPT | ✗ Not working | Business plan or higher required; HTTP bridge only — see `mcp-http-transport` skill |
-| Perplexity | ✗ Not working | OAuth discovery blocker — see `mcp-http-transport` skill |
-
----
-
-## Client Support Summary (stdio clients)
-
-| Client | stdio | HTTP (Streamable) | Notes |
-|---|---|---|---|
-| Claude Code (CLI) | ✓ | ✓ | `claude mcp add --transport http <url>` for remote |
-| Claude Desktop | ✓ | ✓ | Remote via Custom Connectors; JSON config for stdio |
-| Cursor | ✓ | ✓ | Streamable HTTP + SSE fallback (fallback has known bug — pin transport explicitly) |
-| Devin Desktop (formerly Windsurf) | ✓ | ✓ | ACP multi-agent layer sits above MCP |
-| Kiro (AWS IDE) | ✓ | ✓ | Streamable HTTP + SSE fallback; strong native MCP docs |
-| VS Code + GitHub Copilot | ✓ | ✓ | Agent mode only; GA since VS Code 1.102 |
-| Cline | ✓ | ✓ | VS Code, JetBrains, Cursor, Zed, Neovim |
-| Gemini CLI | ✓ | ✓ | stdio + SSE + Streamable HTTP; OAuth 2.0 for remote |
-| Perplexity Mac app | ✓ | — | Local stdio via PerplexityXPC helper |
-| ChatGPT | ✗ | ✓ | HTTP bridge required — see `mcp-http-transport` skill |
-
----
-
 ## Claude Code
 
 The simplest client. Recommended for development and testing.
