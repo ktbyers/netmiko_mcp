@@ -72,7 +72,7 @@ http_path: "/mcp"
 http_auth_enabled: true   # Do not disable in any externally reachable deployment
 ```
 
-**TLS:** The server runs plain HTTP. Terminate TLS at a reverse proxy (nginx, Caddy). See `docs/clients/claude-code-http.md` for a Caddy example.
+**TLS:** The server runs plain HTTP. Terminate TLS at a reverse proxy.
 
 ### Connecting a client
 

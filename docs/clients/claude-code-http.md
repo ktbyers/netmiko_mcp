@@ -21,7 +21,7 @@ The default `stdio` transport spawns the MCP server as a local subprocess. Use t
 - A `commands.yml` whitelist file at the path configured by `command_file`
   (default `~/commands.yml`).
 - A `~/.netmiko.yml` device inventory on the server host.
-- A reverse proxy (nginx, Caddy, etc.) in front of the server handling TLS.
+- A reverse proxy in front of the server handling TLS.
   The MCP server itself does not terminate TLS — expose it only on localhost
   and let the proxy handle HTTPS.
 
@@ -51,20 +51,6 @@ netmiko-mcp
 ```
 
 The server should log that it is listening on `127.0.0.1:8000`.
-
-## Reverse proxy (TLS)
-
-Configure your reverse proxy to terminate HTTPS and forward to the local server.
-A minimal Caddy example:
-
-```
-your-mcp-server.example.com {
-    reverse_proxy 127.0.0.1:8000
-}
-```
-
-Caddy automatically provisions a TLS certificate via Let's Encrypt. The MCP path
-`/mcp` is forwarded as-is.
 
 ## Claude Code client configuration
 
