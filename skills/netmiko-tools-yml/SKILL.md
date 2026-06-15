@@ -9,7 +9,7 @@ The `.netmiko.yml` file is the standard inventory and credential storage mechani
 
 ## File Format
 
-The YAML file contains a `__meta__` block (optional, used for configuring encryption) and standard device blocks. The device blocks represent dictionaries that can be directly unpacked into Netmiko's `ConnectHandler`.
+Contains an optional `__meta__` encryption config block and device blocks. Device blocks are dictionaries that unpack directly into Netmiko's `ConnectHandler`.
 
 ```yaml
 __meta__:
@@ -27,11 +27,11 @@ cisco_router_1:
 ## Environment Variables
 
 - `NETMIKO_TOOLS_CFG`: Overrides the path to the configuration file (default behavior searches the current directory `./.netmiko.yml` then the home directory `~/.netmiko.yml`).
-- `NETMIKO_TOOLS_KEY`: A human-readable string used as the master encryption password (e.g., `export NETMIKO_TOOLS_KEY="my_secret_string"`). Netmiko automatically derives a secure cryptographic key from this string using `PBKDF2HMAC` and a random salt before encrypting/decrypting the `__encrypt__` fields.
+- `NETMIKO_TOOLS_KEY`: Master passphrase for encrypting/decrypting `__encrypt__` fields. Netmiko derives a cryptographic key from it using PBKDF2HMAC and a random salt.
 
 ## Python API for Loading (Important for MCP)
 
-Netmiko provides utilities to discover, parse, and decrypt this file automatically. When building tools that need to resolve device names to connection parameters, use these built-in functions:
+Use these built-in functions to resolve device names to connection parameters:
 
 ```python
 from netmiko.utilities import find_cfg_file, load_yaml_file, obtain_all_devices
@@ -54,7 +54,7 @@ devices = obtain_all_devices(parsed_yaml)
 
 ## Encryption Management (CLI)
 
-To manually encrypt passwords to place into the YAML file, users can leverage Netmiko's provided CLI utilities:
+CLI utilities for encrypting passwords:
 - `netmiko-encrypt <password>`: Encrypts a single string using the `NETMIKO_TOOLS_KEY` environment variable. It will output the `__encrypt__` string to be pasted into the YAML file.
 - `netmiko-bulk-encrypt --input_file <file> --output_file <file>`: Safely encrypts an entire `.netmiko.yml` file in place.
 
@@ -98,7 +98,7 @@ cat ~/.netmiko_encrypted.yml
 cp ~/.netmiko_encrypted.yml ~/.netmiko.yml && rm ~/.netmiko_encrypted.yml
 ```
 
-> Do not use the same path for `--input_file` and `--output_file`.
+Do not use the same path for `--input_file` and `--output_file`.
 
 **Step 4 — Manually update `__meta__`** (`netmiko-bulk-encrypt` does NOT do this automatically):
 ```yaml
@@ -116,7 +116,7 @@ uv run netmiko-encrypt "the_password_to_encrypt"
 # Paste the full __encrypt__... string as the YAML value
 ```
 
-> Passing a password on the command line may save it in shell history. Clear it in bash with `history -d $(history 1)`. Using `netmiko-bulk-encrypt` on the whole file avoids this entirely.
+Passing a password on the command line may save it in shell history — clear with `history -d $(history 1)`. Using `netmiko-bulk-encrypt` on the whole file avoids this.
 
 **Trade-offs:**
 - No external dependencies

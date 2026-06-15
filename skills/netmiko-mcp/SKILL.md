@@ -3,7 +3,7 @@ name: netmiko-mcp
 description: Workflows and configuration references for the Netmiko MCP server, including environment variables, global config (netmiko-mcp.yml), security commands (commands.yml), and running the server over Streamable HTTP transport with bearer token authentication.
 ---
 
-# Netmiko MCP Server Architecture & Configuration
+# Netmiko MCP Server — Configuration Reference
 
 The Netmiko MCP server exposes network devices to Model Context Protocol clients (like Claude Code) via a highly secure, restricted gateway.
 
@@ -17,24 +17,31 @@ The server is configured via a central YAML file.
 ### Supported Fields
 ```yaml
 ---
-inventory_type: "netmiko_tools"          # Optional (Defaults to netmiko_tools. Must be exact match)
-# inventory_file: "~/.netmiko.yml"       # Optional. If omitted, uses native Netmiko search paths
-command_file: "~/commands.yml"           # Optional (Defaults to ~/commands.yml)
-allow_pipe: true                         # Optional (Defaults to false. Enables pipe operators — see Pipe Support below)
-unsafe_chars: [";", "\n", "\r", "&"]    # Optional (Defaults to these four — see Unsafe Characters below)
-pipe_modifiers: ["include", "exclude", "section", "begin", "count"]  # Optional (Defaults to these five — see Pipe Support below)
-transport: "stdio"                       # Optional (stdio or streamable-http, default: stdio)
-http_host: "127.0.0.1"                  # Optional (HTTP bind address, default: 127.0.0.1)
-http_port: 8000                          # Optional (HTTP listen port, default: 8000)
-http_path: "/mcp"                        # Optional (MCP endpoint path, default: /mcp)
-http_auth_enabled: true                  # Optional (RFC 6750 bearer token auth, default: true)
+inventory_type: "netmiko_tools"          # default: netmiko_tools (only supported value)
+# inventory_file: "~/.netmiko.yml"       # default: null — uses native Netmiko search paths
+command_file: "~/commands.yml"           # default: ~/commands.yml
+allow_pipe: false                        # default: false
+unsafe_chars: [";", "\n", "\r", "&"]    # default: these four
+pipe_modifiers: ["include", "exclude", "section", "begin", "count"]  # default: these five
+max_workers: 10                          # default: 10 (thread cap for send_show_command_to_group)
+save_output_dir: "~/.netmiko_mcp_tmp"   # default: ~/.netmiko_mcp_tmp (save_output=True files)
+transport: "stdio"                       # default: stdio (or streamable-http)
+http_host: "127.0.0.1"                  # default: 127.0.0.1
+http_port: 8000                          # default: 8000
+http_path: "/mcp"                        # default: /mcp
+http_auth_enabled: true                  # default: true (bearer token is env-only: NETMIKO_MCP_HTTP_BEARER_TOKEN)
+audit_log_enabled: true                  # default: true
+audit_log_destination: "file"            # default: file (file | syslog | both)
+audit_log_file: "~/.netmiko_mcp_audit.log"  # default: ~/.netmiko_mcp_audit.log
+# audit_log_syslog_address: "/dev/log"  # default: /dev/log (or host:port for remote UDP)
+# audit_log_syslog_facility: "local0"   # default: local0
+audit_log_read_transcript: false         # default: false
+audit_log_transcript_dir: "~/.netmiko_mcp_transcripts"  # default: ~/.netmiko_mcp_transcripts
 ```
 
 ## Security Whitelist (`~/commands.yml`)
 
-Security relies on an explicit whitelist mapped via the `command_file` property. By default, **all commands are denied**.
-
-Both `allowed_commands` and `denied_commands` use the same exact/glob matching rules:
+Default: all commands denied. Path set by `command_file`. Both lists use the same matching rules:
 - A **plain string** (e.g. `"reload"`) matches only that exact command — anchored at both ends.
 - A **glob** (e.g. `"reload *"`) matches the bare command or any command starting with that prefix followed by arguments.
 - `denied_commands` always takes precedence over `allowed_commands`.
@@ -51,9 +58,7 @@ denied_commands:
 
 ## Unsafe Characters (`unsafe_chars`)
 
-`unsafe_chars` defines the set of characters that are **unconditionally rejected** in any command string before whitelist matching or glob evaluation. It is the first line of defence against command injection.
-
-**Default:** `[";", "\n", "\r", "&"]`
+Characters unconditionally rejected before whitelist matching or glob evaluation. Default: `[";", "\n", "\r", "&"]`. Only add to this list — do not remove the defaults.
 
 Override in `~/.netmiko-mcp.yml`:
 ```yaml
@@ -65,8 +70,6 @@ Or via environment variable (JSON array):
 NETMIKO_MCP_UNSAFE_CHARS='[";", "\n", "\r", "&", "|"]'
 ```
 
-> Only add to this list — do not remove the defaults unless you fully understand the security implications.
-
 ## Pipe Support (`allow_pipe` and `pipe_modifiers`)
 
 `allow_pipe` is `false` by default. Set it to `true` in `~/.netmiko-mcp.yml` or via `NETMIKO_MCP_ALLOW_PIPE=true` to enable pipe operators.
@@ -75,7 +78,7 @@ When enabled, the base command is still validated against `allowed_commands`. Th
 
 ### `pipe_modifiers`
 
-Controls which pipe operators are permitted. Default (IOS/IOS-XE):
+Default (IOS/IOS-XE):
 ```yaml
 pipe_modifiers: ["include", "exclude", "section", "begin", "count"]
 ```
@@ -121,13 +124,25 @@ show version | awk '{print $1}'
 show version | redirect tftp://1.1.1.1/out.txt
 ```
 
+## MCP Tools
+
+| Tool | Arguments | Description |
+|---|---|---|
+| `send_show_command` | `device_name`, `command`, `use_textfsm=False` | Connect to a single device and execute a show command. Returns raw text or structured JSON when `use_textfsm=True`. |
+| `send_show_command_to_group` | `device_or_group`, `command`, `use_textfsm=False`, `save_output=False` | Execute a show command concurrently across a device group using a thread pool (`max_workers`). When `save_output=True`, writes per-device output files under `save_output_dir` and returns file paths instead of raw output. |
+| `list_devices` | `device_or_group="all"` | List devices from the inventory. Credentials are never included in the response. |
+| `list_device_outputs` | `device_or_group` | List saved output files for a device, group, or `"all"`. Returns a dict mapping device names to lists of filenames (newest first). |
+| `read_device_output` | `device_name`, `filename` | Read a previously saved output file by device name and exact filename (as returned by `list_device_outputs`). |
+| `ping` | _(none)_ | Health check. Returns `"pong"`. |
+
+---
+
 ## The Inventory (`~/.netmiko.yml`)
 
-Because the server uses the `netmiko_tools` inventory type, it natively leverages Netmiko's encrypted YAML format.
-- Do not expose plaintext credentials in the `list_devices` MCP payload.
-- The server requires the `NETMIKO_TOOLS_KEY` environment variable to be exported in the executing shell to perform PBKDF2HMAC decryption of `__encrypt__` fields.
+- `NETMIKO_TOOLS_KEY` must be set in the environment to decrypt `__encrypt__` fields.
+- Credentials are never included in `list_devices` responses.
 
-See the `netmiko-tools-yml` skill for a deeper dive into inventory generation and encryption mechanics.
+See the `netmiko-tools-yml` skill for inventory format, encryption walkthrough, and secrets manager integration.
 
 ---
 
@@ -136,5 +151,3 @@ See the `netmiko-tools-yml` skill for a deeper dive into inventory generation an
 - **`netmiko-tools-yml`** — Device inventory file format (`.netmiko.yml`), Fernet encryption walkthrough, secrets manager integration, Python API for credential loading
 - **`mcp-client-config`** — Connecting MCP clients (Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code, Kiro) to this server; per-client JSON config blocks and gotchas
 - **`mcp-http-transport`** — Enabling and deploying the Streamable HTTP transport, HTTP bridge options for web clients (ChatGPT, Perplexity), SSE vs Streamable HTTP comparison
-
-See the `mcp-http-transport` skill for deployment instructions, environment variables, bearer token setup, and client connection details.

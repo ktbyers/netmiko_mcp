@@ -9,12 +9,11 @@
 
 ## How This Works
 
-`netmiko-mcp` is a **local stdio server**. It does not run as a standalone service or daemon rather your AI client launches it as a subprocess either at startup or on demand and communicates with it over standard input/output. The server process starts when you open a session and stops when you close it. No ports are opened; nothing listens on the network.
+`netmiko-mcp` supports two transport modes:
 
-This means two things for setup:
+**stdio** — Your AI client launches the server as a local subprocess and communicates over standard input/output. No ports are opened and nothing listens on the network. The process starts when you open a session and stops when you close it. This is the simplest setup and the right choice for a single user running the server on their own machine.
 
-1. **The server must be installed on the same machine as your AI client.** It cannot be installed on a remote host and shared across machines unless you add an HTTP proxy layer.
-2. **Your AI client needs to know how to launch it.** Each client has its own config file where you register the server command. The client handles starting and stopping the process automatically either at AI client startup or when you ask a relevant question like "Can you ping the Netmiko MCP server?"
+**Streamable HTTP** — The server runs as a standalone service that listens on a network port. Your AI client connects to it over HTTP rather than launching it as a subprocess. This allows the server to run on a remote host and be shared across multiple machines or clients. It also enables centralized control and auditing/logging of all device interactions in one place. The tradeoff is a slightly more involved deployment (you are responsible for starting the process and keeping it running).
 
 ---
 
@@ -34,7 +33,7 @@ cd netmiko_mcp
 uv sync
 ```
 
-> **Note:** `uv sync` installs into the project's local virtual environment, which works for Claude Code but not for clients like Claude Desktop, Cursor, Devin (formerly Windsurf) that launch the server from a different working directory. See [docs/mcp_ai_client_installation_guide.md](docs/mcp_ai_client_installation_guide.md) for details on making the server available globally.
+> **Note:** `uv sync` installs into the project's local virtual environment, which works for Claude Code but not for clients like Claude Desktop, Cursor, Devin (formerly Windsurf) that launch the server from a different working directory.
 
 ---
 
@@ -72,7 +71,7 @@ Currently, device inventory is limited to Netmiko Tools' [device inventory](http
 
 Create the `~/.netmiko.yml` device inventory. This file contains device dictionaries and groups of devices.
 
-**A note on credentials:** The Netmiko Tools inventory format requires that device usernames and passwords be stored in this file. Plaintext credentials are perfectly fine for lab or test environments. For anything beyond that, it is strongly recommended to use the built-in encryption option.  Netmiko can encrypt the credential fields so the file can be stored safely without exposing passwords in cleartext. See the [Secrets](docs/mcp_ai_client_installation_guide.md#secrets) section of the installation guide for details on both plaintext and encrypted approaches.
+**A note on credentials:** The Netmiko Tools inventory format requires that device usernames and passwords be stored in this file. Plaintext credentials are perfectly fine for lab or test environments. For anything beyond that, it is strongly recommended to use the built-in encryption option.  Netmiko can encrypt the credential fields so the file can be stored safely without exposing passwords in cleartext. See the [netmiko-tools-yml skill](skills/netmiko-tools-yml/SKILL.md) for details on both plaintext and encrypted approaches.
 
 Netmiko Tools AI [skill file](https://github.com/ktbyers/netmiko_mcp/blob/main/skills/netmiko-tools-yml/SKILL.md)
 <br />
@@ -148,7 +147,7 @@ claude mcp remove netmiko-mcp -s user
 
 Verify it is running by asking Claude to ping the server — it should respond `pong`.
 
-If your `netmiko-mcp.yml` is not at the default location (`~/.netmiko-mcp.yml`), you will need to tell each client where to find it. Each client handles this differently — see [docs/mcp_ai_client_installation_guide.md](docs/mcp_ai_client_installation_guide.md) for per-client instructions including config file locations, env var injection, and installation steps.
+If your `netmiko-mcp.yml` is not at the default location (`~/.netmiko-mcp.yml`), you will need to tell each client where to find it. Each client handles this differently — see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions including config file locations, env var injection, and installation steps.
 
 ---
 
@@ -177,18 +176,22 @@ If your `netmiko-mcp.yml` is not at the default location (`~/.netmiko-mcp.yml`),
 |---|---|
 | [docs/configuration.md](docs/configuration.md) | Netmiko-MCP configuration file settings |
 | [docs/commands.md](docs/commands.md) | Netmiko-MCP allowed commands, denied commands |
-| [docs/mcp_ai_client_installation_guide.md](docs/mcp_ai_client_installation_guide.md) | AI client installation guide (Claude Code, Claude Desktop, Cursor, Devin Desktop, ChatGPT, and more) |
+| [skills/mcp-client-config/SKILL.md](skills/mcp-client-config/SKILL.md) | Per-client MCP configuration (Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code, Kiro) |
+| [skills/netmiko-tools-yml/SKILL.md](skills/netmiko-tools-yml/SKILL.md) | Device inventory format, credential encryption, secrets manager integration |
 <br />
 
 
 ## MCP Tools
 
-The server exposes three tools to MCP clients:
+The server exposes six tools to MCP clients:
 
 | Tool | Description |
 |---|---|
-| `send_show_command` | Connect to a device and execute a show command. Accepts `device_name`, `command`, and optional `use_textfsm=True` to return structured JSON instead of raw text. |
+| `send_show_command` | Connect to a single device and execute a show command. Accepts `device_name`, `command`, and optional `use_textfsm=True` to return structured JSON instead of raw text. |
+| `send_show_command_to_group` | Execute a show command concurrently across a device group. Accepts `device_or_group`, `command`, optional `use_textfsm=True`, and optional `save_output=True` to write per-device files instead of returning raw output. |
 | `list_devices` | List devices from the inventory. Accepts an optional `device_or_group` argument (defaults to `"all"`). Credentials are never included in the response. |
+| `list_device_outputs` | List saved output files for a device, group, or `"all"`. Returns a dict mapping device names to lists of saved filenames (newest first). |
+| `read_device_output` | Read a previously saved output file. Accepts `device_name` and `filename` (as returned by `list_device_outputs`). |
 | `ping` | Health check. Returns `"pong"`. |
 
 ---

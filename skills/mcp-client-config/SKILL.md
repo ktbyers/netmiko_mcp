@@ -7,8 +7,6 @@ description: Configuration reference for connecting MCP clients (Claude Code, Cl
 
 ## Default File Locations
 
-If these files exist at the default paths, no environment variables or extra client config are needed:
-
 | File | Default path |
 |---|---|
 | MCP server config | `~/.netmiko-mcp.yml` |
@@ -21,7 +19,7 @@ Use `NETMIKO_MCP_CONFIG` to point to a non-default config path. Use `NETMIKO_TOO
 
 ## Making the Server Available to All Clients
 
-`uv pip install -e .` puts the executable only in the project's local `.venv`. Claude Code finds it because it runs from the project directory. All other clients (Claude Desktop, Cursor, Devin Desktop, VS Code) launch the subprocess from their own working directory and will fail unless the tool is installed globally.
+All clients except Claude Code launch the server from their own working directory and require a global installation. `uv pip install -e .` only installs into the project's local `.venv`.
 
 **Install from PyPI (future):**
 ```bash
@@ -41,8 +39,6 @@ uv tool list   # netmiko-mcp should appear
 ---
 
 ## Claude Code
-
-The simplest client. Recommended for development and testing.
 
 **Basic registration (default config `~/.netmiko-mcp.yml`):**
 ```bash
@@ -119,7 +115,6 @@ Use when not installed as a global tool. Brittle if the repo moves.
 
 Find the path: `find ~ -path "*netmiko_mcp/.venv/bin/netmiko-mcp" 2>/dev/null`
 
-**Critical gotchas:**
 - Claude Desktop silently reverts the config file on any JSON syntax error. Validate JSON before saving: `python3 -m json.tool claude_desktop_config.json`
 - Do not edit the file while Claude Desktop is running — it may overwrite changes on exit
 - If the server disappears after restart, the config was reverted. Check for the `mcpServers` key
@@ -153,7 +148,6 @@ Config file locations:
 }
 ```
 
-**Critical gotchas:**
 - **Agent mode is required** for MCP tool calls. Ask mode blocks all tool execution, including `ping`. Switch to Agent mode in the chat input area before making any requests
 - If tools appear available but calls are blocked, this is almost always the cause
 - Verify the server loaded: **Settings → Tools & MCPs** — active servers show a green indicator
@@ -187,7 +181,6 @@ Config file:
 }
 ```
 
-**Critical gotchas:**
 - Switch to **Agent mode (Cascade)** before making requests. The panel is labeled Cascade even after the rebrand
 - If the server status isn’t visible in settings, ask Cascade directly — it will confirm whether the tool is available
 
@@ -238,7 +231,6 @@ Config file locations:
 }
 ```
 
-**Critical gotchas:**
 - Key is `"servers"`, not `"mcpServers"` — wrong key silently does nothing
 - `"type": "stdio"` is required — omitting it causes the server to not load
 - After editing, reload VS Code: `Cmd+Shift+P` → **Developer: Reload Window**
@@ -250,7 +242,7 @@ Config file locations:
 
 ## Kiro
 
-AWS IDE with strong native MCP support. See [kiro.dev/docs/mcp/](https://kiro.dev/docs/mcp/) — best MCP docs of any client.
+See [kiro.dev/docs/mcp/](https://kiro.dev/docs/mcp/) for official Kiro MCP configuration docs.
 
 Config file locations:
 
@@ -282,6 +274,5 @@ Not end-to-end tested as of June 2026. If the server does not load, Kiro’s MCP
 
 See the `netmiko-tools-yml` skill for the full inventory encryption walkthrough, secrets manager integration examples, comparison table, and credential best practices.
 
-**Two things that matter when configuring clients:**
 - `${ENV_VAR}` interpolation in `.netmiko.yml` does **not** work — Netmiko parses values literally
 - Never put `NETMIKO_TOOLS_KEY` or device passwords in client config files (`.cursor/mcp.json`, `claude_desktop_config.json`) — these files are often synced or backed up

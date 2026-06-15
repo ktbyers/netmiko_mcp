@@ -72,7 +72,7 @@ http_path: "/mcp"
 http_auth_enabled: true   # Do not disable in any externally reachable deployment
 ```
 
-> **TLS:** The server runs plain HTTP. Terminate TLS at a reverse proxy (nginx, Caddy). See `docs/clients/claude-code-http.md` for a Caddy example.
+**TLS:** The server runs plain HTTP. Terminate TLS at a reverse proxy (nginx, Caddy). See `docs/clients/claude-code-http.md` for a Caddy example.
 
 ### Connecting a client
 
@@ -125,9 +125,7 @@ Web clients cannot spawn a local subprocess — they need an HTTP endpoint. Most
 
 [`supergateway`](https://github.com/supercorp-ai/supergateway) wraps a stdio MCP server and exposes it over SSE or Streamable HTTP. No global install — `npx` runs it directly.
 
-> **Security:** Run on localhost only. Do not expose the bridge port to a network interface — it gives unauthenticated access to your network devices.
-
-> **Direction:** Bridge goes stdio → HTTP. Some tools go the wrong direction (local client → remote HTTP server). Verify before use.
+Run on localhost only — do not expose the bridge port to a network interface, as it gives unauthenticated access to your network devices. Bridge direction is stdio → HTTP; some tools go the wrong direction (local client → remote HTTP server), so verify before use.
 
 ```bash
 # SSE on port 8787 (ChatGPT default)
@@ -186,7 +184,7 @@ ngrok prints a public HTTPS URL (e.g. `https://abc123.ngrok-free.app`). Use that
 2. **Settings → Apps** → **Create app**
 3. Enter `http://localhost:8787/sse` as the endpoint URL → Save
 
-> "Connectors" was renamed to "Apps" in December 2025. The UI path above is based on OpenAI documentation but has not been verified hands-on — if **Advanced settings** doesn't show a Developer mode toggle, check [OpenAI's help article](https://help.openai.com/en/articles/12584461).
+"Connectors" was renamed to "Apps" in December 2025. The UI path above is based on OpenAI documentation but has not been verified hands-on — if **Advanced settings** doesn't show a Developer mode toggle, check [OpenAI's help article](https://help.openai.com/en/articles/12584461).
 
 **Alternative:** OpenAI's [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) — outbound-only relay, no inbound port needed. Most secure option for ChatGPT integration.
 
