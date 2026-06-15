@@ -109,45 +109,7 @@ Full details on allowed/denied matching, globbing, pipes, and unsafe characters:
 
 ## Registering with Your AI Client
 
-With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. The client needs to know the command to launch the server.  It handles starting and stopping the process automatically.
-
-**Claude Code**
-
-The local/user scope system is specific to Claude Code.  Other clients handle scope by which config file you edit rather than a command flag.
-
-Claude Code supports two registration scopes:
-
-| Scope | Flag | Available in | Config location |
-|---|---|---|---|
-| **Local** | _(default)_ | This project/directory only | `~/.claude.json` (project entry) |
-| **User** | `-s user` | All your projects | `~/.claude.json` (user entry) |
-
-Register for the current project only (recommended when testing or if different projects need different configs). These two commands are equivalent — `-s local` is the default:
-
-```bash
-claude mcp add netmiko-mcp -- uv run netmiko-mcp
-claude mcp add -s local netmiko-mcp -- uv run netmiko-mcp
-```
-
-Register for all your projects:
-
-```bash
-claude mcp add -s user netmiko-mcp -- uv run netmiko-mcp
-```
-
-To remove:
-
-```bash
-# Remove local (project-scoped) registration
-claude mcp remove netmiko-mcp -s local
-
-# Remove user (global) registration
-claude mcp remove netmiko-mcp -s user
-```
-
-Verify it is running by asking Claude to ping the server — it should respond `pong`.
-
-If your `netmiko-mcp.yml` is not at the default location (`~/.netmiko-mcp.yml`), you will need to tell each client where to find it. Each client handles this differently — see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions including config file locations, env var injection, and installation steps.
+With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. Each client has its own config file or CLI command for registering the server — see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions covering Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, and Kiro.
 
 ---
 
