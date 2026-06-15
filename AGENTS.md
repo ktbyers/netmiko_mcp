@@ -32,6 +32,12 @@
 - `uv run --frozen pytest -v` must 100% pass before committing. Note: Live integration tests are protected via `@pytest.mark.skipif(not os.environ.get("RUN_LIVE_TESTS"), ...)`.
 - **Comment Style:** Avoid using numbered or bulleted lists in inline code comments (e.g., `# 1. This part` or `# 2. Some other part`). Write comments as descriptive paragraphs or clear, individual sentences without numeric or alphabetic step indicators.
 
+## Skills Documentation
+
+- All files under `skills/` are written **for LLMs, not humans**. They are injected directly into LLM context and should be optimized accordingly: dense, structured, reference-first. No orientation prose, no motivational language, no callout boxes (`>` blockquotes). Every sentence should be a fact or a rule.
+- Do not add narrative introductions, "why" explanations, or human-friendly transitions to skill files. If an LLM needs to know a rule, state it directly.
+- `README.md`, `ARCHITECTURE.md`, and `TODO.md` are human-facing documents and should be written accordingly. Everything else — including all files under `skills/` and `docs/` — should be written with an LLM consumer in mind.
+
 ## Documentation Style
 
 - **Avoid absolute, black-and-white statements.** Do not write things like "this documents
