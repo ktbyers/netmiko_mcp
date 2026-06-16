@@ -66,6 +66,20 @@ def get_device_names(device_or_group: str) -> list[str]:
     return list(devices.keys())
 
 
+def get_all_device_params(device_or_group: str) -> Dict[str, Any]:
+    """
+    Retrieve full device parameters for all devices in a group with a single
+    obtain_devices call. Avoids repeated inventory decryption when connecting
+    to multiple devices concurrently.
+    INTERNAL USE ONLY. Never expose this directly to the LLM.
+    """
+    _set_inventory_env_var()
+    devices = obtain_devices(device_or_group)
+    if isinstance(devices, str):
+        raise ValueError(devices)
+    return devices
+
+
 def get_sanitized_inventory(device_or_group: str) -> str:
     """
     Retrieve device inventory by group-name, all, or device-name.

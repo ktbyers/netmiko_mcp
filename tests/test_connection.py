@@ -231,25 +231,25 @@ def test_run_show_command_on_group_security_block(mock_validate: MagicMock) -> N
 
 
 @patch("netmiko_mcp.connection.validate_command")
-@patch("netmiko_mcp.connection.get_device_names")
+@patch("netmiko_mcp.connection.get_all_device_params")
 def test_run_show_command_on_group_empty_device_list(
-    mock_names: MagicMock, mock_validate: MagicMock
+    mock_all_params: MagicMock, mock_validate: MagicMock
 ) -> None:
     """An empty device list returns an empty dict without attempting any connections."""
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
-    mock_names.return_value = []
+    mock_all_params.return_value = {}
     result = run_show_command_on_group("empty_group", "show version")
     assert result == {}
 
 
 @patch("netmiko_mcp.connection.validate_command")
-@patch("netmiko_mcp.connection.get_device_names")
+@patch("netmiko_mcp.connection.get_all_device_params")
 def test_run_show_command_on_group_inventory_error(
-    mock_names: MagicMock, mock_validate: MagicMock
+    mock_all_params: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an inventory error is returned cleanly."""
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
-    mock_names.side_effect = ValueError("Group 'bad' not found")
+    mock_all_params.side_effect = ValueError("Group 'bad' not found")
     result = run_show_command_on_group("bad", "show version")
     assert "error" in result
     assert "Inventory Error" in result["error"]
@@ -258,16 +258,16 @@ def test_run_show_command_on_group_inventory_error(
 @patch("netmiko_mcp.connection.settings")
 @patch("netmiko_mcp.connection.run_show_command")
 @patch("netmiko_mcp.connection.validate_command")
-@patch("netmiko_mcp.connection.get_device_names")
+@patch("netmiko_mcp.connection.get_all_device_params")
 def test_run_show_command_on_group_success(
-    mock_names: MagicMock,
+    mock_all_params: MagicMock,
     mock_validate: MagicMock,
     mock_run: MagicMock,
     mock_settings: MagicMock,
 ) -> None:
     """Test successful concurrent execution across multiple devices."""
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
-    mock_names.return_value = ["rtr1", "rtr2"]
+    mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}, "rtr2": {"host": "2.2.2.2"}}
     mock_settings.max_workers = 10
     mock_run.side_effect = lambda name, cmd, tf, **kw: f"output from {name}"
     result = run_show_command_on_group("core", "show version")
@@ -278,16 +278,16 @@ def test_run_show_command_on_group_success(
 @patch("netmiko_mcp.connection.settings")
 @patch("netmiko_mcp.connection.run_show_command")
 @patch("netmiko_mcp.connection.validate_command")
-@patch("netmiko_mcp.connection.get_device_names")
+@patch("netmiko_mcp.connection.get_all_device_params")
 def test_run_show_command_on_group_all_devices_fail(
-    mock_names: MagicMock,
+    mock_all_params: MagicMock,
     mock_validate: MagicMock,
     mock_run: MagicMock,
     mock_settings: MagicMock,
 ) -> None:
     """When every device raises an exception every result is an Execution Error string."""
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
-    mock_names.return_value = ["rtr1", "rtr2", "rtr3"]
+    mock_all_params.return_value = {"rtr1": {}, "rtr2": {}, "rtr3": {}}
     mock_settings.max_workers = 10
     mock_run.side_effect = RuntimeError("connection refused")
 
@@ -302,16 +302,16 @@ def test_run_show_command_on_group_all_devices_fail(
 @patch("netmiko_mcp.connection.settings")
 @patch("netmiko_mcp.connection.run_show_command")
 @patch("netmiko_mcp.connection.validate_command")
-@patch("netmiko_mcp.connection.get_device_names")
+@patch("netmiko_mcp.connection.get_all_device_params")
 def test_run_show_command_on_group_partial_failure(
-    mock_names: MagicMock,
+    mock_all_params: MagicMock,
     mock_validate: MagicMock,
     mock_run: MagicMock,
     mock_settings: MagicMock,
 ) -> None:
     """Test that one device failing does not prevent results from other devices."""
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
-    mock_names.return_value = ["rtr1", "rtr2"]
+    mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}, "rtr2": {"host": "2.2.2.2"}}
     mock_settings.max_workers = 10
 
     def side_effect(name: str, cmd: str, tf: bool, **kw: Any) -> str:
@@ -328,9 +328,9 @@ def test_run_show_command_on_group_partial_failure(
 @patch("netmiko_mcp.connection.settings")
 @patch("netmiko_mcp.connection.run_show_command")
 @patch("netmiko_mcp.connection.validate_command")
-@patch("netmiko_mcp.connection.get_device_names")
+@patch("netmiko_mcp.connection.get_all_device_params")
 def test_run_show_command_on_group_save_output(
-    mock_names: MagicMock,
+    mock_all_params: MagicMock,
     mock_validate: MagicMock,
     mock_run: MagicMock,
     mock_settings: MagicMock,
@@ -338,7 +338,7 @@ def test_run_show_command_on_group_save_output(
 ) -> None:
     """Test that save_output=True writes files and returns file paths."""
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
-    mock_names.return_value = ["rtr1"]
+    mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}}
     mock_settings.max_workers = 10
     mock_settings.save_output_dir = str(tmp_path)
     mock_run.return_value = "IOS output"
@@ -354,16 +354,16 @@ def test_run_show_command_on_group_save_output(
 @patch("netmiko_mcp.connection.settings")
 @patch("netmiko_mcp.connection.run_show_command")
 @patch("netmiko_mcp.connection.validate_command")
-@patch("netmiko_mcp.connection.get_device_names")
+@patch("netmiko_mcp.connection.get_all_device_params")
 def test_run_show_command_on_group_textfsm_propagated(
-    mock_names: MagicMock,
+    mock_all_params: MagicMock,
     mock_validate: MagicMock,
     mock_run: MagicMock,
     mock_settings: MagicMock,
 ) -> None:
     """use_textfsm=True must be passed through to every run_show_command call."""
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
-    mock_names.return_value = ["rtr1", "rtr2", "rtr3"]
+    mock_all_params.return_value = {"rtr1": {}, "rtr2": {}, "rtr3": {}}
     mock_settings.max_workers = 10
     mock_run.return_value = [{"intf": "Gi0/0", "status": "up"}]
 
@@ -393,7 +393,10 @@ def test_run_show_command_on_group_max_workers_enforced() -> None:
                 "netmiko_mcp.connection.validate_command",
                 return_value=ValidationResult(allowed=True, reason=REASON_ALLOWED),
             ),
-            patch("netmiko_mcp.connection.get_device_names", return_value=devices),
+            patch(
+                "netmiko_mcp.connection.get_all_device_params",
+                return_value={d: {} for d in devices},
+            ),
             patch("netmiko_mcp.connection.run_show_command", side_effect=slow_run),
         ):
             ms.max_workers = workers

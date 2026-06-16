@@ -38,7 +38,7 @@ from netmiko_mcp.audit import (
     save_channel_transcript,
 )
 from netmiko_mcp.config import settings
-from netmiko_mcp.inventory import get_device_names, get_device_params
+from netmiko_mcp.inventory import get_all_device_params, get_device_names, get_device_params
 from netmiko_mcp.security import ValidationResult, validate_command
 
 
@@ -80,6 +80,7 @@ def run_show_command(
     *,
     _tool_name: str = "send_show_command",
     _correlation_id: str | None = None,
+    _preloaded_params: dict[str, Any] | None = None,
 ) -> str | list[Any] | dict[str, Any]:
     """
     Connect to a network device and execute a single show command.
@@ -114,9 +115,13 @@ def run_show_command(
     if not result.allowed:
         return f"Security Error: Command '{command}' is not permitted."
 
-    # Fetch device parameters.
+    # Fetch device parameters. When called from run_show_command_on_group,
+    # pre-loaded params are passed directly to avoid repeated inventory
+    # decryption across concurrent threads.
     try:
-        params = get_device_params(device_name)
+        params = (
+            _preloaded_params if _preloaded_params is not None else get_device_params(device_name)
+        )
     except ValueError as e:
         audit_context.log_outcome(OUTCOME_INVENTORY_ERROR, detail=str(e))
         return f"Inventory Error: {str(e)}"
@@ -348,8 +353,11 @@ def run_show_command_on_group(
         audit_context.log_attempt(DENIED, result.reason)
         return {"error": f"Security Error: Command '{command}' is not permitted."}
 
+    # Load all device params once before spawning threads to avoid repeated
+    # inventory decryption inside each thread, which serializes concurrent
+    # connections and significantly increases wall-clock time for group commands.
     try:
-        device_names = get_device_names(device_or_group)
+        all_device_params = get_all_device_params(device_or_group)
     except ValueError as e:
         return {"error": f"Inventory Error: {str(e)}"}
 
@@ -363,8 +371,9 @@ def run_show_command_on_group(
                 command,
                 use_textfsm,
                 _tool_name="send_show_command_to_group",
+                _preloaded_params=params,
             ): name
-            for name in device_names
+            for name, params in all_device_params.items()
         }
         for future in as_completed(future_to_device):
             device_name = future_to_device[future]
