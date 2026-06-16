@@ -15,7 +15,6 @@
 
 **Streamable HTTP** — The server runs as a standalone service that listens on a network port. Your AI client connects to it over HTTP rather than launching it as a subprocess. This allows the server to run on a remote host and be shared across multiple machines or clients. It also enables centralized control and auditing/logging of all device interactions in one place. The tradeoff is a slightly more involved deployment (you are responsible for starting the process and keeping it running).
 
----
 
 ## Installation
 
@@ -35,7 +34,6 @@ uv sync
 
 > **Note:** `uv sync` installs into the project's local virtual environment, which works for Claude Code but not for clients like Claude Desktop, Cursor, Devin (formerly Windsurf) that launch the server from a different working directory.
 
----
 
 ## Getting Started
 
@@ -55,7 +53,6 @@ export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"
 Create `~/.netmiko-mcp.yml`:
 
 ```yaml
----
 inventory_type: "netmiko_tools"
 inventory_file: "~/.netmiko.yml"
 command_file: "~/commands.yml"
@@ -83,7 +80,6 @@ Create `~/commands.yml` to define what the LLM is allowed to send to devices. By
 **no commands are permitted**:
 
 ```yaml
----
 allowed_commands:
   - "show version"
   - "show ip interface brief"
@@ -111,7 +107,6 @@ Full details on allowed/denied matching, globbing, pipes, and unsafe characters:
 
 With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. Each client has its own config file or CLI command for registering the server — see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions covering Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, and Kiro.
 
----
 
 ## Supported MCP Clients (June 2026)
 
@@ -130,7 +125,6 @@ With the server installed and the three config files in place, register `netmiko
 | Perplexity web | ✗ | ✓ | ✗ | OAuth 2.1 discovery required; not working |
 <br />
 
----
 
 ## Reference Documentation
 
@@ -156,7 +150,6 @@ The server exposes six tools to MCP clients:
 | `read_device_output` | Read a previously saved output file. Accepts `device_name` and `filename` (as returned by `list_device_outputs`). |
 | `ping` | Health check. Returns `"pong"`. |
 
----
 
 ## Usage Examples
 
@@ -178,7 +171,6 @@ The LLM discovers devices via `list_devices`, runs `show version` on each in par
 | Total Memory | ~16 GB | ~16 GB |
 | Free Memory | ~12.2 GB | ~12.2 GB |
 
----
 
 ### Structured JSON output
 
@@ -213,7 +205,6 @@ Adding "in JSON format" to your prompt causes the LLM to invoke `send_show_comma
 
 The structured output is useful when you want to pipe results into another tool, compare fields programmatically, or ask the LLM follow-up questions that require field-level access (e.g., "which devices are running a version older than 4.34?").
 
----
 
 ### Saving output to local files
 
