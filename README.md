@@ -139,13 +139,14 @@ With the server installed and the three config files in place, register `netmiko
 
 ## MCP Tools
 
-The server exposes six tools to MCP clients:
+The server exposes seven tools to MCP clients:
 
 | Tool | Description |
 |---|---|
 | `send_show_command` | Connect to a single device and execute a show command. Accepts `device_name`, `command`, and optional `use_textfsm=True` to return structured JSON instead of raw text. |
 | `send_show_command_to_group` | Execute a show command concurrently across a device group. Accepts `device_or_group`, `command`, optional `use_textfsm=True`, and optional `save_output=True` to write per-device files instead of returning raw output. |
 | `list_devices` | List devices from the inventory. Accepts an optional `device_or_group` argument (defaults to `"all"`). Credentials are never included in the response. |
+| `list_groups` | List all device group names defined in the inventory. Returns a list of strings. |
 | `list_device_outputs` | List saved output files for a device, group, or `"all"`. Returns a dict mapping device names to lists of saved filenames (newest first). |
 | `read_device_output` | Read a previously saved output file. Accepts `device_name` and `filename` (as returned by `list_device_outputs`). |
 | `ping` | Health check. Returns `"pong"`. |

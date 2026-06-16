@@ -4,7 +4,61 @@ from typing import Any
 from unittest.mock import patch
 import pytest
 
-from netmiko_mcp.inventory import get_device_names, get_device_params, get_sanitized_inventory
+from netmiko_mcp.inventory import (
+    get_device_names,
+    get_device_params,
+    get_group_names,
+    get_sanitized_inventory,
+)
+
+
+@patch("netmiko_mcp.inventory.load_yaml_file")
+@patch("netmiko_mcp.inventory.find_cfg_file")
+def test_get_group_names_returns_groups(mock_find_cfg: Any, mock_load_yaml: Any) -> None:
+    """Groups (list values) are returned; device entries (dict values) and __meta__ are excluded."""
+    mock_find_cfg.return_value = "/fake/.netmiko.yml"
+    mock_load_yaml.return_value = {
+        "__meta__": {"encryption": True},
+        "cisco1": {"device_type": "cisco_ios", "host": "1.1.1.1"},
+        "cisco2": {"device_type": "cisco_ios", "host": "2.2.2.2"},
+        "cisco": ["cisco1", "cisco2"],
+        "arista": ["arista1"],
+    }
+    result = get_group_names()
+    assert sorted(result) == ["arista", "cisco"]
+
+
+@patch("netmiko_mcp.inventory.load_yaml_file")
+@patch("netmiko_mcp.inventory.find_cfg_file")
+def test_get_group_names_no_groups_returns_empty_list(
+    mock_find_cfg: Any, mock_load_yaml: Any
+) -> None:
+    """Inventory with only device entries and __meta__ returns an empty list."""
+    mock_find_cfg.return_value = "/fake/.netmiko.yml"
+    mock_load_yaml.return_value = {
+        "__meta__": {"encryption": False},
+        "cisco1": {"device_type": "cisco_ios", "host": "1.1.1.1"},
+    }
+    result = get_group_names()
+    assert result == []
+
+
+@patch("netmiko_mcp.inventory.load_yaml_file")
+@patch("netmiko_mcp.inventory.find_cfg_file")
+def test_get_group_names_empty_inventory(mock_find_cfg: Any, mock_load_yaml: Any) -> None:
+    """Empty inventory returns an empty list without error."""
+    mock_find_cfg.return_value = "/fake/.netmiko.yml"
+    mock_load_yaml.return_value = {}
+    result = get_group_names()
+    assert result == []
+
+
+@patch("netmiko_mcp.inventory.find_cfg_file")
+def test_get_group_names_inventory_not_found(mock_find_cfg: Any) -> None:
+    """ValueError from find_cfg_file propagates as a ValueError."""
+    mock_find_cfg.side_effect = ValueError("No inventory file found")
+    with pytest.raises(ValueError, match="Inventory file not found"):
+        get_group_names()
 
 
 @patch("netmiko_mcp.inventory.obtain_devices")

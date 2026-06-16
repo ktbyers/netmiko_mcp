@@ -131,6 +131,7 @@ show version | redirect tftp://1.1.1.1/out.txt
 | `send_show_command` | `device_name`, `command`, `use_textfsm=False` | Connect to a single device and execute a show command. Returns raw text or structured JSON when `use_textfsm=True`. |
 | `send_show_command_to_group` | `device_or_group`, `command`, `use_textfsm=False`, `save_output=False` | Execute a show command concurrently across a device group using a thread pool (`max_workers`). When `save_output=True`, writes per-device output files under `save_output_dir` and returns file paths instead of raw output. |
 | `list_devices` | `device_or_group="all"` | List devices from the inventory. Credentials are never included in the response. |
+| `list_groups` | _(none)_ | List all device group names defined in the inventory. Returns a list of strings. |
 | `list_device_outputs` | `device_or_group` | List saved output files for a device, group, or `"all"`. Returns a dict mapping device names to lists of filenames (newest first). |
 | `read_device_output` | `device_name`, `filename` | Read a previously saved output file by device name and exact filename (as returned by `list_device_outputs`). |
 | `ping` | _(none)_ | Health check. Returns `"pong"`. |

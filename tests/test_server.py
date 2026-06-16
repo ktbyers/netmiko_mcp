@@ -8,6 +8,7 @@ from netmiko_mcp.server import (
     _validate_startup,
     list_device_outputs,
     list_devices,
+    list_groups,
     mcp,
     ping,
     read_device_output,
@@ -50,6 +51,38 @@ def test_validate_startup_error_message_contains_path(mock_settings: Any, tmp_pa
 # ---------------------------------------------------------------------------
 # MCP tools
 # ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.server.get_group_names")
+def test_list_groups_tool(mock_get_groups: Any) -> None:
+    """list_groups should return a JSON-encoded list of group name strings."""
+    import json
+
+    mock_get_groups.return_value = ["cisco", "arista"]
+    result = list_groups()
+    assert json.loads(result) == ["cisco", "arista"]
+    mock_get_groups.assert_called_once_with()
+
+
+@patch("netmiko_mcp.server.log_tool_invocation")
+@patch("netmiko_mcp.server.get_group_names")
+def test_list_groups_tool_logs_invocation(mock_get_groups: Any, mock_log: Any) -> None:
+    """list_groups should emit an audit record with no arguments."""
+    mock_get_groups.return_value = []
+    list_groups()
+    mock_log.assert_called_once_with(tool="list_groups", arguments={})
+
+
+@patch("netmiko_mcp.server.get_group_names")
+def test_list_groups_tool_handles_error(mock_get_groups: Any) -> None:
+    """list_groups should return a JSON-encoded error when get_group_names raises ValueError."""
+    import json
+
+    mock_get_groups.side_effect = ValueError("Inventory file not found: No file")
+    result = list_groups()
+    parsed = json.loads(result)
+    assert "error" in parsed
+    assert "Inventory file not found" in parsed["error"]
 
 
 def test_ping_tool() -> None:

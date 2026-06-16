@@ -18,6 +18,26 @@ async def test_ping_integration(mcp_client: ClientSession) -> None:
 
 
 @pytest.mark.anyio
+async def test_list_groups_integration(mcp_client: ClientSession) -> None:
+    """list_groups returns the groups defined in the test inventory fixture.
+
+    The test fixture (tests/etc/.netmiko.yml) defines one group: 'cisco'.
+    Device entries and __meta__ should not appear in the result.
+    """
+    result = await mcp_client.call_tool("list_groups", arguments={})
+
+    assert len(result.content) == 1
+    assert result.content[0].type == "text"
+    groups = json.loads(getattr(result.content[0], "text", ""))
+
+    assert isinstance(groups, list)
+    assert "cisco" in groups
+    assert "__meta__" not in groups
+    assert "cisco1" not in groups
+    assert "cisco2" not in groups
+
+
+@pytest.mark.anyio
 @pytest.mark.skipif(
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",

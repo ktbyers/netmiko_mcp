@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from netmiko.cli_tools.helpers import obtain_devices
+from netmiko.utilities import find_cfg_file, load_yaml_file
 
 from netmiko_mcp.config import settings
 
@@ -19,6 +20,23 @@ def _set_inventory_env_var() -> None:
     if settings.inventory_type == "netmiko_tools" and settings.inventory_file:
         inventory_path = Path(settings.inventory_file).expanduser()
         os.environ["NETMIKO_TOOLS_CFG"] = str(inventory_path)
+
+
+def get_group_names() -> list[str]:
+    """
+    Return a list of group names defined in the inventory file.
+
+    Groups are top-level keys whose values are lists of device names.
+    Device entries (dict values) and the __meta__ block are excluded.
+    Raises ValueError if the inventory file cannot be found.
+    """
+    _set_inventory_env_var()
+    try:
+        cfg_file = find_cfg_file()
+    except ValueError as e:
+        raise ValueError(f"Inventory file not found: {e}") from e
+    raw = load_yaml_file(cfg_file)
+    return [k for k, v in raw.items() if isinstance(v, list) and k != "__meta__"]
 
 
 def get_device_params(device_name: str) -> Dict[str, Any]:

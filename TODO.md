@@ -78,6 +78,20 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ---
 
+## Observability (`server.py` / `audit.py`)
+
+- **HTTP transport request-level timing** — The Streamable HTTP transport has no visibility
+  into how long individual calls take, making it difficult to distinguish Netmiko SSH
+  latency from LLM/MCP framework overhead. Add per-request timing that captures at minimum:
+  the total handler duration, SSH connection establishment time, and command execution time.
+  Possible approaches: structured timing fields in the audit log (alongside the existing
+  `command_attempt` and `connection_outcome` records), response headers
+  (`X-Netmiko-Duration-Ms`, `X-Netmiko-Connect-Ms`), or a dedicated metrics endpoint.
+  The audit log approach is likely the lowest friction since the infrastructure already
+  exists — it avoids adding HTTP middleware and works for both stdio and HTTP transports.
+
+---
+
 ## MCP Protocol Features (`server.py` / `ARCHITECTURE.md`)
 
 - **No MCP Resources** `[ARCH §5]` - The device inventory could be exposed as an MCP

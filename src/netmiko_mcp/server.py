@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,7 @@ from netmiko_mcp.connection import (
     run_show_command_on_group,
 )
 from netmiko_mcp.http_auth import BearerTokenMiddleware
-from netmiko_mcp.inventory import get_sanitized_inventory
+from netmiko_mcp.inventory import get_group_names, get_sanitized_inventory
 
 # Initialize the FastMCP server. The HTTP settings (host, port, path) are passed
 # here so that streamable_http_app() uses the operator-configured values when the
@@ -27,6 +28,19 @@ mcp = FastMCP(
     port=settings.http_port,
     streamable_http_path=settings.http_path,
 )
+
+
+@mcp.tool()
+def list_groups() -> str:
+    """
+    List all device groups defined in the inventory.
+    Returns a JSON-encoded list of group name strings.
+    """
+    log_tool_invocation(tool="list_groups", arguments={})
+    try:
+        return json.dumps(get_group_names())
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
 
 
 @mcp.tool()
