@@ -81,6 +81,10 @@
   before committing. If it has already been committed, treat the secret as compromised and
   rotate it — git history rewrites are insufficient on their own.
 
+## Environment Variables
+
+- **NEVER inspect or print environment variables.** Do not run `printenv`, `env`, `echo $VAR`, or any equivalent command that would reveal environment variable values. Environment variables in this project contain secrets (encryption keys, bearer tokens, device passwords). Exposing them in output visible to an LLM is a serious security violation.
+
 ## Configuration & Paths
 - **Global Config:** The MCP Server uses `pydantic-settings` centralized in `src/netmiko_mcp/config.py`. It reads natively from `~/.netmiko-mcp.yml` (and other custom profiles) with strict precedence handling managed via the `settings_customise_sources` classmethod. Environment variables prefixed with `NETMIKO_MCP_` always take precedence over keys in the physical YAML config.
 - **Paths:** Always use the `pathlib.Path` module for file operations instead of `os.path`.
