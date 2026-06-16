@@ -83,9 +83,8 @@ Authorization: Bearer <your-token>
 
 For Claude Code specifically:
 ```bash
-claude mcp add -s user \
-  -e NETMIKO_MCP_HTTP_BEARER_TOKEN="<your-token>" \
-  netmiko-mcp --transport http http://your-server:8000/mcp
+claude mcp add --transport http netmiko-mcp http://your-server:8000/mcp \
+  --header "Authorization: Bearer ${NETMIKO_MCP_HTTP_BEARER_TOKEN}"
 ```
 
 ---

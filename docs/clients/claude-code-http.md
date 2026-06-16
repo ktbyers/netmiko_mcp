@@ -64,7 +64,8 @@ export NETMIKO_MCP_HTTP_BEARER_TOKEN="your-strong-random-token-here"
 Register the remote MCP server in Claude Code:
 
 ```bash
-claude mcp add netmiko-mcp --transport http https://your-mcp-server.example.com/mcp
+claude mcp add --transport http netmiko-mcp https://your-mcp-server.example.com/mcp \
+  --header "Authorization: Bearer ${NETMIKO_MCP_HTTP_BEARER_TOKEN}"
 ```
 
 Claude Code will include the bearer token in the `Authorization` header when
