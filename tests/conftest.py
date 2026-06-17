@@ -1,10 +1,16 @@
 import os
 import sys
+from pathlib import Path
 from typing import AsyncGenerator
 
 import pytest
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+
+# Absolute path to the tests directory, derived from this file's location so
+# that all fixture paths are CWD-independent and work correctly in CI.
+_TESTS_DIR = Path(__file__).parent.resolve()
+_ETC_DIR = _TESTS_DIR / "etc"
 
 
 @pytest.fixture
@@ -20,7 +26,11 @@ def _make_mcp_client(
 
     async def _client() -> AsyncGenerator[ClientSession, None]:
         test_env = {**os.environ}
-        test_env["NETMIKO_MCP_CONFIG"] = os.path.abspath("tests/etc/netmiko-mcp.yml")
+        test_env["NETMIKO_MCP_CONFIG"] = str(_ETC_DIR / "netmiko-mcp.yml")
+        # Override inventory_file and command_file with absolute paths so the
+        # server subprocess resolves them correctly regardless of its CWD.
+        test_env["NETMIKO_MCP_INVENTORY_FILE"] = str(_ETC_DIR / ".netmiko.yml")
+        test_env["NETMIKO_MCP_COMMAND_FILE"] = str(_ETC_DIR / "commands.yml")
         if extra_env:
             test_env.update(extra_env)
 
