@@ -245,9 +245,7 @@ def _validate_path_component(value: str, label: str) -> None:
     error message.
     """
     if value in _UNSAFE_PATH_VALUES:
-        raise ValueError(
-            f"Security Error: Insecure characters detected in path (src: {label}, value: {value!r})"
-        )
+        raise ValueError(f"Security Error: Unsafe path value (src: {label}, value: {value!r})")
     if any(unsafe in value for unsafe in _UNSAFE_PATH_CHARS):
         raise ValueError(
             f"Security Error: Insecure characters detected in path (src: {label}, value: {value})"
