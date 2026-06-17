@@ -644,6 +644,31 @@ def test_read_device_output_device_name_backslash(mock_settings: MagicMock, tmp_
     assert result.startswith("Security Error")
 
 
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_symlink_escape_blocked(
+    mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """A device directory that is a symlink pointing outside base_dir is blocked.
+
+    Fix #1 (string validation) passes because 'cisco1' is a clean name.
+    Fix #2 (resolved path check against base_dir) catches the escape because
+    file_path.resolve() lands outside the sandbox.
+    """
+    mock_settings.save_output_dir = str(tmp_path)
+
+    # Create a target outside the sandbox with a readable file.
+    outside = tmp_path.parent / "outside_sandbox"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("sensitive data", encoding="utf-8")
+
+    # Place a symlink inside base_dir that points to the external directory.
+    symlink_device = tmp_path / "cisco1"
+    symlink_device.symlink_to(outside)
+
+    result = read_device_output("cisco1", "secret.txt")
+    assert result.startswith("Security Error")
+
+
 @patch("netmiko_mcp.connection.save_channel_transcript")
 @patch("netmiko_mcp.connection.validate_command")
 @patch("netmiko_mcp.connection.ConnectHandler")

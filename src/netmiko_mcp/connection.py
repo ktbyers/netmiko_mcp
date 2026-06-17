@@ -227,7 +227,9 @@ def _validate_path_component(value: str, label: str) -> None:
     error message.
     """
     if any(unsafe in value for unsafe in _UNSAFE_PATH_CHARS):
-        raise ValueError(f"Security Error: Insecure characters detected in path (src: {label}, value: {value})")
+        raise ValueError(
+            f"Security Error: Insecure characters detected in path (src: {label}, value: {value})"
+        )
 
 
 def _sanitize_command_for_filename(command: str) -> str:
@@ -318,12 +320,15 @@ def read_device_output(device_name: str, filename: str) -> str:
     device_dir = base_dir / device_name
     file_path = device_dir / filename
 
-    # Belt-and-suspenders: ensure resolved path stays within device_dir.
+    # Belt-and-suspenders: resolve the final path and confirm it sits inside
+    # base_dir (the operator-controlled sandbox root). Anchoring to base_dir
+    # rather than device_dir means symlinks or any other bypass that escapes
+    # the sandbox are caught here regardless of how they got past string validation.
     try:
-        if not file_path.resolve().is_relative_to(device_dir.resolve()):
-            return f"Security Error: Invalid filename '{filename}'."
+        if not file_path.resolve().is_relative_to(base_dir.resolve()):
+            return f"Security Error: Insecure characters detected in path (src: filename, value: {filename})"
     except Exception:  # pragma: no cover
-        return f"Security Error: Invalid filename '{filename}'."
+        return f"Security Error: Insecure characters detected in path (src: filename, value: {filename})"
 
     if not device_dir.is_dir():
         return f"Error: No saved output found for device '{device_name}'."
