@@ -23,6 +23,8 @@ from netmiko_mcp.connection import (
     _managed_connection,
     _sanitize_command_for_filename,
     _save_device_output,
+    _UNSAFE_PATH_CHARS,
+    _UNSAFE_PATH_VALUES,
     _validate_path_component,
     list_device_outputs,
     read_device_output,
@@ -188,6 +190,81 @@ def test_validate_path_component_dotdot_embedded_raises() -> None:
     """'..' embedded inside a longer string raises ValueError."""
     with pytest.raises(ValueError, match="Security Error"):
         _validate_path_component("some..path", "filename")
+
+
+def test_validate_path_component_empty_string_raises() -> None:
+    """An empty string raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component("", "device name")
+
+
+def test_validate_path_component_single_dot_raises() -> None:
+    """A single dot raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component(".", "device name")
+
+
+def test_validate_path_component_dot_within_name_allowed() -> None:
+    """A dot within a name such as 'cisco.dev' is valid and must not raise."""
+    _validate_path_component("cisco.dev", "device name")  # must not raise
+
+
+def test_validate_path_component_null_byte_raises() -> None:
+    """A null byte embedded in a value raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component("cisco\x00", "device name")
+
+
+@pytest.mark.parametrize(
+    "char",
+    [
+        "\u2215",  # DIVISION SLASH
+        "\uff0f",  # FULLWIDTH SOLIDUS
+        "\u2044",  # FRACTION SLASH
+        "\u29f8",  # BIG SOLIDUS
+    ],
+)
+def test_validate_path_component_unicode_slash_lookalike_raises(char: str) -> None:
+    """Each Unicode slash lookalike embedded in a value raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component(f"cisco{char}etc", "device name")
+
+
+@pytest.mark.parametrize(
+    "char",
+    [
+        "\uff3c",  # FULLWIDTH REVERSE SOLIDUS
+        "\u29f5",  # REVERSE SOLIDUS OPERATOR
+        "\u2216",  # SET MINUS
+        "\u29f9",  # BIG REVERSE SOLIDUS
+    ],
+)
+def test_validate_path_component_unicode_backslash_lookalike_raises(char: str) -> None:
+    """Each Unicode backslash lookalike embedded in a value raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component(f"cisco{char}etc", "device name")
+
+
+def test_unsafe_path_chars_covers_all_unicode_lookalikes() -> None:
+    """Every Unicode lookalike listed in the test parametrize blocks is present
+    in _UNSAFE_PATH_CHARS, catching any future mismatch between the two lists."""
+    expected = {
+        "\u2215",
+        "\uff0f",
+        "\u2044",
+        "\u29f8",  # slash lookalikes
+        "\uff3c",
+        "\u29f5",
+        "\u2216",
+        "\u29f9",  # backslash lookalikes
+    }
+    assert expected.issubset(set(_UNSAFE_PATH_CHARS))
+
+
+def test_unsafe_path_values_contains_empty_and_dot() -> None:
+    """_UNSAFE_PATH_VALUES must contain the empty string and single dot."""
+    assert "" in _UNSAFE_PATH_VALUES
+    assert "." in _UNSAFE_PATH_VALUES
 
 
 def test_validate_path_component_label_in_error_message() -> None:

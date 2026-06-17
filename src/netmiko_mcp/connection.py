@@ -213,19 +213,41 @@ def run_show_command(
         return f"Execution Error: An unexpected error occurred: {str(e)}"
 
 
-# Path components containing any of these sequences are rejected to prevent
-# directory traversal. Extend this list to tighten validation over time.
-_UNSAFE_PATH_CHARS: list[str] = ["/", "\\", ".."]
+# Sequences rejected as substrings within any path component.
+# Extend this list to tighten validation over time.
+_UNSAFE_PATH_CHARS: list[str] = [
+    "/",  # Unix path separator
+    "\\",  # Windows path separator
+    "..",  # parent directory traversal
+    "\x00",  # null byte
+    "\u2215",  # DIVISION SLASH (Unicode slash lookalike)
+    "\uff0f",  # FULLWIDTH SOLIDUS (Unicode slash lookalike)
+    "\u2044",  # FRACTION SLASH (Unicode slash lookalike)
+    "\u29f8",  # BIG SOLIDUS (Unicode slash lookalike)
+    "\uff3c",  # FULLWIDTH REVERSE SOLIDUS (Unicode backslash lookalike)
+    "\u29f5",  # REVERSE SOLIDUS OPERATOR (Unicode backslash lookalike)
+    "\u2216",  # SET MINUS (Unicode backslash lookalike)
+    "\u29f9",  # BIG REVERSE SOLIDUS (Unicode backslash lookalike)
+]
+
+# Exact values rejected as a complete path component. A single dot collapses
+# device_dir to base_dir; an empty string does the same.
+_UNSAFE_PATH_VALUES: frozenset[str] = frozenset({"", "."})
 
 
 def _validate_path_component(value: str, label: str) -> None:
-    """Raise ValueError if value contains any sequence in _UNSAFE_PATH_CHARS.
+    """Raise ValueError if value is in _UNSAFE_PATH_VALUES or contains any
+    sequence in _UNSAFE_PATH_CHARS.
 
     Centralises path-component validation so that the rule set can be
     extended in one place. The label parameter names the argument being
     checked (e.g. "device name" or "filename") so callers get a precise
     error message.
     """
+    if value in _UNSAFE_PATH_VALUES:
+        raise ValueError(
+            f"Security Error: Insecure characters detected in path (src: {label}, value: {value!r})"
+        )
     if any(unsafe in value for unsafe in _UNSAFE_PATH_CHARS):
         raise ValueError(
             f"Security Error: Insecure characters detected in path (src: {label}, value: {value})"
