@@ -340,15 +340,15 @@ def read_device_output(device_name: str, filename: str) -> str:
     device_dir = base_dir / device_name
     file_path = device_dir / filename
 
-    # Belt-and-suspenders: resolve the final path and confirm it sits inside
-    # base_dir (the operator-controlled sandbox root). Anchoring to base_dir
-    # rather than device_dir means symlinks or any other bypass that escapes
-    # the sandbox are caught here regardless of how they got past string validation.
+    # Resolve the final path and confirm it sits inside base_dir. This catches
+    # bypasses that survive string validation, such as symlinks that point
+    # outside the permitted directory. Anchoring to base_dir rather than
+    # device_dir ensures the check is against the operator-controlled root.
     try:
         if not file_path.resolve().is_relative_to(base_dir.resolve()):
-            return f"Security Error: Insecure characters detected in path (src: filename, value: {filename})"
+            return f"Security Error: Path resolves outside restricted directory (device: {device_name}, file: {filename})"
     except Exception:  # pragma: no cover
-        return f"Security Error: Insecure characters detected in path (src: filename, value: {filename})"
+        return f"Security Error: Path resolves outside restricted directory (device: {device_name}, file: {filename})"
 
     if not device_dir.is_dir():
         return f"Error: No saved output found for device '{device_name}'."
