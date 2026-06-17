@@ -23,6 +23,7 @@ from netmiko_mcp.connection import (
     _managed_connection,
     _sanitize_command_for_filename,
     _save_device_output,
+    _validate_path_component,
     list_device_outputs,
     read_device_output,
     run_show_command,
@@ -151,6 +152,57 @@ def test_run_show_command_unexpected_exception(
 
 
 # ---------------------------------------------------------------------------
+# _validate_path_component
+# ---------------------------------------------------------------------------
+
+
+def test_validate_path_component_valid_name() -> None:
+    """A plain alphanumeric name raises no exception."""
+    _validate_path_component("cisco1", "device name")  # must not raise
+
+
+def test_validate_path_component_valid_name_with_special_chars() -> None:
+    """Names with hyphens and dots that are not '..' are valid."""
+    _validate_path_component("rtr-1.lab", "device name")  # must not raise
+
+
+def test_validate_path_component_forward_slash_raises() -> None:
+    """A value containing a forward slash raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component("../../etc", "device name")
+
+
+def test_validate_path_component_backslash_raises() -> None:
+    """A value containing a backslash raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component("windows\\path", "filename")
+
+
+def test_validate_path_component_dotdot_alone_raises() -> None:
+    """A value that is exactly '..' raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component("..", "device name")
+
+
+def test_validate_path_component_dotdot_embedded_raises() -> None:
+    """'..' embedded inside a longer string raises ValueError."""
+    with pytest.raises(ValueError, match="Security Error"):
+        _validate_path_component("some..path", "filename")
+
+
+def test_validate_path_component_label_in_error_message() -> None:
+    """The label string appears in the raised ValueError message."""
+    with pytest.raises(ValueError, match="device name"):
+        _validate_path_component("/etc", "device name")
+
+
+def test_validate_path_component_value_in_error_message() -> None:
+    """The invalid value appears in the raised ValueError message."""
+    with pytest.raises(ValueError, match="/etc"):
+        _validate_path_component("/etc", "device name")
+
+
+# ---------------------------------------------------------------------------
 # _sanitize_command_for_filename
 # ---------------------------------------------------------------------------
 
@@ -214,6 +266,26 @@ def test_save_device_output_json_for_structured(mock_settings: MagicMock, tmp_pa
 
     content = json.loads(Path(file_path).read_text(encoding="utf-8"))
     assert content == output
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_save_device_output_device_name_traversal_raises(
+    mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """_save_device_output raises ValueError when device_name contains '..'."""
+    mock_settings.save_output_dir = str(tmp_path)
+    with pytest.raises(ValueError, match="Security Error"):
+        _save_device_output("../../etc", "show version", "output")
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_save_device_output_device_name_slash_raises(
+    mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """_save_device_output raises ValueError when device_name contains a slash."""
+    mock_settings.save_output_dir = str(tmp_path)
+    with pytest.raises(ValueError, match="Security Error"):
+        _save_device_output("cisco/subdir", "show version", "output")
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +616,32 @@ def test_read_device_output_device_not_found(mock_settings: MagicMock, tmp_path:
     result = read_device_output("nonexistent_device", "show_version.txt")
     assert "No saved output found" in result
     assert "nonexistent_device" in result
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_device_name_dotdot_traversal(
+    mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """device_name with '..' is blocked — exact PoC reported by tester."""
+    mock_settings.save_output_dir = str(tmp_path)
+    result = read_device_output("../../etc", "passwd")
+    assert result.startswith("Security Error")
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_device_name_slash(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """device_name containing a forward slash is blocked."""
+    mock_settings.save_output_dir = str(tmp_path)
+    result = read_device_output("cisco/subdir", "show_version.txt")
+    assert result.startswith("Security Error")
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_device_name_backslash(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """device_name containing a backslash is blocked."""
+    mock_settings.save_output_dir = str(tmp_path)
+    result = read_device_output("cisco\\subdir", "show_version.txt")
+    assert result.startswith("Security Error")
 
 
 @patch("netmiko_mcp.connection.save_channel_transcript")
