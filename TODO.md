@@ -74,7 +74,8 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 - **`_set_inventory_env_var()` mutates `os.environ` as a side effect** - Setting
   `NETMIKO_TOOLS_CFG` globally on every call is a side effect that could interfere with
-  other parts of the process. Should be refactored to pass the path more explicitly.
+  other parts of the process. Should be refactored to pass the path more explicitly. The 
+  best long-term fix would be to add an argument into Netmiko's obtain_devices.
 
 ---
 

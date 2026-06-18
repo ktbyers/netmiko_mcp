@@ -213,6 +213,45 @@ def run_show_command(
         return f"Execution Error: An unexpected error occurred: {str(e)}"
 
 
+# Sequences rejected as substrings within any path component.
+# Extend this list to tighten validation over time.
+_UNSAFE_PATH_CHARS: list[str] = [
+    "/",  # Unix path separator
+    "\\",  # Windows path separator
+    "..",  # parent directory traversal
+    "\x00",  # null byte
+    "\u2215",  # DIVISION SLASH (Unicode slash lookalike)
+    "\uff0f",  # FULLWIDTH SOLIDUS (Unicode slash lookalike)
+    "\u2044",  # FRACTION SLASH (Unicode slash lookalike)
+    "\u29f8",  # BIG SOLIDUS (Unicode slash lookalike)
+    "\uff3c",  # FULLWIDTH REVERSE SOLIDUS (Unicode backslash lookalike)
+    "\u29f5",  # REVERSE SOLIDUS OPERATOR (Unicode backslash lookalike)
+    "\u2216",  # SET MINUS (Unicode backslash lookalike)
+    "\u29f9",  # BIG REVERSE SOLIDUS (Unicode backslash lookalike)
+]
+
+# Exact values rejected as a complete path component. A single dot collapses
+# device_dir to base_dir; an empty string does the same.
+_UNSAFE_PATH_VALUES: frozenset[str] = frozenset({"", "."})
+
+
+def _validate_path_component(value: str, label: str) -> None:
+    """Raise ValueError if value is in _UNSAFE_PATH_VALUES or contains any
+    sequence in _UNSAFE_PATH_CHARS.
+
+    Centralises path-component validation so that the rule set can be
+    extended in one place. The label parameter names the argument being
+    checked (e.g. "device name" or "filename") so callers get a precise
+    error message.
+    """
+    if value in _UNSAFE_PATH_VALUES:
+        raise ValueError(f"Security Error: Unsafe path value (src: {label}, value: {value!r})")
+    if any(unsafe in value for unsafe in _UNSAFE_PATH_CHARS):
+        raise ValueError(
+            f"Security Error: Insecure characters detected in path (src: {label}, value: {value})"
+        )
+
+
 def _sanitize_command_for_filename(command: str) -> str:
     """Convert a command string into a safe filename component.
     Normalizes whitespace and replaces non-alphanumeric characters with underscores.
@@ -230,6 +269,7 @@ def _save_device_output(device_name: str, command: str, output: Any) -> str:
     prevent other users on the system from reading potentially sensitive network
     device output.
     """
+    _validate_path_component(device_name, "device name")
     base_dir = Path(settings.save_output_dir).expanduser()
     base_dir.mkdir(parents=True, exist_ok=True)
     base_dir.chmod(0o700)
@@ -281,8 +321,7 @@ def list_device_outputs(device_or_group: str) -> dict[str, Any]:
 def read_device_output(device_name: str, filename: str) -> str:
     """Read a previously saved output file for a specific device.
 
-    The filename is validated to prevent path traversal attacks — only plain
-    filenames (no slashes or '..' components) are accepted.
+    Both device_name and filename are validated to prevent path traversal attacks.
 
     Args:
         device_name: The device name whose output directory to read from.
@@ -291,19 +330,25 @@ def read_device_output(device_name: str, filename: str) -> str:
     Returns:
         The file content as a string, or an error message.
     """
-    if "/" in filename or "\\" in filename or ".." in filename:
-        return f"Security Error: Invalid filename '{filename}'."
+    try:
+        _validate_path_component(device_name, "device name")
+        _validate_path_component(filename, "filename")
+    except ValueError as e:
+        return str(e)
 
     base_dir = Path(settings.save_output_dir).expanduser()
     device_dir = base_dir / device_name
     file_path = device_dir / filename
 
-    # Belt-and-suspenders: ensure resolved path stays within device_dir.
+    # Resolve the final path and confirm it sits inside base_dir. This catches
+    # bypasses that survive string validation, such as symlinks that point
+    # outside the permitted directory. Anchoring to base_dir rather than
+    # device_dir ensures the check is against the operator-controlled root.
     try:
-        if not file_path.resolve().is_relative_to(device_dir.resolve()):
-            return f"Security Error: Invalid filename '{filename}'."
+        if not file_path.resolve().is_relative_to(base_dir.resolve()):
+            return f"Security Error: Path resolves outside restricted directory (device: {device_name}, file: {filename})"
     except Exception:  # pragma: no cover
-        return f"Security Error: Invalid filename '{filename}'."
+        return f"Security Error: Path resolves outside restricted directory (device: {device_name}, file: {filename})"
 
     if not device_dir.is_dir():
         return f"Error: No saved output found for device '{device_name}'."

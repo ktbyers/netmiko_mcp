@@ -5,29 +5,28 @@ This document outlines the high-level architecture, design considerations, and r
 ## 1. Safety, Security, and Structural Guardrails
 * **Command Whitelisting/Blacklisting:** LLMs can hallucinate destructive commands. We need a way to restrict what commands are allowed (e.g., strictly allowing `show` commands by default, and requiring explicit overrides for configuration).
 * **Read-Only vs. Read-Write Modes:** The MCP server should have a configuration flag to run in "Read-Only" mode where `send_config_set` tools are entirely hidden from the LLM.
-* **Blast Radius Limits:** Implement constraints on how many devices the LLM can touch in a single request or timeframe.
-* **Human-in-the-loop (HITL):** For config changes, consider a mechanism where the MCP server stages the change, requiring a secondary approval step before actual execution.
+* **Blast Radius Limits:** Implement constraints on how many devices the LLM can touch in a single request or timeframe. [NOT DONE]
+* **Human-in-the-loop (HITL):** For config changes, consider a mechanism where the MCP server stages the change, requiring a secondary approval step before actual execution. [NOT DONE AS CONFIG MODE HAS NOT BEEN IMPLEMENTED]
 
 ## 2. State Management and Connection Pooling
-* **The Cost of SSH:** Establishing an SSH connection to a network device is time-consuming (often 3-10 seconds). Opening a new connection for every single tool call will result in a frustratingly slow LLM experience.
-* **Connection Caching:** The server should implement a connection pool or cache mechanism. When the LLM requests a command on `Router A`, the server should hold that Netmiko `ConnectHandler` object open for a predefined TTL (e.g., 60 seconds of inactivity) in case the LLM needs to run follow-up commands.
+* **The Cost of SSH:** Establishing an SSH connection to a network device is time-consuming (often 3-10 seconds). Opening a new connection for every single tool call will result in a frustratingly slow LLM experience. [CONN POOLING NOT DONE]
+* **Connection Caching:** The server should implement a connection pool or cache mechanism. When the LLM requests a command on `Router A`, the server should hold that Netmiko `ConnectHandler` object open for a predefined TTL (e.g., 60 seconds of inactivity) in case the LLM needs to run follow-up commands. [CONN POOLING NOT DONE]
 * **Concurrency:** Network I/O is slow. We should design the tools to leverage concurrency where possible (likely utilizing a threading solution), allowing the LLM to query multiple devices concurrently if needed.
-* **Dead/Stale Session Mechanism:** A mechanism will be required to detect, purge, and re-establish connections that have died and are no longer functional.
+* **Dead/Stale Session Mechanism:** A mechanism will be required to detect, purge, and re-establish connections that have died and are no longer functional.    [NO CONN POOLING SO NO STALE CONN MECHANISM]
 
 ## 3. Handling Context Windows & Output Management
-* **The "Show Tech" Problem:** Raw CLI output can easily blow out an LLM's context window. We must implement strict output limits.
-* **Pagination & Truncation:** Tools should accept `limit` or `offset` parameters, and automatically truncate outputs (e.g., capping at 2000 lines) with a warning appended so the LLM knows it didn't see everything. The truncation warning should teach the LLM how to resolve its own issue.
+* **The "Show Tech" Problem:** Raw CLI output can easily blow out an LLM's context window. We must implement strict output limits.  [NOT DONE] * **Pagination & Truncation:** Tools should accept `limit` or `offset` parameters, and automatically truncate outputs (e.g., capping at 2000 lines) with a warning appended so the LLM knows it didn't see everything. The truncation warning should teach the LLM how to resolve its own issue. [NOT DONE]
 * **Structured Data (ntc-templates/TextFSM):** 
     * We should heavily lean on Netmiko's built-in `use_textfsm=True` functionality using ntc-templates.
     * Returning parsed JSON lists of dictionaries is *much* more token-efficient and easier for the LLM to reason about than raw fixed-width CLI text.
-    * Tools should have an option for the LLM to request raw text vs. structured data, defaulting to structured data when a template exists.
+    * Tools should have an option for the LLM to request raw text vs. structured data.
 
 ## 4. Device Credentials Handling
 * **No Plaintext in Prompts:** The LLM should *never* be asked to generate or pass passwords as arguments to the tool.
 * **Credential Resolution:** 
     * The MCP server should handle credential resolution internally. 
-    * The LLM should only provide the `host` and `device_type` (where `host` is a FQDN or an IP/IPv6 address).
-    * The server can look up credentials via environment variables (including .env file), a local `netmiko.yaml` file with encryption support, use SSH keys, or use an SSH agent (keys).
+    * The LLM should only provide the `host` or `group` names for device identification.
+    * The MCP server can look up credentials via environment variables (including .env file), a local `netmiko.yml` file with encryption support, use SSH keys, or use an SSH agent (keys). [CURRENTLY netmiko.yml w/ encryption]
 
 ## 5. Additional High-Level Topics to Consider
 
