@@ -115,6 +115,39 @@ Use when not installed as a global tool. Brittle if the repo moves.
 
 Find the path: `find ~ -path "*netmiko_mcp/.venv/bin/netmiko-mcp" 2>/dev/null`
 
+**Option 3 — remote HTTP server via mcp-remote bridge:**
+Claude Desktop has no native plain-bearer HTTP support and crashes if a `headers` block is included in the config. Use `mcp-remote` (Node.js required) as a local stdio-to-HTTP bridge.
+
+Two bugs to work around:
+- **Header space-splitting:** passing `--header "Authorization: Bearer <token>"` fragments at the space and breaks auth. Put `Bearer <token>` in the `env` block and reference it via `Authorization:${VAR}` with no space after the colon.
+- **SSE probe:** mcp-remote probes SSE first by default, which hangs or returns 405 against a streamable-HTTP-only server. Pass `--transport` and `http-only` as separate args to skip the probe.
+
+```json
+{
+  "mcpServers": {
+    "netmiko-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://your-mcp-server.example.com/mcp",
+        "--transport",
+        "http-only",
+        "--header",
+        "Authorization:${NETMIKO_MCP_HTTP_BEARER_TOKEN}"
+      ],
+      "env": {
+        "NETMIKO_MCP_HTTP_BEARER_TOKEN": "Bearer your-token-here"
+      }
+    }
+  }
+}
+```
+
+Checklist:
+- `--transport` and `http-only` must be separate array elements — not a single `"--transport http-only"` string
+- `Authorization:${NETMIKO_MCP_HTTP_BEARER_TOKEN}` must have no spaces around the colon
+- The `env` value must include the literal word `Bearer` followed by a space and the token
+
 - Claude Desktop silently reverts the config file on any JSON syntax error. Validate JSON before saving: `python3 -m json.tool claude_desktop_config.json`
 - Do not edit the file while Claude Desktop is running — it may overwrite changes on exit
 - If the server disappears after restart, the config was reverted. Check for the `mcpServers` key
