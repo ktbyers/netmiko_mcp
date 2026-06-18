@@ -78,7 +78,7 @@ http_auth_enabled: true   # Do not disable in any externally reachable deploymen
 
 ## TLS Termination with Caddy
 
-Caddy is the recommended reverse proxy for self-hosted deployments. It handles certificate provisioning automatically — either via Let's Encrypt for public domains or an internal CA for private/lab use.
+Caddy is a reverse proxy for self-hosted deployments that handles certificate provisioning automatically — either via Let's Encrypt for public domains or an internal CA for private/lab use.
 
 ### Install Caddy
 
