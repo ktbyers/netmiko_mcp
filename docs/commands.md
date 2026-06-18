@@ -6,6 +6,8 @@ until you explicitly allow it.
 
 The path to this file is controlled by the `command_file` setting in your
 [configuration file](configuration.md). It defaults to `~/commands.yml`.
+
+> **Note:** `commands.yml` is loaded and cached at startup. Changes to the file require a server restart to take effect — there is no live reload.
 <br />
 <br />
 
