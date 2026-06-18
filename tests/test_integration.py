@@ -17,8 +17,11 @@ async def test_ping_integration(mcp_client: ClientSession) -> None:
     assert getattr(result.content[0], "text", "") == "pong"
 
 
-@pytest.mark.skip(reason="Temporarily disabled pending CI inventory path fix")
 @pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires real inventory file (.netmiko.yml) which is not committed. Set RUN_LIVE_TESTS=1 to run.",
+)
 async def test_list_groups_integration(mcp_client: ClientSession) -> None:
     """list_groups returns the groups defined in the test inventory fixture.
 
