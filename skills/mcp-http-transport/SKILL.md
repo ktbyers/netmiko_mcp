@@ -74,6 +74,7 @@ http_auth_enabled: true   # Do not disable in any externally reachable deploymen
 
 **TLS:** The server runs plain HTTP. Terminate TLS at a reverse proxy.
 
+
 ### Connecting a client
 
 Every request must include the bearer token:
