@@ -104,6 +104,10 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   MCP server should belong to a dedicated service account with minimum necessary
   permissions, configured on AAA/TACACS+.
 
+- **Host execution isolation guidance** - Document that the MCP server process should
+  not run as root or Administrator; it should run in an isolated user space or rootless
+  Docker container with minimal host OS permissions.
+
 ---
 
 ## Future Tools
