@@ -2,14 +2,6 @@
 
 This document outlines the high-level architecture, design considerations, and roadmap for building the Netmiko MCP (Model Context Protocol) server. Integrating an LLM with live network devices requires strict controls, efficient data handling, and robust security.
 
-## 3. Handling Context Windows & Output Management
-* **Structured Data (ntc-templates/TextFSM):**
-    * We should heavily lean on Netmiko's built-in `use_textfsm=True` functionality using ntc-templates.
-    * Returning parsed JSON lists of dictionaries is *much* more token-efficient and easier for the LLM to reason about than raw fixed-width CLI text.
-    * Tools should have an option for the LLM to request raw text vs. structured data.
-
-See TODO.md for outstanding output truncation and pagination tasks.
-
 ## 4. Device Credentials Handling
 * **No Plaintext in Prompts:** The LLM should *never* be asked to generate or pass passwords as arguments to the tool.
 * **Credential Resolution:** 
