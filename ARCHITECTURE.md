@@ -2,13 +2,6 @@
 
 This document outlines the high-level architecture, design considerations, and roadmap for building the Netmiko MCP (Model Context Protocol) server. Integrating an LLM with live network devices requires strict controls, efficient data handling, and robust security.
 
-## 4. Device Credentials Handling
-* **No Plaintext in Prompts:** The LLM should *never* be asked to generate or pass passwords as arguments to the tool.
-* **Credential Resolution:** 
-    * The MCP server should handle credential resolution internally. 
-    * The LLM should only provide the `host` or `group` names for device identification.
-    * The MCP server can look up credentials via environment variables (including .env file), a local `netmiko.yml` file with encryption support, use SSH keys, or use an SSH agent (keys). [CURRENTLY netmiko.yml w/ encryption]
-
 ## 5. Additional High-Level Topics to Consider
 
 * **Error Handling & LLM Feedback Loop:** 
