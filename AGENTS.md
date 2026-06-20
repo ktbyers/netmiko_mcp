@@ -18,7 +18,8 @@
 - Installation: `uv add <package>`
 - Running tools: `uv run --frozen <tool>`. Always pass `--frozen` so uv doesn't
   rewrite `uv.lock` as a side effect.
-- Upgrading: `uv lock --upgrade-package <package>`
+- Upgrading all packages: `uv lock --upgrade`
+- Upgrading a specific package: `uv lock --upgrade-package <package>`
 - FORBIDDEN: `uv pip install`, `@latest` syntax
 
 ## Code Quality
