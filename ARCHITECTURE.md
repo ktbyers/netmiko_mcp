@@ -3,7 +3,6 @@
 This document outlines the high-level architecture, design considerations, and roadmap for building the Netmiko MCP (Model Context Protocol) server. Integrating an LLM with live network devices requires strict controls, efficient data handling, and robust security.
 
 ## 1. Safety, Security, and Structural Guardrails
-* **Command Whitelisting/Blacklisting:** LLMs can hallucinate destructive commands. We need a way to restrict what commands are allowed (e.g., strictly allowing `show` commands by default, and requiring explicit overrides for configuration).
 * **Read-Only vs. Read-Write Modes:** The MCP server should have a configuration flag to run in "Read-Only" mode where `send_config_set` tools are entirely hidden from the LLM.
 * **Blast Radius Limits:** Implement constraints on how many devices the LLM can touch in a single request or timeframe. [NOT DONE]
 * **Human-in-the-loop (HITL):** For config changes, consider a mechanism where the MCP server stages the change, requiring a secondary approval step before actual execution. [NOT DONE AS CONFIG MODE HAS NOT BEEN IMPLEMENTED]
