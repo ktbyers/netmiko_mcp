@@ -55,6 +55,11 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   consider a staging/approval step: the server generates the config diff, pauses, and
   requires explicit user confirmation before pushing.
 
+- **Commit method for config changes?** - When config mode is implemented, should it
+  include a commit mechanism for platforms that support candidate configurations
+  (Junos, IOS-XR, EOS)? Tools like `commit check` and `commit confirmed` could prevent
+  the AI from locking out access to a device.
+
 - **Audit fail-closed policy for config-write tools** `[open question]` - General policy
   is fail-closed: if audit logging is enabled and the logger fails, the MCP operation
   fails. Open question: should `allow_config` mode enforce fail-closed independently of
@@ -90,6 +95,26 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   (`X-Netmiko-Duration-Ms`, `X-Netmiko-Connect-Ms`), or a dedicated metrics endpoint.
   The audit log approach is likely the lowest friction since the infrastructure already
   exists — it avoids adding HTTP middleware and works for both stdio and HTTP transports.
+
+---
+
+## Documentation
+
+- **Network device authorization guidance** - Document that credentials supplied to the
+  MCP server should belong to a dedicated service account with minimum necessary
+  permissions, configured on AAA/TACACS+.
+
+- **Host execution isolation guidance** - Document that the MCP server process should
+  not run as root or Administrator; it should run in an isolated user space or rootless
+  Docker container with minimal host OS permissions.
+
+---
+
+## Future Tools
+
+- **Secure Copy (SCP) support** - Add an MCP tool for file transfers to/from network
+  devices using Netmiko's built-in SCP support (`file_transfer()`). Useful for pushing
+  configs, retrieving logs, or archiving device state.
 
 ---
 

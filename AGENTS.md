@@ -1,5 +1,11 @@
 # Netmiko MCP Agent Instructions
 
+## Security: Credentials and Secrets
+
+- **NEVER send credentials, secrets, or environment variable values to an LLM.** This includes passwords, tokens, API keys, encryption keys, passphrases, and any sensitive environment variable contents.
+- All solutions involving credentials or secrets must be designed so that the sensitive values remain on the server and are never included in LLM prompts, tool arguments, tool responses, or any content that flows through the MCP protocol to a model.
+- When discussing or documenting credential handling, describe the mechanism (e.g. "read from environment variable") without including actual values.
+
 ## Architecture & Design
 
 - Refer to the `ARCHITECTURE.md` file in the root directory for high-level architecture
@@ -12,7 +18,8 @@
 - Installation: `uv add <package>`
 - Running tools: `uv run --frozen <tool>`. Always pass `--frozen` so uv doesn't
   rewrite `uv.lock` as a side effect.
-- Upgrading: `uv lock --upgrade-package <package>`
+- Upgrading all packages: `uv lock --upgrade`
+- Upgrading a specific package: `uv lock --upgrade-package <package>`
 - FORBIDDEN: `uv pip install`, `@latest` syntax
 
 ## Code Quality
