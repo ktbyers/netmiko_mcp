@@ -2,12 +2,6 @@
 
 This document outlines the high-level architecture, design considerations, and roadmap for building the Netmiko MCP (Model Context Protocol) server. Integrating an LLM with live network devices requires strict controls, efficient data handling, and robust security.
 
-## 2. State Management and Connection Pooling
-* **The Cost of SSH:** Establishing an SSH connection to a network device is time-consuming (often 3-10 seconds). Opening a new connection for every single tool call will result in a frustratingly slow LLM experience.
-* **Concurrency:** Network I/O is slow. We should design the tools to leverage concurrency where possible (likely utilizing a threading solution), allowing the LLM to query multiple devices concurrently if needed.
-
-See TODO.md for outstanding connection pooling and stale session detection tasks.
-
 ## 3. Handling Context Windows & Output Management
 * **Structured Data (ntc-templates/TextFSM):**
     * We should heavily lean on Netmiko's built-in `use_textfsm=True` functionality using ntc-templates.
