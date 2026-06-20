@@ -98,6 +98,14 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ---
 
+## Documentation
+
+- **Network device authorization guidance** - Document that credentials supplied to the
+  MCP server should belong to a dedicated service account with minimum necessary
+  permissions, configured on AAA/TACACS+.
+
+---
+
 ## Future Tools
 
 - **Secure Copy (SCP) support** - Add an MCP tool for file transfers to/from network
