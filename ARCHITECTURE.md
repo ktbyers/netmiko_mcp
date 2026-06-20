@@ -4,11 +4,6 @@ This document outlines the high-level architecture, design considerations, and r
 
 ## 5. Additional High-Level Topics to Consider
 
-* **Error Handling & LLM Feedback Loop:** 
-    * How do we handle SSH timeouts, auth failures, or invalid syntax? 
-    * The tools must catch Netmiko exceptions (like `NetmikoTimeoutException` or `NetmikoAuthenticationException`) and return them as clear, human-readable string messages to the LLM. If the LLM sees "Authentication failed for user X", it knows to stop trying or ask the user.
-* **Audit Logging:** 
-    * Every command executed by the LLM MUST be logged locally (or to syslog) with timestamps. If the network goes down, the network engineers need to know exactly what the AI agent did.
 * **Device Inventory (MCP Resources):** 
     * MCP supports "Resources" (read-only data) in addition to "Tools" (actions). 
     * We could expose an inventory file (like a NetBox export or a YAML inventory) as an MCP Resource. The LLM can read this resource to discover what devices exist before deciding which ones to connect to.
