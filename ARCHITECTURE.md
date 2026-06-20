@@ -2,11 +2,6 @@
 
 This document outlines the high-level architecture, design considerations, and roadmap for building the Netmiko MCP (Model Context Protocol) server. Integrating an LLM with live network devices requires strict controls, efficient data handling, and robust security.
 
-## 1. Additional High-Level Topics to Consider
-
-* **Idempotency & Config Rollbacks:**
-    * If a configuration change is pushed, does it support rollback? For platforms that support candidate configurations (Junos, IOS-XR, EOS), we should expose tools for `commit check` and `commit confirmed` to prevent the AI from locking us out.
-
 ## 2. Deployment Considerations
 
 * **Host Execution Isolation:**
