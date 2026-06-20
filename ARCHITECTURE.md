@@ -15,11 +15,12 @@ This document outlines the high-level architecture, design considerations, and r
 See TODO.md for outstanding connection pooling and stale session detection tasks.
 
 ## 3. Handling Context Windows & Output Management
-* **The "Show Tech" Problem:** Raw CLI output can easily blow out an LLM's context window. We must implement strict output limits.  [NOT DONE] * **Pagination & Truncation:** Tools should accept `limit` or `offset` parameters, and automatically truncate outputs (e.g., capping at 2000 lines) with a warning appended so the LLM knows it didn't see everything. The truncation warning should teach the LLM how to resolve its own issue. [NOT DONE]
-* **Structured Data (ntc-templates/TextFSM):** 
+* **Structured Data (ntc-templates/TextFSM):**
     * We should heavily lean on Netmiko's built-in `use_textfsm=True` functionality using ntc-templates.
     * Returning parsed JSON lists of dictionaries is *much* more token-efficient and easier for the LLM to reason about than raw fixed-width CLI text.
     * Tools should have an option for the LLM to request raw text vs. structured data.
+
+See TODO.md for outstanding output truncation and pagination tasks.
 
 ## 4. Device Credentials Handling
 * **No Plaintext in Prompts:** The LLM should *never* be asked to generate or pass passwords as arguments to the tool.
