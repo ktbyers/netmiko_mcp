@@ -9,10 +9,10 @@ This document outlines the high-level architecture, design considerations, and r
 * **Human-in-the-loop (HITL):** For config changes, consider a mechanism where the MCP server stages the change, requiring a secondary approval step before actual execution. [NOT DONE AS CONFIG MODE HAS NOT BEEN IMPLEMENTED]
 
 ## 2. State Management and Connection Pooling
-* **The Cost of SSH:** Establishing an SSH connection to a network device is time-consuming (often 3-10 seconds). Opening a new connection for every single tool call will result in a frustratingly slow LLM experience. [CONN POOLING NOT DONE]
-* **Connection Caching:** The server should implement a connection pool or cache mechanism. When the LLM requests a command on `Router A`, the server should hold that Netmiko `ConnectHandler` object open for a predefined TTL (e.g., 60 seconds of inactivity) in case the LLM needs to run follow-up commands. [CONN POOLING NOT DONE]
+* **The Cost of SSH:** Establishing an SSH connection to a network device is time-consuming (often 3-10 seconds). Opening a new connection for every single tool call will result in a frustratingly slow LLM experience.
 * **Concurrency:** Network I/O is slow. We should design the tools to leverage concurrency where possible (likely utilizing a threading solution), allowing the LLM to query multiple devices concurrently if needed.
-* **Dead/Stale Session Mechanism:** A mechanism will be required to detect, purge, and re-establish connections that have died and are no longer functional.    [NO CONN POOLING SO NO STALE CONN MECHANISM]
+
+See TODO.md for outstanding connection pooling and stale session detection tasks.
 
 ## 3. Handling Context Windows & Output Management
 * **The "Show Tech" Problem:** Raw CLI output can easily blow out an LLM's context window. We must implement strict output limits.  [NOT DONE] * **Pagination & Truncation:** Tools should accept `limit` or `offset` parameters, and automatically truncate outputs (e.g., capping at 2000 lines) with a warning appended so the LLM knows it didn't see everything. The truncation warning should teach the LLM how to resolve its own issue. [NOT DONE]
