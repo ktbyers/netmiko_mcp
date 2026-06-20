@@ -3,9 +3,8 @@
 This document outlines the high-level architecture, design considerations, and roadmap for building the Netmiko MCP (Model Context Protocol) server. Integrating an LLM with live network devices requires strict controls, efficient data handling, and robust security.
 
 ## 1. Safety, Security, and Structural Guardrails
-* **Read-Only vs. Read-Write Modes:** The MCP server should have a configuration flag to run in "Read-Only" mode where `send_config_set` tools are entirely hidden from the LLM.
-* **Blast Radius Limits:** Implement constraints on how many devices the LLM can touch in a single request or timeframe. [NOT DONE]
-* **Human-in-the-loop (HITL):** For config changes, consider a mechanism where the MCP server stages the change, requiring a secondary approval step before actual execution. [NOT DONE AS CONFIG MODE HAS NOT BEEN IMPLEMENTED]
+
+See TODO.md for outstanding safety and guardrail tasks (config mode, blast radius limits, human-in-the-loop).
 
 ## 2. State Management and Connection Pooling
 * **The Cost of SSH:** Establishing an SSH connection to a network device is time-consuming (often 3-10 seconds). Opening a new connection for every single tool call will result in a frustratingly slow LLM experience.
