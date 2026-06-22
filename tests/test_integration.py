@@ -370,7 +370,7 @@ async def test_read_device_output_pagination(mcp_client: ClientSession) -> None:
     # 20 content lines follow the header.
     assert len(page1_lines) == 21, f"Expected 1 header + 20 content lines, got {len(page1_lines)}"
 
-    # Step 4 — read page 2 (lines 21-40).
+    # Step 4 — read page 2 (lines 21 to min(40, total)).
     page2_result = await mcp_client.call_tool(
         "read_device_output",
         arguments={"device_name": "cisco1", "filename": filename, "offset": 20, "limit": 20},
@@ -378,14 +378,15 @@ async def test_read_device_output_pagination(mcp_client: ClientSession) -> None:
     page2 = getattr(page2_result.content[0], "text", "")
     page2_lines = page2.splitlines()
 
-    assert page2_lines[0].startswith("Lines 21-40 of "), (
+    # End line depends on how many lines the device actually produced.
+    expected_end = min(40, total_lines)
+    assert page2_lines[0].startswith(f"Lines 21-{expected_end} of {total_lines}."), (
         f"Unexpected page 2 header: {page2_lines[0]!r}"
     )
-    # Content of page 2 must differ from page 1 — no overlap.
-    page1_content = set(page1_lines[1:])
-    page2_content = set(page2_lines[1:])
-    assert not page1_content & page2_content, (
-        f"Pages 1 and 2 share content lines: {page1_content & page2_content}"
+    # Pages must cover different positions. Compare as ordered lists, not sets,
+    # to avoid false failures from repeated blank lines or identical indentation.
+    assert page1_lines[1:] != page2_lines[1:], (
+        "Pages 1 and 2 returned identical content — pagination is not advancing"
     )
 
 
