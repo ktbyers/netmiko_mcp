@@ -26,6 +26,7 @@ from netmiko_mcp.server import (
 def test_validate_startup_missing_command_file(mock_settings: Any, tmp_path: Path) -> None:
     """Server should refuse to start if command_file does not exist."""
     mock_settings.command_file = str(tmp_path / "nonexistent.yml")
+    mock_settings.transport = "stdio"
     with pytest.raises(SystemExit, match="Startup Error"):
         _validate_startup()
 
@@ -36,6 +37,7 @@ def test_validate_startup_valid_command_file(mock_settings: Any, tmp_path: Path)
     cmd_file = tmp_path / "commands.yml"
     cmd_file.write_text("allowed_commands: []\n", encoding="utf-8")
     mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
     _validate_startup()  # should not raise
 
 
@@ -44,6 +46,7 @@ def test_validate_startup_error_message_contains_path(mock_settings: Any, tmp_pa
     """The startup error message should include the configured path."""
     bad_path = str(tmp_path / "missing.yml")
     mock_settings.command_file = bad_path
+    mock_settings.transport = "stdio"
     with pytest.raises(SystemExit, match=bad_path):
         _validate_startup()
 
