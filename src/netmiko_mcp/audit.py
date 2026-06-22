@@ -332,8 +332,10 @@ def save_channel_transcript(
     """Save the SSH channel read transcript to a per-connection file.
 
     Transcript files are named by timestamp, correlation ID, and device so they
-    can be joined with audit event records during incident investigation. Old
-    files beyond audit_log_retention_days are removed on each write.
+    can be joined with audit event records during incident investigation. The
+    transcript directory is not automatically cleaned up — the operator is
+    responsible for log rotation and disk management (e.g. using logrotate or a
+    cron job to prune files older than a retention period).
 
     This function should only be called when audit_log_read_transcript is True.
     The caller is responsible for checking the setting before creating the
