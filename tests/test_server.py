@@ -122,12 +122,20 @@ def test_list_devices_tool_logs_invocation(mock_inv: Any, mock_log: Any) -> None
 @patch("netmiko_mcp.server.run_show_command")
 def test_send_show_command_tool(mock_run_show: Any) -> None:
     """Test that the send_show_command tool delegates to the connection module."""
-    # Mock returning structured data
     mock_run_show.return_value = [{"intf": "Gi0/0", "status": "up"}]
     assert send_show_command("rtr1", "show ip int brief", True) == [
         {"intf": "Gi0/0", "status": "up"}
     ]
-    mock_run_show.assert_called_once_with("rtr1", "show ip int brief", True)
+    mock_run_show.assert_called_once_with("rtr1", "show ip int brief", True, False)
+
+
+@patch("netmiko_mcp.server.run_show_command")
+def test_send_show_command_tool_explicit_save(mock_run_show: Any) -> None:
+    """save_output=True is passed through to run_show_command."""
+    mock_run_show.return_value = "Output saved as 'show_version_20260622_120000.txt'."
+    result = send_show_command("rtr1", "show version", save_output=True)
+    assert result == "Output saved as 'show_version_20260622_120000.txt'."
+    mock_run_show.assert_called_once_with("rtr1", "show version", False, True)
 
 
 @patch("netmiko_mcp.server.run_show_command_on_group")

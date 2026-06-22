@@ -77,6 +77,7 @@ def run_show_command(
     device_name: str,
     command: str,
     use_textfsm: bool = False,
+    save_output: bool = False,
     *,
     _tool_name: str = "send_show_command",
     _correlation_id: str | None = None,
@@ -189,12 +190,18 @@ def run_show_command(
                 audit_context.log_outcome(OUTCOME_ERROR, detail=traceback.format_exc())
                 return f"Execution Error: An unexpected error occurred: {str(e)}"
 
+            # Explicit save requested — persist output to disk regardless of size.
+            # Takes priority over the threshold-based auto-save below.
+            if save_output:
+                saved_path_str = _save_device_output(device_name, command, final_output)
+                saved_filename = Path(saved_path_str).name
+                final_output = f"Output saved as '{saved_filename}'."
             # Automatically save output that exceeds the configured line threshold
             # rather than returning it inline. This prevents large outputs (e.g. a
             # full BGP table) from overwhelming the LLM's context window. The full
             # path is not included in the return message — the client should use
             # list_device_outputs and read_device_output to retrieve the content.
-            if _auto_save:
+            elif _auto_save:
                 as_str = (
                     json.dumps(final_output, indent=2)
                     if isinstance(final_output, (list, dict))
@@ -470,9 +477,10 @@ def run_show_command_on_group(
                 name,
                 command,
                 use_textfsm,
+                False,  # save_output=False — group runner handles explicit saves
                 _tool_name="send_show_command_to_group",
                 _preloaded_params=params,
-                _auto_save=False,  # group commands handle save_output explicitly
+                _auto_save=not save_output,  # auto-save applies only when not explicitly saving
             ): name
             for name, params in all_device_params.items()
         }
@@ -481,9 +489,9 @@ def run_show_command_on_group(
             try:
                 output = future.result()
                 if save_output:
-                    results[device_name] = (
-                        f"Saved to: {_save_device_output(device_name, command, output)}"
-                    )
+                    saved_path_str = _save_device_output(device_name, command, output)
+                    saved_filename = Path(saved_path_str).name
+                    results[device_name] = f"Output saved as '{saved_filename}'."
                 else:
                     results[device_name] = output
             except Exception as e:

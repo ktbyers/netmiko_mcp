@@ -56,7 +56,10 @@ def list_devices(device_or_group: str = "all") -> str:
 
 @mcp.tool()
 def send_show_command(
-    device_name: str, command: str, use_textfsm: bool = False
+    device_name: str,
+    command: str,
+    use_textfsm: bool = False,
+    save_output: bool = False,
 ) -> str | list[Any] | dict[str, Any]:
     """
     Connect to a network device and execute a show command.
@@ -65,12 +68,16 @@ def send_show_command(
         device_name: The exact name of the device from the inventory.
         command: The CLI command to execute (e.g. 'show ip int brief').
         use_textfsm: Set to True to attempt parsing the output into structured JSON data using ntc-templates.
+        save_output: If True, always save output to disk and return the filename instead
+                     of the raw output. Useful when you intend to refer back to the output
+                     multiple times without re-running the command.
 
-    If the output exceeds the configured save_threshold (default 1000 lines) it is
-    automatically saved to disk and a short notification is returned instead. Use
-    list_device_outputs and read_device_output to retrieve the saved content.
+    If save_output is False and the output exceeds the configured save_threshold
+    (default 1000 lines) it is automatically saved to disk and a short notification
+    is returned instead. Use list_device_outputs and read_device_output to retrieve
+    the saved content.
     """
-    return run_show_command(device_name, command, use_textfsm)
+    return run_show_command(device_name, command, use_textfsm, save_output)
 
 
 @mcp.tool()
