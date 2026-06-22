@@ -7,7 +7,7 @@
 
 ## Security Recommendations
 
-The controls in Netmiko-MCP are a best-effort layer and should not be your only line of defense. You should strongly consider using AAA (e.g. TACACS+) with a dedicated read-only service account. AAA should independently authorize and audit what commands the account can execute on your devices. The MCP command authorization can potentially be bypassed, so this tool should only be used by authorized personnel –untrusted input should not be used with this MCP.
+The controls in Netmiko-MCP are a best-effort layer and should not be your only line of defense. You should strongly consider using AAA (e.g. TACACS+) with a dedicated read-only service account. AAA should independently authorize and audit what commands the account can execute on your devices. The MCP command authorization can potentially be bypassed, so this tool should only be used by authorized personnel. Untrusted input should not be used with this MCP.
 <br />
 <br />
 
