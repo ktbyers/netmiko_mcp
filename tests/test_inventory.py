@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from netmiko_mcp.inventory import (
+    get_all_device_params,
     get_device_names,
     get_device_params,
     get_group_names,
@@ -152,6 +153,26 @@ def test_get_device_names_error(mock_obtain: Any) -> None:
     mock_obtain.return_value = "Group not found"
     with pytest.raises(ValueError, match="Group not found"):
         get_device_names("nonexistent")
+
+
+@patch("netmiko_mcp.inventory.obtain_devices")
+def test_get_all_device_params_success(mock_obtain: Any) -> None:
+    """get_all_device_params returns the full dict when obtain_devices succeeds."""
+    mock_obtain.return_value = {
+        "rtr1": {"host": "1.1.1.1", "password": "secret"},
+        "rtr2": {"host": "2.2.2.2", "password": "secret"},
+    }
+    result = get_all_device_params("core")
+    assert "rtr1" in result
+    assert "rtr2" in result
+
+
+@patch("netmiko_mcp.inventory.obtain_devices")
+def test_get_all_device_params_error_string(mock_obtain: Any) -> None:
+    """get_all_device_params raises ValueError when obtain_devices returns an error string."""
+    mock_obtain.return_value = "Group 'bad' not found in inventory."
+    with pytest.raises(ValueError, match="Group 'bad' not found"):
+        get_all_device_params("bad")
 
 
 @patch("netmiko_mcp.inventory.settings")
