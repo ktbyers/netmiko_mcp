@@ -161,22 +161,35 @@ def test_list_device_outputs_tool_logs_invocation(mock_list: Any, mock_log: Any)
 
 @patch("netmiko_mcp.server._read_device_output")
 def test_read_device_output_tool(mock_read: Any) -> None:
-    """Test that read_device_output delegates to the connection module."""
-    mock_read.return_value = "IOS output content"
-    result = read_device_output("cisco1", "show_version_20260607.txt")
-    assert result == "IOS output content"
-    mock_read.assert_called_once_with("cisco1", "show_version_20260607.txt")
+    """Test that read_device_output delegates to the connection module with offset and limit."""
+    mock_read.return_value = "Lines 1-3 of 3.\nIOS output content"
+    result = read_device_output("cisco1", "show_version_20260607.txt", offset=0, limit=500)
+    assert result == "Lines 1-3 of 3.\nIOS output content"
+    mock_read.assert_called_once_with("cisco1", "show_version_20260607.txt", 0, 500)
+
+
+@patch("netmiko_mcp.server._read_device_output")
+def test_read_device_output_tool_default_pagination(mock_read: Any) -> None:
+    """read_device_output uses offset=0, limit=500 when called with no pagination args."""
+    mock_read.return_value = "Lines 1-3 of 3.\ncontent"
+    read_device_output("cisco1", "show_version_20260607.txt")
+    mock_read.assert_called_once_with("cisco1", "show_version_20260607.txt", 0, 500)
 
 
 @patch("netmiko_mcp.server.log_tool_invocation")
 @patch("netmiko_mcp.server._read_device_output")
 def test_read_device_output_tool_logs_invocation(mock_read: Any, mock_log: Any) -> None:
-    """read_device_output should emit an audit record with device_name and filename."""
+    """read_device_output should emit an audit record including offset and limit."""
     mock_read.return_value = "content"
-    read_device_output("cisco1", "show_version_20260607.txt")
+    read_device_output("cisco1", "show_version_20260607.txt", offset=100, limit=200)
     mock_log.assert_called_once_with(
         tool="read_device_output",
-        arguments={"device_name": "cisco1", "filename": "show_version_20260607.txt"},
+        arguments={
+            "device_name": "cisco1",
+            "filename": "show_version_20260607.txt",
+            "offset": 100,
+            "limit": 200,
+        },
     )
 
 

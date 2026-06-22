@@ -18,6 +18,7 @@ def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.pipe_modifiers == ["include", "exclude", "section", "begin", "count"]
     assert config.max_workers == 10
     assert config.save_output_dir == "~/.netmiko_mcp_tmp"
+    assert config.save_threshold == 1000
 
 
 def test_mcp_config_validation() -> None:

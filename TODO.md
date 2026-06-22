@@ -31,6 +31,19 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ## Output Handling (`connection.py` / `ARCHITECTURE.md`)
 
+- **`grep_device_output` tool not implemented** - Once output is saved to disk, the LLM
+  has no way to search it without reading the whole file page by page. A
+  `grep_device_output(device, filename, pattern)` tool would let the LLM search saved
+  output for a specific string or regex and receive only matching lines (plus optional
+  context lines), avoiding the need to paginate through large files.
+
+- **`save_output` exposes full server-side file path to the client** - When output is
+  saved to disk, the full absolute path (e.g. `/home/user/.netmiko-mcp/output/...`) is
+  returned to the LLM client. The client doesn't need to know the server's filesystem
+  layout — it should receive only a logical reference (e.g. device name + command) that
+  it can pass back to `read_device_output`. Leaking the full path is unnecessary and
+  exposes server internals.
+
 - **No output truncation** `[ARCH §3]` - A `show tech-support` or similar verbose command
   could return hundreds of thousands of tokens, blowing out the LLM's context window. Tools
   should enforce a configurable line/character cap and append a truncation warning that

@@ -29,6 +29,9 @@ class McpConfig(BaseSettings):
     pipe_modifiers: list[str] = Field(default=["include", "exclude", "section", "begin", "count"])
     max_workers: int = Field(default=10)
     save_output_dir: str = Field(default="~/.netmiko_mcp_tmp")
+    # Output exceeding this line count is automatically saved to save_output_dir
+    # instead of being returned inline to the client.
+    save_threshold: int = Field(default=1000)
 
     # Transport
     transport: Literal["stdio", "streamable-http"] = Field(default="stdio")
