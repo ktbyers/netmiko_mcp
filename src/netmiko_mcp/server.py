@@ -56,7 +56,10 @@ def list_devices(device_or_group: str = "all") -> str:
 
 @mcp.tool()
 def send_show_command(
-    device_name: str, command: str, use_textfsm: bool = False
+    device_name: str,
+    command: str,
+    use_textfsm: bool = False,
+    save_output: bool = False,
 ) -> str | list[Any] | dict[str, Any]:
     """
     Connect to a network device and execute a show command.
@@ -65,8 +68,16 @@ def send_show_command(
         device_name: The exact name of the device from the inventory.
         command: The CLI command to execute (e.g. 'show ip int brief').
         use_textfsm: Set to True to attempt parsing the output into structured JSON data using ntc-templates.
+        save_output: If True, always save output to disk and return the filename instead
+                     of the raw output. Useful when you intend to refer back to the output
+                     multiple times without re-running the command.
+
+    If save_output is False and the output exceeds the configured save_threshold
+    (default 1000 lines) it is automatically saved to disk and a short notification
+    is returned instead. Use list_device_outputs and read_device_output to retrieve
+    the saved content.
     """
-    return run_show_command(device_name, command, use_textfsm)
+    return run_show_command(device_name, command, use_textfsm, save_output)
 
 
 @mcp.tool()
@@ -109,22 +120,34 @@ def list_device_outputs(device_or_group: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def read_device_output(device_name: str, filename: str) -> str:
+def read_device_output(
+    device_name: str,
+    filename: str,
+    offset: int = 0,
+    limit: int = 500,
+) -> str:
     """
-    Read a previously saved output file for a specific device.
+    Read a previously saved output file for a specific device, with pagination.
 
     Args:
         device_name: The device name whose output directory to read from.
         filename: The exact filename as returned by list_device_outputs.
+        offset: Line number to start reading from (0-indexed). Defaults to 0.
+        limit: Maximum number of lines to return per call. Defaults to 500.
 
-    Returns:
-        The file content as a string, or an error message.
+    The response header shows the line range and total line count. If more lines
+    remain, a continuation hint tells you which offset to use on the next call.
     """
     log_tool_invocation(
         tool="read_device_output",
-        arguments={"device_name": device_name, "filename": filename},
+        arguments={
+            "device_name": device_name,
+            "filename": filename,
+            "offset": offset,
+            "limit": limit,
+        },
     )
-    return _read_device_output(device_name, filename)
+    return _read_device_output(device_name, filename, offset, limit)
 
 
 @mcp.tool()

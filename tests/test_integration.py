@@ -183,23 +183,19 @@ async def test_group_command_save_output_true(mcp_client: ClientSession) -> None
     output = json.loads(getattr(result.content[0], "text", ""))
 
     for device, value in output.items():
-        assert str(value).startswith("Saved to:"), f"{device}: expected file path but got: {value}"
-        file_path = Path(str(value).replace("Saved to: ", ""))
+        assert str(value).startswith("Output saved as '"), (
+            f"{device}: expected save notification but got: {value}"
+        )
+        filename = str(value).split("'")[1]
+        # Verify the file actually exists under save_output_dir
+        expected_base = Path("~/.netmiko_mcp_tmp").expanduser()
+        file_path = expected_base / device / filename
         assert file_path.exists(), f"Expected file not found: {file_path}"
         content = file_path.read_text(encoding="utf-8")
         assert (
             "Cisco IOS Software" in content
             or "Cisco Internetwork Operating System Software" in content
         ), f"{device}: saved file does not contain IOS output"
-        # Verify file is under the default save_output_dir (~/.netmiko_mcp_tmp)
-        expected_base = str(Path("~/.netmiko_mcp_tmp").expanduser())
-        assert str(file_path).startswith(expected_base), (
-            f"{device}: file not in expected save_output_dir ({expected_base})"
-        )
-        # Verify device name is used as subdirectory
-        assert file_path.parent.name == device, (
-            f"Expected subdirectory '{device}', got '{file_path.parent.name}'"
-        )
 
 
 @pytest.mark.anyio
@@ -286,8 +282,8 @@ async def test_list_and_read_device_output_roundtrip(mcp_client: ClientSession) 
         arguments={"device_or_group": "cisco", "command": "show version", "save_output": True},
     )
     saved = json.loads(getattr(save_result.content[0], "text", ""))
-    assert all(str(v).startswith("Saved to:") for v in saved.values()), (
-        f"Expected all values to be file paths: {saved}"
+    assert all(str(v).startswith("Output saved as '") for v in saved.values()), (
+        f"Expected all values to be save notifications: {saved}"
     )
 
     # Step 2 — list saved files for the group
@@ -308,10 +304,189 @@ async def test_list_and_read_device_output_roundtrip(mcp_client: ClientSession) 
             arguments={"device_name": device, "filename": filename},
         )
         content = getattr(read_result.content[0], "text", "")
+        # Content now includes a pagination header on line 1 followed by the output.
         assert (
             "Cisco IOS Software" in content
             or "Cisco Internetwork Operating System Software" in content
         ), f"{device}: read content does not look like IOS output"
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
+)
+async def test_single_device_explicit_save(mcp_client: ClientSession) -> None:
+    """send_show_command with save_output=True saves to disk and returns a filename notification."""
+    result = await mcp_client.call_tool(
+        "send_show_command",
+        arguments={"device_name": "cisco1", "command": "show version", "save_output": True},
+    )
+    text = getattr(result.content[0], "text", "")
+
+    assert text.startswith("Output saved as '"), f"Unexpected response: {text!r}"
+    filename = text.split("'")[1]
+
+    # Verify the file is listed and readable
+    list_result = await mcp_client.call_tool(
+        "list_device_outputs", arguments={"device_or_group": "cisco1"}
+    )
+    listing = json.loads(getattr(list_result.content[0], "text", ""))
+    assert filename in listing.get("cisco1", []), (
+        f"Saved file '{filename}' not found in listing: {listing}"
+    )
+
+    read_result = await mcp_client.call_tool(
+        "read_device_output",
+        arguments={"device_name": "cisco1", "filename": filename},
+    )
+    content = getattr(read_result.content[0], "text", "")
+    assert (
+        "Cisco IOS Software" in content or "Cisco Internetwork Operating System Software" in content
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
+)
+async def test_single_device_auto_save(mcp_client_low_threshold: ClientSession) -> None:
+    """send_show_command auto-saves when output exceeds save_threshold.
+    Uses a 5-line threshold so any real show command triggers it.
+    """
+    result = await mcp_client_low_threshold.call_tool(
+        "send_show_command",
+        arguments={"device_name": "cisco1", "command": "show version", "save_output": False},
+    )
+    text = getattr(result.content[0], "text", "")
+
+    assert "Automatically saved as '" in text, f"Expected auto-save notification, got: {text!r}"
+    filename = text.split("Automatically saved as '")[1].split("'")[0]
+
+    # Verify the file is listed and readable
+    list_result = await mcp_client_low_threshold.call_tool(
+        "list_device_outputs", arguments={"device_or_group": "cisco1"}
+    )
+    listing = json.loads(getattr(list_result.content[0], "text", ""))
+    assert filename in listing.get("cisco1", []), (
+        f"Auto-saved file '{filename}' not found in listing: {listing}"
+    )
+
+    read_result = await mcp_client_low_threshold.call_tool(
+        "read_device_output",
+        arguments={"device_name": "cisco1", "filename": filename},
+    )
+    content = getattr(read_result.content[0], "text", "")
+    assert (
+        "Cisco IOS Software" in content or "Cisco Internetwork Operating System Software" in content
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
+)
+async def test_group_command_auto_save(mcp_client_low_threshold: ClientSession) -> None:
+    """send_show_command_to_group with save_output=False auto-saves per-device output
+    when it exceeds save_threshold. Uses a 5-line threshold.
+    """
+    result = await mcp_client_low_threshold.call_tool(
+        "send_show_command_to_group",
+        arguments={"device_or_group": "cisco", "command": "show version", "save_output": False},
+    )
+    output = json.loads(getattr(result.content[0], "text", ""))
+
+    assert len(output) >= 2, f"Expected at least 2 devices, got: {list(output.keys())}"
+    for device, text in output.items():
+        assert "Automatically saved as '" in str(text), (
+            f"{device}: expected auto-save notification, got: {text!r}"
+        )
+        filename = str(text).split("Automatically saved as '")[1].split("'")[0]
+        list_result = await mcp_client_low_threshold.call_tool(
+            "list_device_outputs", arguments={"device_or_group": device}
+        )
+        listing = json.loads(getattr(list_result.content[0], "text", ""))
+        assert filename in listing.get(device, []), (
+            f"{device}: auto-saved file '{filename}' not in listing: {listing}"
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
+)
+async def test_read_device_output_pagination(mcp_client: ClientSession) -> None:
+    """Pagination round-trip: save show interfaces output, then read it back in 20-line pages.
+
+    Verifies that:
+    - The first page header correctly shows 'Lines 1-20 of N'
+    - A continuation hint is present when more lines remain
+    - The second page header correctly shows 'Lines 21-40 of N'
+    - Content from each page is distinct (no overlap)
+    """
+    # Step 1 — save 'show interfaces' output explicitly so we have a known file to paginate.
+    # show interfaces typically produces well over 40 lines on any real IOS device.
+    save_result = await mcp_client.call_tool(
+        "send_show_command_to_group",
+        arguments={"device_or_group": "cisco1", "command": "show interfaces", "save_output": True},
+    )
+    saved = json.loads(getattr(save_result.content[0], "text", ""))
+    assert "cisco1" in saved, f"Expected cisco1 in save result: {saved}"
+
+    # Step 2 — list saved files to get the filename.
+    list_result = await mcp_client.call_tool(
+        "list_device_outputs",
+        arguments={"device_or_group": "cisco1"},
+    )
+    listing = json.loads(getattr(list_result.content[0], "text", ""))
+    assert "cisco1" in listing and len(listing["cisco1"]) >= 1, (
+        f"No saved files found for cisco1: {listing}"
+    )
+    filename = listing["cisco1"][0]  # newest file first
+
+    # Step 3 — read page 1 (lines 1-20).
+    page1_result = await mcp_client.call_tool(
+        "read_device_output",
+        arguments={"device_name": "cisco1", "filename": filename, "offset": 0, "limit": 20},
+    )
+    page1 = getattr(page1_result.content[0], "text", "")
+    page1_lines = page1.splitlines()
+
+    # Header is always the first line.
+    assert page1_lines[0].startswith("Lines 1-20 of "), (
+        f"Unexpected page 1 header: {page1_lines[0]!r}"
+    )
+    total_lines = int(page1_lines[0].split(" of ")[1].split(".")[0])
+    assert total_lines > 20, (
+        f"Expected more than 20 total lines for show interfaces, got {total_lines}"
+    )
+    assert "offset=20" in page1_lines[0], (
+        f"Expected continuation hint with offset=20 in header: {page1_lines[0]!r}"
+    )
+    # 20 content lines follow the header.
+    assert len(page1_lines) == 21, f"Expected 1 header + 20 content lines, got {len(page1_lines)}"
+
+    # Step 4 — read page 2 (lines 21 to min(40, total)).
+    page2_result = await mcp_client.call_tool(
+        "read_device_output",
+        arguments={"device_name": "cisco1", "filename": filename, "offset": 20, "limit": 20},
+    )
+    page2 = getattr(page2_result.content[0], "text", "")
+    page2_lines = page2.splitlines()
+
+    # End line depends on how many lines the device actually produced.
+    expected_end = min(40, total_lines)
+    assert page2_lines[0].startswith(f"Lines 21-{expected_end} of {total_lines}."), (
+        f"Unexpected page 2 header: {page2_lines[0]!r}"
+    )
+    # Pages must cover different positions. Compare as ordered lists, not sets,
+    # to avoid false failures from repeated blank lines or identical indentation.
+    assert page1_lines[1:] != page2_lines[1:], (
+        "Pages 1 and 2 returned identical content — pagination is not advancing"
+    )
 
 
 @pytest.mark.anyio

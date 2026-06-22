@@ -31,13 +31,11 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ## Output Handling (`connection.py` / `ARCHITECTURE.md`)
 
-- **No output truncation** `[ARCH §3]` - A `show tech-support` or similar verbose command
-  could return hundreds of thousands of tokens, blowing out the LLM's context window. Tools
-  should enforce a configurable line/character cap and append a truncation warning that
-  tells the LLM how to retrieve the remainder (e.g. via `limit`/`offset` parameters).
-
-- **No `limit`/`offset` parameters on `send_show_command`** `[ARCH §3]` - Pagination
-  support for large outputs is not implemented.
+- **`grep_device_output` tool not implemented** - Once output is saved to disk, the LLM
+  has no way to search it without reading the whole file page by page. A
+  `grep_device_output(device, filename, pattern)` tool would let the LLM search saved
+  output for a specific string or regex and receive only matching lines (plus optional
+  context lines), avoiding the need to paginate through large files.
 
 ---
 

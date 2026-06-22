@@ -60,3 +60,10 @@ async def mcp_client_sequential() -> AsyncGenerator[ClientSession, None]:
     """MCP client with max_workers=1 for sequential execution — used to verify threading."""
     async for client in _make_mcp_client({"NETMIKO_MCP_MAX_WORKERS": "1"}):
         yield client
+
+
+@pytest.fixture
+async def mcp_client_low_threshold() -> AsyncGenerator[ClientSession, None]:
+    """MCP client with save_threshold=5 so any real show command triggers auto-save."""
+    async for client in _make_mcp_client({"NETMIKO_MCP_SAVE_THRESHOLD": "5"}):
+        yield client

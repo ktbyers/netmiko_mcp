@@ -24,7 +24,8 @@ allow_pipe: false                        # default: false
 unsafe_chars: [";", "\n", "\r", "&"]    # default: these four
 pipe_modifiers: ["include", "exclude", "section", "begin", "count"]  # default: these five
 max_workers: 10                          # default: 10 (thread cap for send_show_command_to_group)
-save_output_dir: "~/.netmiko_mcp_tmp"   # default: ~/.netmiko_mcp_tmp (save_output=True files)
+save_output_dir: "~/.netmiko_mcp_tmp"   # default: ~/.netmiko_mcp_tmp (all saved output lands here)
+save_threshold: 1000                     # default: 1000 (lines; output above this is auto-saved)
 transport: "stdio"                       # default: stdio (or streamable-http)
 http_host: "127.0.0.1"                  # default: 127.0.0.1
 http_port: 8000                          # default: 8000
@@ -128,13 +129,33 @@ show version | redirect tftp://1.1.1.1/out.txt
 
 | Tool | Arguments | Description |
 |---|---|---|
-| `send_show_command` | `device_name`, `command`, `use_textfsm=False` | Connect to a single device and execute a show command. Returns raw text or structured JSON when `use_textfsm=True`. |
-| `send_show_command_to_group` | `device_or_group`, `command`, `use_textfsm=False`, `save_output=False` | Execute a show command concurrently across a device group using a thread pool (`max_workers`). When `save_output=True`, writes per-device output files under `save_output_dir` and returns file paths instead of raw output. |
+| `send_show_command` | `device_name`, `command`, `use_textfsm=False`, `save_output=False` | Connect to a single device and execute a show command. Returns raw text or structured JSON when `use_textfsm=True`. Pass `save_output=True` to always save to disk regardless of output size. Output exceeding `save_threshold` is automatically saved even when `save_output=False`. |
+| `send_show_command_to_group` | `device_or_group`, `command`, `use_textfsm=False`, `save_output=False` | Execute a show command concurrently across a device group using a thread pool (`max_workers`). `save_output=True` and auto-save threshold behave identically to `send_show_command`, applied per device. |
 | `list_devices` | `device_or_group="all"` | List devices from the inventory. Credentials are never included in the response. |
 | `list_groups` | _(none)_ | List all device group names defined in the inventory. Returns a list of strings. |
 | `list_device_outputs` | `device_or_group` | List saved output files for a device, group, or `"all"`. Returns a dict mapping device names to lists of filenames (newest first). |
-| `read_device_output` | `device_name`, `filename` | Read a previously saved output file by device name and exact filename (as returned by `list_device_outputs`). |
+| `read_device_output` | `device_name`, `filename`, `offset=0`, `limit=500` | Read a previously saved output file by device name and exact filename. Returns a paginated slice with a header showing line range and total (`Lines 1-500 of 42000. Call read_device_output with offset=500 to continue.`). Use `offset` and `limit` to page through large files. |
 | `ping` | _(none)_ | Health check. Returns `"pong"`. |
+
+## Large Output Handling
+
+Both `send_show_command` and `send_show_command_to_group` handle large output the same way.
+
+**Explicit save** (`save_output=True`): always saves to `save_output_dir` regardless of size. Returns `"Output saved as 'filename.txt'."`. Use when you intend to reference the output multiple times without re-running the command.
+
+**Auto-save** (`save_output=False`, output exceeds `save_threshold`): automatically saves and returns a notification:
+```
+Output too large to return inline (42,000 lines, exceeds save_threshold of 1,000).
+Automatically saved as 'show_ip_bgp_20260622_143201.txt'.
+Use read_device_output to retrieve it.
+```
+
+**Retrieving saved output**: call `list_device_outputs` to find the filename, then `read_device_output` with `offset`/`limit` to page through the content. The response header on every page shows position and total:
+```
+Lines 1-500 of 42000. Call read_device_output with offset=500 to continue.
+<content...>
+```
+The filename (not the full server path) is returned in all notifications.
 
 ---
 

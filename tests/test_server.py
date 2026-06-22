@@ -122,12 +122,20 @@ def test_list_devices_tool_logs_invocation(mock_inv: Any, mock_log: Any) -> None
 @patch("netmiko_mcp.server.run_show_command")
 def test_send_show_command_tool(mock_run_show: Any) -> None:
     """Test that the send_show_command tool delegates to the connection module."""
-    # Mock returning structured data
     mock_run_show.return_value = [{"intf": "Gi0/0", "status": "up"}]
     assert send_show_command("rtr1", "show ip int brief", True) == [
         {"intf": "Gi0/0", "status": "up"}
     ]
-    mock_run_show.assert_called_once_with("rtr1", "show ip int brief", True)
+    mock_run_show.assert_called_once_with("rtr1", "show ip int brief", True, False)
+
+
+@patch("netmiko_mcp.server.run_show_command")
+def test_send_show_command_tool_explicit_save(mock_run_show: Any) -> None:
+    """save_output=True is passed through to run_show_command."""
+    mock_run_show.return_value = "Output saved as 'show_version_20260622_120000.txt'."
+    result = send_show_command("rtr1", "show version", save_output=True)
+    assert result == "Output saved as 'show_version_20260622_120000.txt'."
+    mock_run_show.assert_called_once_with("rtr1", "show version", False, True)
 
 
 @patch("netmiko_mcp.server.run_show_command_on_group")
@@ -161,22 +169,35 @@ def test_list_device_outputs_tool_logs_invocation(mock_list: Any, mock_log: Any)
 
 @patch("netmiko_mcp.server._read_device_output")
 def test_read_device_output_tool(mock_read: Any) -> None:
-    """Test that read_device_output delegates to the connection module."""
-    mock_read.return_value = "IOS output content"
-    result = read_device_output("cisco1", "show_version_20260607.txt")
-    assert result == "IOS output content"
-    mock_read.assert_called_once_with("cisco1", "show_version_20260607.txt")
+    """Test that read_device_output delegates to the connection module with offset and limit."""
+    mock_read.return_value = "Lines 1-3 of 3.\nIOS output content"
+    result = read_device_output("cisco1", "show_version_20260607.txt", offset=0, limit=500)
+    assert result == "Lines 1-3 of 3.\nIOS output content"
+    mock_read.assert_called_once_with("cisco1", "show_version_20260607.txt", 0, 500)
+
+
+@patch("netmiko_mcp.server._read_device_output")
+def test_read_device_output_tool_default_pagination(mock_read: Any) -> None:
+    """read_device_output uses offset=0, limit=500 when called with no pagination args."""
+    mock_read.return_value = "Lines 1-3 of 3.\ncontent"
+    read_device_output("cisco1", "show_version_20260607.txt")
+    mock_read.assert_called_once_with("cisco1", "show_version_20260607.txt", 0, 500)
 
 
 @patch("netmiko_mcp.server.log_tool_invocation")
 @patch("netmiko_mcp.server._read_device_output")
 def test_read_device_output_tool_logs_invocation(mock_read: Any, mock_log: Any) -> None:
-    """read_device_output should emit an audit record with device_name and filename."""
+    """read_device_output should emit an audit record including offset and limit."""
     mock_read.return_value = "content"
-    read_device_output("cisco1", "show_version_20260607.txt")
+    read_device_output("cisco1", "show_version_20260607.txt", offset=100, limit=200)
     mock_log.assert_called_once_with(
         tool="read_device_output",
-        arguments={"device_name": "cisco1", "filename": "show_version_20260607.txt"},
+        arguments={
+            "device_name": "cisco1",
+            "filename": "show_version_20260607.txt",
+            "offset": 100,
+            "limit": 200,
+        },
     )
 
 

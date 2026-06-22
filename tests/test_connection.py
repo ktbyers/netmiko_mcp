@@ -45,6 +45,7 @@ def test_run_show_command_success(
 ) -> None:
     """Test that a command is executed successfully and returns output."""
     mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 1000
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 
@@ -57,6 +58,8 @@ def test_run_show_command_success(
     result = run_show_command("rtr1", "show ip int brief")
 
     assert result == "GigabitEthernet0/0 up up"
+    mock_connect.assert_called_once_with(host="1.1.1.1", device_type="cisco_ios")
+    mock_net_connect.send_command.assert_called_once_with("show ip int brief", use_textfsm=False)
     mock_connect.assert_called_once_with(host="1.1.1.1", device_type="cisco_ios")
     mock_net_connect.send_command.assert_called_once_with("show ip int brief", use_textfsm=False)
 
@@ -366,6 +369,322 @@ def test_save_device_output_device_name_slash_raises(
 
 
 # ---------------------------------------------------------------------------
+# run_show_command — explicit save_output
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_explicit_save(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """save_output=True saves the file and returns a filename notification, not raw output."""
+    mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 1000
+    mock_settings.save_output_dir = str(tmp_path)
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.return_value.send_command.return_value = "GigabitEthernet0/0 up up"
+
+    result = run_show_command("rtr1", "show ip int brief", save_output=True)
+
+    assert isinstance(result, str)
+    assert result.startswith("Output saved as '")
+    assert result.endswith("'.")
+    assert ".txt" in result
+    # Full path must NOT appear in the message
+    assert str(tmp_path) not in result
+    # File must actually exist on disk
+    device_dir = tmp_path / "rtr1"
+    saved_files = list(device_dir.glob("*.txt"))
+    assert len(saved_files) == 1
+    assert saved_files[0].read_text(encoding="utf-8") == "GigabitEthernet0/0 up up"
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_explicit_save_ignores_threshold(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """save_output=True saves regardless of output size — threshold is not consulted."""
+    mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 1000
+    mock_settings.save_output_dir = str(tmp_path)
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    # Output is only 1 line — well below any threshold — but save_output=True forces save.
+    mock_connect.return_value.send_command.return_value = "tiny output"
+
+    result = run_show_command("rtr1", "show version", save_output=True)
+
+    assert isinstance(result, str)
+    assert result.startswith("Output saved as '")
+    device_dir = tmp_path / "rtr1"
+    assert len(list(device_dir.glob("*.txt"))) == 1
+
+
+# ---------------------------------------------------------------------------
+# run_show_command — auto-save threshold
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_below_threshold_returns_inline(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+) -> None:
+    """Output below save_threshold is returned inline without saving."""
+    mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 1000
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.return_value.send_command.return_value = "line1\nline2\nline3"
+
+    result = run_show_command("rtr1", "show version")
+    assert result == "line1\nline2\nline3"
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_above_threshold_auto_saves(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Output exceeding save_threshold is automatically saved and a notification returned."""
+    mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 3
+    mock_settings.save_output_dir = str(tmp_path)
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    large_output = "\n".join(f"line {i}" for i in range(10))  # 10 lines > threshold of 3
+    mock_connect.return_value.send_command.return_value = large_output
+
+    result = run_show_command("rtr1", "show ip bgp")
+
+    assert isinstance(result, str)
+    assert "too large" in result
+    assert "Automatically saved" in result
+    assert "read_device_output" in result
+    # Full path must NOT appear in the message — only the filename
+    assert str(tmp_path) not in result
+    # The file should actually exist on disk
+    device_dir = tmp_path / "rtr1"
+    saved_files = list(device_dir.glob("*.txt"))
+    assert len(saved_files) == 1
+    assert saved_files[0].read_text(encoding="utf-8") == large_output
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_structured_above_threshold_auto_saves(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """Structured (list) output exceeding threshold is also automatically saved."""
+    mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 3
+    mock_settings.save_output_dir = str(tmp_path)
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    # A list with enough records that JSON serialization exceeds 3 lines
+    large_structured = [{"intf": f"Gi0/{i}", "status": "up"} for i in range(10)]
+    mock_connect.return_value.send_command.return_value = large_structured
+
+    result = run_show_command("rtr1", "show ip int brief", use_textfsm=True)
+
+    assert isinstance(result, str)
+    assert "too large" in result
+    assert "Automatically saved" in result
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_auto_save_disabled_returns_inline(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """When _auto_save=False, large output is returned inline regardless of threshold."""
+    mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 3
+    mock_settings.save_output_dir = str(tmp_path)
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    large_output = "\n".join(f"line {i}" for i in range(10))
+    mock_connect.return_value.send_command.return_value = large_output
+
+    result = run_show_command("rtr1", "show ip bgp", _auto_save=False)
+
+    assert result == large_output
+    # Nothing should have been saved
+    assert not (tmp_path / "rtr1").exists()
+
+
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.ConnectHandler")
+@patch("netmiko_mcp.connection.get_device_params")
+@patch("netmiko_mcp.connection.settings")
+def test_run_show_command_notification_contains_filename_not_path(
+    mock_settings: MagicMock,
+    mock_get_params: MagicMock,
+    mock_connect: MagicMock,
+    mock_validate: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """The auto-save notification includes the filename but not the full server path."""
+    mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 2
+    mock_settings.save_output_dir = str(tmp_path)
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_get_params.return_value = {"host": "1.1.1.1"}
+    mock_connect.return_value.send_command.return_value = "line1\nline2\nline3"
+
+    result = run_show_command("rtr1", "show version")
+
+    assert isinstance(result, str)
+    # Filename (just the .txt basename) must appear
+    assert ".txt" in result
+    # Full directory path must NOT appear
+    assert str(tmp_path) not in result
+
+
+# ---------------------------------------------------------------------------
+# read_device_output — pagination
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_pagination_first_page(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """Default offset=0 returns first limit lines with a continuation hint."""
+    mock_settings.save_output_dir = str(tmp_path)
+    device_dir = tmp_path / "rtr1"
+    device_dir.mkdir()
+    content = "\n".join(f"line {i}" for i in range(1, 1001))  # 1000 lines
+    (device_dir / "show_ip_bgp_20260622_120000.txt").write_text(content, encoding="utf-8")
+
+    result = read_device_output("rtr1", "show_ip_bgp_20260622_120000.txt", offset=0, limit=500)
+
+    assert result.startswith("Lines 1-500 of 1000.")
+    assert "offset=500" in result
+    assert "line 1" in result
+    assert "line 500" in result
+    assert "line 501" not in result
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_pagination_middle_page(
+    mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """Non-zero offset returns the correct slice and continuation hint."""
+    mock_settings.save_output_dir = str(tmp_path)
+    device_dir = tmp_path / "rtr1"
+    device_dir.mkdir()
+    content = "\n".join(f"line {i}" for i in range(1, 1001))
+    (device_dir / "show_ip_bgp_20260622_120000.txt").write_text(content, encoding="utf-8")
+
+    result = read_device_output("rtr1", "show_ip_bgp_20260622_120000.txt", offset=500, limit=500)
+
+    assert result.startswith("Lines 501-1000 of 1000.")
+    assert "offset=" not in result  # last page — no continuation hint
+    assert "line 501" in result
+    assert "line 1000" in result
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_pagination_last_page_no_hint(
+    mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """When the page reaches the end of file, no continuation hint is included."""
+    mock_settings.save_output_dir = str(tmp_path)
+    device_dir = tmp_path / "rtr1"
+    device_dir.mkdir()
+    content = "\n".join(f"line {i}" for i in range(1, 101))  # 100 lines
+    (device_dir / "output.txt").write_text(content, encoding="utf-8")
+
+    result = read_device_output("rtr1", "output.txt", offset=0, limit=500)
+
+    assert "Lines 1-100 of 100." in result
+    assert "Call read_device_output" not in result
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_pagination_offset_beyond_eof(
+    mock_settings: MagicMock, tmp_path: Path
+) -> None:
+    """An offset beyond the end of file returns a clear error."""
+    mock_settings.save_output_dir = str(tmp_path)
+    device_dir = tmp_path / "rtr1"
+    device_dir.mkdir()
+    (device_dir / "output.txt").write_text("line 1\nline 2", encoding="utf-8")
+
+    result = read_device_output("rtr1", "output.txt", offset=999, limit=500)
+
+    assert "Error" in result
+    assert "999" in result
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_empty_file(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """An empty file returns a zero-line header without error."""
+    mock_settings.save_output_dir = str(tmp_path)
+    device_dir = tmp_path / "rtr1"
+    device_dir.mkdir()
+    (device_dir / "output.txt").write_text("", encoding="utf-8")
+
+    result = read_device_output("rtr1", "output.txt")
+
+    assert "0" in result
+
+
+@patch("netmiko_mcp.connection.settings")
+def test_read_device_output_header_format(mock_settings: MagicMock, tmp_path: Path) -> None:
+    """The header is the first line of the response and separates from content."""
+    mock_settings.save_output_dir = str(tmp_path)
+    device_dir = tmp_path / "rtr1"
+    device_dir.mkdir()
+    (device_dir / "output.txt").write_text("alpha\nbeta\ngamma", encoding="utf-8")
+
+    result = read_device_output("rtr1", "output.txt", offset=0, limit=500)
+    lines = result.splitlines()
+
+    assert lines[0].startswith("Lines 1-3 of 3.")
+    assert lines[1] == "alpha"
+    assert lines[2] == "beta"
+    assert lines[3] == "gamma"
+
+
+# ---------------------------------------------------------------------------
 # run_show_command_on_group
 # ---------------------------------------------------------------------------
 
@@ -418,7 +737,7 @@ def test_run_show_command_on_group_success(
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}, "rtr2": {"host": "2.2.2.2"}}
     mock_settings.max_workers = 10
-    mock_run.side_effect = lambda name, cmd, tf, **kw: f"output from {name}"
+    mock_run.side_effect = lambda name, cmd, tf, save, **kw: f"output from {name}"
     result = run_show_command_on_group("core", "show version")
     assert result["rtr1"] == "output from rtr1"
     assert result["rtr2"] == "output from rtr2"
@@ -463,7 +782,7 @@ def test_run_show_command_on_group_partial_failure(
     mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}, "rtr2": {"host": "2.2.2.2"}}
     mock_settings.max_workers = 10
 
-    def side_effect(name: str, cmd: str, tf: bool, **kw: Any) -> str:
+    def side_effect(name: str, cmd: str, tf: bool, save: bool, **kw: Any) -> str:
         if name == "rtr2":
             raise RuntimeError("connection dropped")
         return "output from rtr1"
@@ -494,8 +813,9 @@ def test_run_show_command_on_group_save_output(
 
     result = run_show_command_on_group("core", "show version", save_output=True)
     assert "rtr1" in result
-    assert result["rtr1"].startswith("Saved to:")
-    saved_path = Path(result["rtr1"].replace("Saved to: ", ""))
+    assert result["rtr1"].startswith("Output saved as '")
+    filename = result["rtr1"].split("'")[1]
+    saved_path = tmp_path / "rtr1" / filename
     assert saved_path.exists()
     assert saved_path.read_text(encoding="utf-8") == "IOS output"
 
@@ -520,7 +840,7 @@ def test_run_show_command_on_group_textfsm_propagated(
 
     assert mock_run.call_count == 3
     for call in mock_run.call_args_list:
-        _name, _cmd, tf = call.args
+        _name, _cmd, tf, _save = call.args
         assert tf is True, f"Expected use_textfsm=True but got {tf}"
 
 
@@ -529,7 +849,7 @@ def test_run_show_command_on_group_max_workers_enforced() -> None:
     delay = 0.2
     devices = ["rtr1", "rtr2", "rtr3", "rtr4"]
 
-    def slow_run(name: str, cmd: str, tf: bool, **kw: Any) -> str:
+    def slow_run(name: str, cmd: str, tf: bool, save: bool, **kw: Any) -> str:
         time.sleep(delay)
         return f"output from {name}"
 
@@ -559,6 +879,67 @@ def test_run_show_command_on_group_max_workers_enforced() -> None:
     assert timings[4] < timings[1] / 2, (
         f"max_workers=4 ({timings[4]:.2f}s) not 2x faster than max_workers=1 ({timings[1]:.2f}s)"
     )
+
+
+# ---------------------------------------------------------------------------
+# run_show_command_on_group — auto-save threshold
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.connection.settings")
+@patch("netmiko_mcp.connection.run_show_command")
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.get_all_device_params")
+def test_run_show_command_on_group_auto_save_large_output(
+    mock_all_params: MagicMock,
+    mock_validate: MagicMock,
+    mock_run: MagicMock,
+    mock_settings: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """With save_output=False, large per-device output is auto-saved by run_show_command.
+    The group result contains the notification string returned by run_show_command."""
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}}
+    mock_settings.max_workers = 10
+    # Simulate run_show_command already having auto-saved and returning a notification.
+    mock_run.return_value = "Output too large to return inline (5,000 lines). Automatically saved as 'show_ip_bgp_20260622.txt'. Use read_device_output to retrieve it."
+
+    result = run_show_command_on_group("core", "show ip bgp", save_output=False)
+
+    assert "rtr1" in result
+    assert "Automatically saved" in result["rtr1"]
+    # Verify _auto_save=True was passed (save_output=False → auto-save enabled)
+    call_kwargs = mock_run.call_args_list[0][1]
+    assert call_kwargs["_auto_save"] is True
+
+
+@patch("netmiko_mcp.connection.settings")
+@patch("netmiko_mcp.connection.run_show_command")
+@patch("netmiko_mcp.connection.validate_command")
+@patch("netmiko_mcp.connection.get_all_device_params")
+def test_run_show_command_on_group_explicit_save_disables_auto_save(
+    mock_all_params: MagicMock,
+    mock_validate: MagicMock,
+    mock_run: MagicMock,
+    mock_settings: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """With save_output=True, _auto_save=False is passed so run_show_command
+    returns raw output and the group runner handles the save."""
+    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}}
+    mock_settings.max_workers = 10
+    mock_settings.save_output_dir = str(tmp_path)
+    mock_run.return_value = "raw output"
+
+    result = run_show_command_on_group("core", "show version", save_output=True)
+
+    # Verify _auto_save=False was passed (save_output=True → auto-save disabled)
+    call_kwargs = mock_run.call_args_list[0][1]
+    assert call_kwargs["_auto_save"] is False
+    # Group runner saves and returns consistent message format
+    assert result["rtr1"].startswith("Output saved as '")
 
 
 # ---------------------------------------------------------------------------
@@ -657,7 +1038,8 @@ def test_read_device_output_success(mock_settings: MagicMock, tmp_path: Path) ->
     )
 
     result = read_device_output("cisco1", "show_version_20260607_120000.txt")
-    assert result == "IOS output here"
+    assert "IOS output here" in result
+    assert result.startswith("Lines 1-1 of 1.")
 
 
 @patch("netmiko_mcp.connection.settings")
@@ -760,6 +1142,7 @@ def test_run_show_command_transcript_captured(
 ) -> None:
     """When audit_log_read_transcript is True, save_channel_transcript should be called."""
     mock_settings.audit_log_read_transcript = True
+    mock_settings.save_threshold = 1000
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 
@@ -770,6 +1153,9 @@ def test_run_show_command_transcript_captured(
     result = run_show_command("rtr1", "show version")
 
     assert result == "IOS output"
+    mock_transcript.assert_called_once()
+    call_args = mock_transcript.call_args
+    assert call_args.args[1] == "rtr1"  # device_name
     mock_transcript.assert_called_once()
     call_args = mock_transcript.call_args
     assert call_args.args[1] == "rtr1"  # device_name
@@ -789,6 +1175,7 @@ def test_run_show_command_no_transcript_when_disabled(
 ) -> None:
     """When audit_log_read_transcript is False, save_channel_transcript should not be called."""
     mock_settings.audit_log_read_transcript = False
+    mock_settings.save_threshold = 1000
     mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 

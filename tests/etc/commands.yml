@@ -5,6 +5,7 @@
 
 allowed_commands:
   - "show version"
+  - "show interfaces"
 
 # Explicitly denied commands/substrings (these override allowed_commands)
 denied_commands:

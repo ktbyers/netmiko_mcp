@@ -77,10 +77,12 @@ def run_show_command(
     device_name: str,
     command: str,
     use_textfsm: bool = False,
+    save_output: bool = False,
     *,
     _tool_name: str = "send_show_command",
     _correlation_id: str | None = None,
     _preloaded_params: dict[str, Any] | None = None,
+    _auto_save: bool = True,
 ) -> str | list[Any] | dict[str, Any]:
     """
     Connect to a network device and execute a single show command.
@@ -187,6 +189,34 @@ def run_show_command(
                 # logging pipeline.
                 audit_context.log_outcome(OUTCOME_ERROR, detail=traceback.format_exc())
                 return f"Execution Error: An unexpected error occurred: {str(e)}"
+
+            # Explicit save requested — persist output to disk regardless of size.
+            # Takes priority over the threshold-based auto-save below.
+            if save_output:
+                saved_path_str = _save_device_output(device_name, command, final_output)
+                saved_filename = Path(saved_path_str).name
+                final_output = f"Output saved as '{saved_filename}'."
+            # Automatically save output that exceeds the configured line threshold
+            # rather than returning it inline. This prevents large outputs (e.g. a
+            # full BGP table) from overwhelming the LLM's context window. The full
+            # path is not included in the return message — the client should use
+            # list_device_outputs and read_device_output to retrieve the content.
+            elif _auto_save:
+                as_str = (
+                    json.dumps(final_output, indent=2)
+                    if isinstance(final_output, (list, dict))
+                    else str(final_output)
+                )
+                line_count = len(as_str.splitlines())
+                if line_count > settings.save_threshold:
+                    saved_path_str = _save_device_output(device_name, command, final_output)
+                    saved_filename = Path(saved_path_str).name
+                    final_output = (
+                        f"Output too large to return inline ({line_count:,} lines, "
+                        f"exceeds save_threshold of {settings.save_threshold:,}). "
+                        f"Automatically saved as '{saved_filename}'. "
+                        f"Use read_device_output to retrieve it."
+                    )
 
             if session_log_buf is not None:
                 save_channel_transcript(correlation_id, device_name, session_log_buf.getvalue())
@@ -318,17 +348,26 @@ def list_device_outputs(device_or_group: str) -> dict[str, Any]:
     return result
 
 
-def read_device_output(device_name: str, filename: str) -> str:
-    """Read a previously saved output file for a specific device.
+def read_device_output(
+    device_name: str,
+    filename: str,
+    offset: int = 0,
+    limit: int = 500,
+) -> str:
+    """Read a previously saved output file for a specific device, with pagination.
 
     Both device_name and filename are validated to prevent path traversal attacks.
 
     Args:
         device_name: The device name whose output directory to read from.
         filename: The exact filename as returned by list_device_outputs.
+        offset: Line number to start reading from (0-indexed). Defaults to 0.
+        limit: Maximum number of lines to return. Defaults to 500.
 
     Returns:
-        The file content as a string, or an error message.
+        A paginated slice of the file with a header showing line range and total,
+        plus a continuation hint when more lines remain. Returns an error message
+        string on validation failure or if the file is not found.
     """
     try:
         _validate_path_component(device_name, "device name")
@@ -355,7 +394,30 @@ def read_device_output(device_name: str, filename: str) -> str:
     if not file_path.is_file():
         return f"Error: File '{filename}' not found for device '{device_name}'."
 
-    return file_path.read_text(encoding="utf-8")
+    content = file_path.read_text(encoding="utf-8")
+    lines = content.splitlines()
+    total = len(lines)
+
+    if total == 0:
+        return "Lines 0-0 of 0.\n"
+
+    if offset >= total:
+        return (
+            f"Error: offset {offset} is beyond end of file "
+            f"({total} line{'s' if total != 1 else ''})."
+        )
+
+    end = min(offset + limit, total)
+    page = lines[offset:end]
+
+    display_start = offset + 1  # 1-indexed for readability
+    if end < total:
+        continuation = f" Call read_device_output with offset={end} to continue."
+    else:
+        continuation = ""
+
+    header = f"Lines {display_start}-{end} of {total}.{continuation}"
+    return header + "\n" + "\n".join(page)
 
 
 def run_show_command_on_group(
@@ -415,8 +477,10 @@ def run_show_command_on_group(
                 name,
                 command,
                 use_textfsm,
+                False,  # save_output=False — group runner handles explicit saves
                 _tool_name="send_show_command_to_group",
                 _preloaded_params=params,
+                _auto_save=not save_output,  # auto-save applies only when not explicitly saving
             ): name
             for name, params in all_device_params.items()
         }
@@ -425,9 +489,9 @@ def run_show_command_on_group(
             try:
                 output = future.result()
                 if save_output:
-                    results[device_name] = (
-                        f"Saved to: {_save_device_output(device_name, command, output)}"
-                    )
+                    saved_path_str = _save_device_output(device_name, command, output)
+                    saved_filename = Path(saved_path_str).name
+                    results[device_name] = f"Output saved as '{saved_filename}'."
                 else:
                     results[device_name] = output
             except Exception as e:
