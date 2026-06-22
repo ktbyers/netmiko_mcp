@@ -35,7 +35,8 @@ defaults.
 | `unsafe_chars` | `list[str]` | `[";", "\n", "\r", "&"]` | `NETMIKO_MCP_UNSAFE_CHARS` | Characters unconditionally rejected before any validation. See [commands.md — Unsafe Characters](commands.md#unsafe-characters). |
 | `pipe_modifiers` | `list[str]` | `["include", "exclude", "section", "begin", "count"]` | `NETMIKO_MCP_PIPE_MODIFIERS` | Permitted keywords after a pipe operator. See [commands.md — Pipe Support](commands.md#pipe-support). |
 | `max_workers` | `int` | `10` | `NETMIKO_MCP_MAX_WORKERS` | Maximum concurrent threads used by `send_show_command_to_group`. |
-| `save_output_dir` | `string` | `"~/.netmiko_mcp_tmp"` | `NETMIKO_MCP_SAVE_OUTPUT_DIR` | Base directory for per-device output files written when `send_show_command_to_group` is called with `save_output=True`. Created with mode `0o700`. |
+| `save_output_dir` | `string` | `"~/.netmiko_mcp_tmp"` | `NETMIKO_MCP_SAVE_OUTPUT_DIR` | Base directory for per-device output files written when `save_output=True` is passed to either `send_show_command` or `send_show_command_to_group`, or when output is automatically saved due to `save_threshold`. Created with mode `0o700`. |
+| `save_threshold` | `int` | `1000` | `NETMIKO_MCP_SAVE_THRESHOLD` | Line count above which command output is automatically saved to `save_output_dir` instead of being returned inline. Applies to both `send_show_command` and `send_show_command_to_group` (when `save_output=False`). The LLM receives a notification with the filename and instructions to use `read_device_output`. |
 
 ### HTTP Transport
 
@@ -164,13 +165,31 @@ max_workers: 10
 
 ### `save_output_dir`
 
-Base directory where per-device output files are written when `send_show_command_to_group`
-is called with `save_output=True`. Each device gets its own subdirectory named after the
-device. The base directory and all subdirectories are created with mode `0o700`; individual
-files are created with mode `0o600`. Tilde expansion is supported.
+Base directory where per-device output files are written. Used by both `send_show_command`
+and `send_show_command_to_group` whenever output is saved — whether because `save_output=True`
+was passed explicitly, or because the output exceeded `save_threshold` and was auto-saved.
+Each device gets its own subdirectory named after the device. The base directory and all
+subdirectories are created with mode `0o700`; individual files are created with mode `0o600`.
+Tilde expansion is supported.
 
 ```yaml
 save_output_dir: "~/.netmiko_mcp_tmp"
+```
+<br />
+
+### `save_threshold`
+
+The line count above which command output is automatically saved to `save_output_dir` instead
+of being returned inline to the LLM. Applies to both `send_show_command` (single device) and
+`send_show_command_to_group` (per device, when `save_output=False`). When auto-save triggers,
+the LLM receives a notification containing the saved filename and instructions to use
+`read_device_output` with `offset`/`limit` to retrieve the content incrementally.
+
+The saved filename (not the full path) is included in the notification to avoid exposing
+server filesystem layout to the LLM client.
+
+```yaml
+save_threshold: 1000
 ```
 <br />
 <br />
@@ -367,6 +386,7 @@ unsafe_chars: [";", "\n", "\r", "&"]
 # Concurrency and output storage
 max_workers: 10
 save_output_dir: "~/.netmiko_mcp_tmp"
+save_threshold: 1000
 
 # HTTP transport (stdio is the default — uncomment to enable HTTP)
 # transport: "streamable-http"
