@@ -334,8 +334,7 @@ def save_channel_transcript(
     Transcript files are named by timestamp, correlation ID, and device so they
     can be joined with audit event records during incident investigation. The
     transcript directory is not automatically cleaned up — the operator is
-    responsible for log rotation and disk management (e.g. using logrotate or a
-    cron job to prune files older than a retention period).
+    responsible for log rotation and disk management.
 
     This function should only be called when audit_log_read_transcript is True.
     The caller is responsible for checking the setting before creating the
