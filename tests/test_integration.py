@@ -319,6 +319,81 @@ async def test_list_and_read_device_output_roundtrip(mcp_client: ClientSession) 
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
+async def test_read_device_output_pagination(mcp_client: ClientSession) -> None:
+    """Pagination round-trip: save show interfaces output, then read it back in 20-line pages.
+
+    Verifies that:
+    - The first page header correctly shows 'Lines 1-20 of N'
+    - A continuation hint is present when more lines remain
+    - The second page header correctly shows 'Lines 21-40 of N'
+    - Content from each page is distinct (no overlap)
+    """
+    # Step 1 — save 'show interfaces' output explicitly so we have a known file to paginate.
+    # show interfaces typically produces well over 40 lines on any real IOS device.
+    save_result = await mcp_client.call_tool(
+        "send_show_command_to_group",
+        arguments={"device_or_group": "cisco1", "command": "show interfaces", "save_output": True},
+    )
+    saved = json.loads(getattr(save_result.content[0], "text", ""))
+    assert "cisco1" in saved, f"Expected cisco1 in save result: {saved}"
+
+    # Step 2 — list saved files to get the filename.
+    list_result = await mcp_client.call_tool(
+        "list_device_outputs",
+        arguments={"device_or_group": "cisco1"},
+    )
+    listing = json.loads(getattr(list_result.content[0], "text", ""))
+    assert "cisco1" in listing and len(listing["cisco1"]) >= 1, (
+        f"No saved files found for cisco1: {listing}"
+    )
+    filename = listing["cisco1"][0]  # newest file first
+
+    # Step 3 — read page 1 (lines 1-20).
+    page1_result = await mcp_client.call_tool(
+        "read_device_output",
+        arguments={"device_name": "cisco1", "filename": filename, "offset": 0, "limit": 20},
+    )
+    page1 = getattr(page1_result.content[0], "text", "")
+    page1_lines = page1.splitlines()
+
+    # Header is always the first line.
+    assert page1_lines[0].startswith("Lines 1-20 of "), (
+        f"Unexpected page 1 header: {page1_lines[0]!r}"
+    )
+    total_lines = int(page1_lines[0].split(" of ")[1].split(".")[0])
+    assert total_lines > 20, (
+        f"Expected more than 20 total lines for show interfaces, got {total_lines}"
+    )
+    assert "offset=20" in page1_lines[0], (
+        f"Expected continuation hint with offset=20 in header: {page1_lines[0]!r}"
+    )
+    # 20 content lines follow the header.
+    assert len(page1_lines) == 21, f"Expected 1 header + 20 content lines, got {len(page1_lines)}"
+
+    # Step 4 — read page 2 (lines 21-40).
+    page2_result = await mcp_client.call_tool(
+        "read_device_output",
+        arguments={"device_name": "cisco1", "filename": filename, "offset": 20, "limit": 20},
+    )
+    page2 = getattr(page2_result.content[0], "text", "")
+    page2_lines = page2.splitlines()
+
+    assert page2_lines[0].startswith("Lines 21-40 of "), (
+        f"Unexpected page 2 header: {page2_lines[0]!r}"
+    )
+    # Content of page 2 must differ from page 1 — no overlap.
+    page1_content = set(page1_lines[1:])
+    page2_content = set(page2_lines[1:])
+    assert not page1_content & page2_content, (
+        f"Pages 1 and 2 share content lines: {page1_content & page2_content}"
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
+)
 async def test_group_command_security_block(mcp_client: ClientSession) -> None:
     """A blocked command hard-stops without connecting to any device.
     Uses 'show running-config' which is not in the allowed_commands list —
