@@ -20,11 +20,8 @@ from netmiko_mcp.connection import (
 from netmiko_mcp.http_auth import BearerTokenMiddleware
 from netmiko_mcp.inventory import get_group_names, get_sanitized_inventory
 
-# Stores a startup error message when the server is running in stdio mode and a
-# required config file is missing. Set once in _validate_startup() and never
-# modified again. All tools check this via @check_startup_error and return the
-# error instead of executing, so the failure surfaces in-session rather than
-# being swallowed by the MCP client.
+# Set once by _validate_startup() for stdio startup failures. All tools return
+# it immediately via @check_startup_error so errors surface in-session.
 _startup_error: str | None = None
 
 _F = TypeVar("_F", bound=Callable[..., Any])
