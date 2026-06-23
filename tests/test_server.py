@@ -6,6 +6,7 @@ import pytest
 
 import netmiko_mcp.server as server_module
 from netmiko_mcp.server import (
+    check_startup_error,
     _validate_startup,
     list_device_outputs,
     list_devices,
@@ -375,6 +376,20 @@ def test_main_sets_startup_error_on_missing_command_file_stdio(
             mock_mcp.run.assert_called_once_with(transport="stdio")
     finally:
         server_module._startup_error = original
+
+
+def test_check_startup_error_decorator_preserves_function_metadata() -> None:
+    """check_startup_error must preserve __name__, __doc__, and __annotations__
+    so FastMCP generates the correct tool schema for the wrapped function."""
+
+    @check_startup_error
+    def my_tool(device: str) -> str:
+        """My tool docstring."""
+        return device
+
+    assert my_tool.__name__ == "my_tool"
+    assert my_tool.__doc__ == "My tool docstring."
+    assert my_tool.__annotations__ == {"device": str, "return": str}
 
 
 @patch("netmiko_mcp.server.settings")
