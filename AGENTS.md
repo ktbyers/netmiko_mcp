@@ -8,8 +8,6 @@
 
 ## Architecture & Design
 
-- Refer to the `ARCHITECTURE.md` file in the root directory for high-level architecture
-  decisions, structural guardrails, state management, and security constraints.
 - **Refactoring:** Major code refactoring must always be reviewed and approved prior to proceeding.
 
 ## Package Management
@@ -54,7 +52,7 @@
 
 - All files under `skills/` are written **for LLMs, not humans**. They are injected directly into LLM context and should be optimized accordingly: dense, structured, reference-first. No orientation prose, no motivational language, no callout boxes (`>` blockquotes). Every sentence should be a fact or a rule.
 - Do not add narrative introductions, "why" explanations, or human-friendly transitions to skill files. If an LLM needs to know a rule, state it directly.
-- `README.md`, `ARCHITECTURE.md`, and `TODO.md` are human-facing documents and should be written accordingly. Everything else — including all files under `skills/` and `docs/` — should be written with an LLM consumer in mind.
+- `README.md` and `TODO.md` are human-facing documents and should be written accordingly. Everything else — including all files under `skills/` and `docs/` — should be written with an LLM consumer in mind.
 
 ## Documentation Style
 
