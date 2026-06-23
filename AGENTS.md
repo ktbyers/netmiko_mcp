@@ -92,6 +92,30 @@
 
 - **NEVER inspect or print environment variables.** Do not run `printenv`, `env`, `echo $VAR`, or any equivalent command that would reveal environment variable values. Environment variables in this project contain secrets (encryption keys, bearer tokens, device passwords). Exposing them in output visible to an LLM is a serious security violation.
 
+## Live Device Testing
+
+Live integration tests require the following setup before running `RUN_LIVE_TESTS=1 pytest`:
+
+**`tests/etc/.netmiko.yml`** — gitignored, must be created manually. This file contains device credentials and is never committed. If it does not exist, all live test fixtures will skip with a clear message rather than falling back to `~/.netmiko.yml`. The inventory must contain device entries and group definitions matching the values in `tests/etc/responses.yml` (defaults: devices `cisco1`, `cisco2`, group `cisco`).
+
+**`NETMIKO_TOOLS_KEY`** — must be set in the environment if the inventory uses encrypted credentials.
+
+**`tests/etc/responses.yml`** — already committed. Edit this file to adjust expected device names, group names, and output patterns to match your lab. No test code changes are needed.
+
+Everything else (`tests/etc/netmiko-mcp.yml`, `tests/etc/commands.yml`) is committed and requires no setup.
+
+To run the full live test suite:
+
+```bash
+RUN_LIVE_TESTS=1 uv run --frozen pytest -v tests/test_integration.py
+```
+
+To run a single live test:
+
+```bash
+RUN_LIVE_TESTS=1 uv run --frozen pytest -v tests/test_integration.py::test_live_device_connection
+```
+
 ## Configuration & Paths
 - **Global Config:** The MCP Server uses `pydantic-settings` centralized in `src/netmiko_mcp/config.py`. It reads natively from `~/.netmiko-mcp.yml` (and other custom profiles) with strict precedence handling managed via the `settings_customise_sources` classmethod. Environment variables prefixed with `NETMIKO_MCP_` always take precedence over keys in the physical YAML config.
 - **Paths:** Always use the `pathlib.Path` module for file operations instead of `os.path`.

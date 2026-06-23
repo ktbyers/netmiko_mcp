@@ -1,0 +1,23 @@
+---
+# Expected values for live integration tests.
+# Edit these to match your test environment — no test code changes required.
+
+# Single device used for single-device tests
+test_device: "cisco1"
+test_device_type: "cisco_ios"
+
+# Group used for group tests
+test_group: "cisco"
+test_group_min_devices: 2
+
+# Devices expected in tests targeting the "all" group
+all_group_expected_devices:
+  - "cisco1"
+  - "cisco2"
+
+# Expected strings in show version output
+show_version_contains: "Cisco IOS Software"
+
+# Expected behavior of 'show version | include Version'
+show_version_pipe_contains: "Version"
+show_version_pipe_excludes: "uptime is"
