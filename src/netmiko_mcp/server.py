@@ -18,6 +18,12 @@ from netmiko_mcp.connection import (
 from netmiko_mcp.http_auth import BearerTokenMiddleware
 from netmiko_mcp.inventory import get_group_names, get_sanitized_inventory
 
+# Stores a startup error message when the server is running in stdio mode and a
+# required config file is missing. Set once in main() and never modified again.
+# All tools check this and return the error instead of executing, so the failure
+# surfaces in-session rather than being swallowed by the MCP client.
+_startup_error: str | None = None
+
 # Initialize the FastMCP server. The HTTP settings (host, port, path) are passed
 # here so that streamable_http_app() uses the operator-configured values when the
 # HTTP transport is selected. They have no effect in stdio mode.
@@ -36,6 +42,8 @@ def list_groups() -> str:
     List all device groups defined in the inventory.
     Returns a JSON-encoded list of group name strings.
     """
+    if _startup_error:
+        return json.dumps({"error": _startup_error})
     log_tool_invocation(tool="list_groups", arguments={})
     try:
         return json.dumps(get_group_names())
@@ -50,6 +58,8 @@ def list_devices(device_or_group: str = "all") -> str:
     You can query by 'all' (default), a specific 'group-name', or a 'device-name'.
     Returns a JSON string containing device configurations (excluding credentials).
     """
+    if _startup_error:
+        return json.dumps({"error": _startup_error})
     log_tool_invocation(tool="list_devices", arguments={"device_or_group": device_or_group})
     return get_sanitized_inventory(device_or_group)
 
@@ -77,6 +87,8 @@ def send_show_command(
     is returned instead. Use list_device_outputs and read_device_output to retrieve
     the saved content.
     """
+    if _startup_error:
+        return _startup_error
     return run_show_command(device_name, command, use_textfsm, save_output)
 
 
@@ -100,6 +112,8 @@ def send_show_command_to_group(
     Returns:
         A dict mapping each device name to its output (or saved file path).
     """
+    if _startup_error:
+        return {"error": _startup_error}
     return run_show_command_on_group(device_or_group, command, use_textfsm, save_output)
 
 
@@ -115,6 +129,8 @@ def list_device_outputs(device_or_group: str) -> dict[str, Any]:
         A dict mapping each device name to a list of saved filenames (newest first).
         Devices with no saved output are included with an empty list.
     """
+    if _startup_error:
+        return {"error": _startup_error}
     log_tool_invocation(tool="list_device_outputs", arguments={"device_or_group": device_or_group})
     return _list_device_outputs(device_or_group)
 
@@ -138,6 +154,8 @@ def read_device_output(
     The response header shows the line range and total line count. If more lines
     remain, a continuation hint tells you which offset to use on the next call.
     """
+    if _startup_error:
+        return _startup_error
     log_tool_invocation(
         tool="read_device_output",
         arguments={
@@ -153,6 +171,8 @@ def read_device_output(
 @mcp.tool()
 def ping() -> str:
     """A simple health check tool to verify the MCP server is responding."""
+    if _startup_error:
+        return _startup_error
     log_tool_invocation(tool="ping", arguments={})
     return "pong"
 
@@ -178,20 +198,25 @@ def _get_bearer_token() -> str:
 def _validate_startup() -> None:
     """Validate required configuration before starting the server.
 
-    Raises SystemExit with a clear message if the command_file does not exist,
-    preventing the server from running in a state where all commands are silently denied.
-    When transport is streamable-http and http_auth_enabled is true, also validates
-    that NETMIKO_MCP_HTTP_BEARER_TOKEN is set.
-    """
-    command_file = Path(settings.command_file).expanduser()
-    if not command_file.is_file():
-        raise SystemExit(
-            f"Startup Error: command_file '{settings.command_file}' does not exist. "
-            f"Create this file with your allowed_commands before starting the server."
-        )
+    For the streamable-http transport, raises SystemExit if command_file does not
+    exist or if NETMIKO_MCP_HTTP_BEARER_TOKEN is not set — both errors are visible
+    to the operator in the terminal where the server is started manually.
 
-    if settings.transport == "streamable-http" and settings.http_auth_enabled:
-        _get_bearer_token()
+    For the stdio transport, only the bearer token check is skipped (it does not
+    apply). The command_file check is intentionally NOT performed here for stdio —
+    instead, main() stores any missing-file error in _startup_error so the MCP
+    handshake can complete and the error surfaces through tool responses rather
+    than being swallowed by the client.
+    """
+    if settings.transport == "streamable-http":
+        command_file = Path(settings.command_file).expanduser()
+        if not command_file.is_file():
+            raise SystemExit(
+                f"Startup Error: command_file '{settings.command_file}' does not exist. "
+                f"Create this file with your allowed_commands before starting the server."
+            )
+        if settings.http_auth_enabled:
+            _get_bearer_token()
 
 
 def _run_http() -> None:
@@ -215,11 +240,18 @@ def _run_http() -> None:
 
 def main() -> None:
     """Entry point for the Netmiko MCP server."""
+    global _startup_error
     _validate_startup()
     configure_audit_logger()
     if settings.transport == "streamable-http":
         _run_http()
     else:
+        command_file = Path(settings.command_file).expanduser()
+        if not command_file.is_file():
+            _startup_error = (
+                f"Startup Error: command_file '{settings.command_file}' does not exist. "
+                f"Create this file with your allowed_commands before starting the server."
+            )
         mcp.run(transport="stdio")
 
 

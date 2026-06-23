@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+import netmiko_mcp.server as server_module
 from netmiko_mcp.server import (
     _validate_startup,
     list_device_outputs,
@@ -23,12 +24,28 @@ from netmiko_mcp.server import (
 
 
 @patch("netmiko_mcp.server.settings")
-def test_validate_startup_missing_command_file(mock_settings: Any, tmp_path: Path) -> None:
-    """Server should refuse to start if command_file does not exist."""
+def test_validate_startup_missing_command_file_http_raises(
+    mock_settings: Any, tmp_path: Path
+) -> None:
+    """In HTTP mode, _validate_startup should raise SystemExit if command_file does not exist."""
     mock_settings.command_file = str(tmp_path / "nonexistent.yml")
-    mock_settings.transport = "stdio"
+    mock_settings.transport = "streamable-http"
+    mock_settings.http_auth_enabled = False
     with pytest.raises(SystemExit, match="Startup Error"):
         _validate_startup()
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_missing_command_file_stdio_does_not_raise(
+    mock_settings: Any, tmp_path: Path
+) -> None:
+    """In stdio mode, _validate_startup should not raise for a missing command_file.
+    The error is deferred to main() so the MCP handshake can complete.
+    """
+    mock_settings.command_file = str(tmp_path / "nonexistent.yml")
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+    _validate_startup()  # should not raise
 
 
 @patch("netmiko_mcp.server.settings")
@@ -38,15 +55,17 @@ def test_validate_startup_valid_command_file(mock_settings: Any, tmp_path: Path)
     cmd_file.write_text("allowed_commands: []\n", encoding="utf-8")
     mock_settings.command_file = str(cmd_file)
     mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
     _validate_startup()  # should not raise
 
 
 @patch("netmiko_mcp.server.settings")
 def test_validate_startup_error_message_contains_path(mock_settings: Any, tmp_path: Path) -> None:
-    """The startup error message should include the configured path."""
+    """In HTTP mode, the startup error message should include the configured path."""
     bad_path = str(tmp_path / "missing.yml")
     mock_settings.command_file = bad_path
-    mock_settings.transport = "stdio"
+    mock_settings.transport = "streamable-http"
+    mock_settings.http_auth_enabled = False
     with pytest.raises(SystemExit, match=bad_path):
         _validate_startup()
 
@@ -217,8 +236,147 @@ def test_main_calls_configure_audit_logger(mock_settings: Any, mock_configure: A
         tmp = f.name
     try:
         mock_settings.command_file = tmp
+        mock_settings.transport = "stdio"
+        mock_settings.http_auth_enabled = False
         with patch("netmiko_mcp.server.mcp"):
             main()
         mock_configure.assert_called_once()
     finally:
         os.unlink(tmp)
+
+
+# ---------------------------------------------------------------------------
+# _startup_error — stdio degraded mode
+# ---------------------------------------------------------------------------
+
+
+def test_ping_returns_startup_error_when_set() -> None:
+    """ping should return the startup error string instead of 'pong' when set."""
+    original = server_module._startup_error
+    try:
+        server_module._startup_error = (
+            "Startup Error: command_file '~/commands.yml' does not exist."
+        )
+        result = ping()
+        assert result == server_module._startup_error
+    finally:
+        server_module._startup_error = original
+
+
+def test_ping_returns_pong_when_no_startup_error() -> None:
+    """ping should return 'pong' when _startup_error is None."""
+    original = server_module._startup_error
+    try:
+        server_module._startup_error = None
+        assert ping() == "pong"
+    finally:
+        server_module._startup_error = original
+
+
+def test_list_groups_returns_startup_error_when_set() -> None:
+    """list_groups should return a JSON error when _startup_error is set."""
+    import json
+
+    original = server_module._startup_error
+    try:
+        server_module._startup_error = "Startup Error: command_file missing."
+        result = json.loads(list_groups())
+        assert "error" in result
+        assert result["error"] == server_module._startup_error
+    finally:
+        server_module._startup_error = original
+
+
+def test_list_devices_returns_startup_error_when_set() -> None:
+    """list_devices should return a JSON error when _startup_error is set."""
+    import json
+
+    original = server_module._startup_error
+    try:
+        server_module._startup_error = "Startup Error: command_file missing."
+        result = json.loads(list_devices())
+        assert "error" in result
+        assert result["error"] == server_module._startup_error
+    finally:
+        server_module._startup_error = original
+
+
+def test_send_show_command_returns_startup_error_when_set() -> None:
+    """send_show_command should return the startup error string when _startup_error is set."""
+    original = server_module._startup_error
+    try:
+        server_module._startup_error = "Startup Error: command_file missing."
+        result = send_show_command("rtr1", "show version")
+        assert result == server_module._startup_error
+    finally:
+        server_module._startup_error = original
+
+
+def test_send_show_command_to_group_returns_startup_error_when_set() -> None:
+    """send_show_command_to_group should return an error dict when _startup_error is set."""
+    original = server_module._startup_error
+    try:
+        server_module._startup_error = "Startup Error: command_file missing."
+        result = send_show_command_to_group("core", "show version")
+        assert "error" in result
+        assert result["error"] == server_module._startup_error
+    finally:
+        server_module._startup_error = original
+
+
+def test_list_device_outputs_returns_startup_error_when_set() -> None:
+    """list_device_outputs should return an error dict when _startup_error is set."""
+    original = server_module._startup_error
+    try:
+        server_module._startup_error = "Startup Error: command_file missing."
+        result = list_device_outputs("cisco")
+        assert "error" in result
+        assert result["error"] == server_module._startup_error
+    finally:
+        server_module._startup_error = original
+
+
+def test_read_device_output_returns_startup_error_when_set() -> None:
+    """read_device_output should return the startup error string when _startup_error is set."""
+    original = server_module._startup_error
+    try:
+        server_module._startup_error = "Startup Error: command_file missing."
+        result = read_device_output("cisco1", "show_version.txt")
+        assert result == server_module._startup_error
+    finally:
+        server_module._startup_error = original
+
+
+@patch("netmiko_mcp.server.configure_audit_logger")
+@patch("netmiko_mcp.server.settings")
+def test_main_sets_startup_error_on_missing_command_file_stdio(
+    mock_settings: Any, mock_configure: Any
+) -> None:
+    """main() should set _startup_error and still start the server when command_file
+    is missing in stdio mode."""
+    original = server_module._startup_error
+    try:
+        mock_settings.command_file = "/nonexistent/commands.yml"
+        mock_settings.transport = "stdio"
+        mock_settings.http_auth_enabled = False
+        with patch("netmiko_mcp.server.mcp") as mock_mcp:
+            from netmiko_mcp.server import main
+
+            main()
+            mock_mcp.run.assert_called_once_with(transport="stdio")
+        assert server_module._startup_error is not None
+        assert "command_file" in server_module._startup_error
+    finally:
+        server_module._startup_error = original
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_raises_on_missing_command_file_http(
+    mock_settings: Any, tmp_path: Any
+) -> None:
+    """_validate_startup() should raise SystemExit for missing command_file in HTTP mode."""
+    mock_settings.transport = "streamable-http"
+    mock_settings.command_file = str(tmp_path / "nonexistent.yml")
+    mock_settings.http_auth_enabled = False
+    with pytest.raises(SystemExit, match="command_file"):
+        _validate_startup()
