@@ -202,21 +202,25 @@ def _validate_startup() -> None:
     exist or if NETMIKO_MCP_HTTP_BEARER_TOKEN is not set — both errors are visible
     to the operator in the terminal where the server is started manually.
 
-    For the stdio transport, only the bearer token check is skipped (it does not
-    apply). The command_file check is intentionally NOT performed here for stdio —
-    instead, main() stores any missing-file error in _startup_error so the MCP
-    handshake can complete and the error surfaces through tool responses rather
-    than being swallowed by the client.
+    For the stdio transport, a missing command_file is stored in _startup_error so
+    the MCP handshake can complete and the error surfaces through tool responses
+    rather than being swallowed by the client.
     """
-    if settings.transport == "streamable-http":
-        command_file = Path(settings.command_file).expanduser()
-        if not command_file.is_file():
+    global _startup_error
+    command_file = Path(settings.command_file).expanduser()
+    if not command_file.is_file():
+        if settings.transport == "streamable-http":
             raise SystemExit(
                 f"Startup Error: command_file '{settings.command_file}' does not exist. "
                 f"Create this file with your allowed_commands before starting the server."
             )
-        if settings.http_auth_enabled:
-            _get_bearer_token()
+        else:
+            _startup_error = (
+                f"Startup Error: command_file '{settings.command_file}' does not exist. "
+                f"Create this file with your allowed_commands before starting the server."
+            )
+    if settings.transport == "streamable-http" and settings.http_auth_enabled:
+        _get_bearer_token()
 
 
 def _run_http() -> None:
@@ -240,18 +244,11 @@ def _run_http() -> None:
 
 def main() -> None:
     """Entry point for the Netmiko MCP server."""
-    global _startup_error
     _validate_startup()
     configure_audit_logger()
     if settings.transport == "streamable-http":
         _run_http()
     else:
-        command_file = Path(settings.command_file).expanduser()
-        if not command_file.is_file():
-            _startup_error = (
-                f"Startup Error: command_file '{settings.command_file}' does not exist. "
-                f"Create this file with your allowed_commands before starting the server."
-            )
         mcp.run(transport="stdio")
 
 
