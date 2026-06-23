@@ -22,6 +22,10 @@
 - Upgrading a specific package: `uv lock --upgrade-package <package>`
 - FORBIDDEN: `uv pip install`, `@latest` syntax
 
+## MCP Tool Implementation Rules
+
+- **Every tool must check `_startup_error` at entry.** If `_startup_error` is not `None`, the tool must return it immediately without executing. This ensures that a missing `command_file` (or any other startup failure captured in `_startup_error`) surfaces in-session through any tool call rather than being swallowed by the MCP client on stdio transport. New tools that do not follow this rule will silently misbehave when the server is misconfigured.
+
 ## Code Quality
 
 - Type hints required for all code
