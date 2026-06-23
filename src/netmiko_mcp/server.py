@@ -212,14 +212,29 @@ def _get_bearer_token() -> str:
 def _validate_startup() -> str | None:
     """Validate required configuration before starting the server.
 
-    For the streamable-http transport, raises SystemExit if command_file does not
-    exist or if NETMIKO_MCP_HTTP_BEARER_TOKEN is not set — both errors are visible
-    to the operator in the terminal where the server is started manually.
+    For the streamable-http transport, raises SystemExit if NETMIKO_MCP_CONFIG
+    points at a missing file, if command_file does not exist, or if
+    NETMIKO_MCP_HTTP_BEARER_TOKEN is not set — all errors are visible to the
+    operator in the terminal where the server is started manually.
 
-    For the stdio transport, returns an error string if command_file is missing so
-    the caller can surface it in-session rather than raising before the MCP handshake.
+    For the stdio transport, returns an error string for the same file-missing
+    conditions so the caller can surface it in-session rather than raising before
+    the MCP handshake.
     Returns None when all checks pass.
     """
+    config_path_str = os.environ.get("NETMIKO_MCP_CONFIG")
+    if config_path_str:
+        config_path = Path(config_path_str).expanduser()
+        if not config_path.is_file():
+            error_msg = (
+                f"Startup Error: NETMIKO_MCP_CONFIG is set to '{config_path_str}' "
+                f"but that file does not exist."
+            )
+            if settings.transport == "streamable-http":
+                raise SystemExit(error_msg)
+            else:
+                return error_msg
+
     command_file = Path(settings.command_file).expanduser()
     if not command_file.is_file():
         if settings.transport == "streamable-http":

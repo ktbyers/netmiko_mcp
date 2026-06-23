@@ -69,6 +69,105 @@ def test_validate_startup_error_message_contains_path(mock_settings: Any, tmp_pa
         _validate_startup()
 
 
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_explicit_config_missing_http_raises(
+    mock_settings: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In HTTP mode, _validate_startup should raise SystemExit when NETMIKO_MCP_CONFIG
+    is set but the path does not exist."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text("allowed_commands: []\n", encoding="utf-8")
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "streamable-http"
+    mock_settings.http_auth_enabled = False
+
+    bad_config = str(tmp_path / "nonexistent-config.yml")
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", bad_config)
+
+    with pytest.raises(SystemExit, match="NETMIKO_MCP_CONFIG"):
+        _validate_startup()
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_explicit_config_missing_stdio_returns_error(
+    mock_settings: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In stdio mode, _validate_startup should return an error string (not raise) when
+    NETMIKO_MCP_CONFIG is set but the path does not exist."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text("allowed_commands: []\n", encoding="utf-8")
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+
+    bad_config = str(tmp_path / "nonexistent-config.yml")
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", bad_config)
+
+    result = _validate_startup()
+    assert result is not None
+    assert "NETMIKO_MCP_CONFIG" in result
+    assert bad_config in result
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_explicit_config_missing_error_contains_path(
+    mock_settings: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The error message for a missing explicit config must include the configured path
+    so the operator knows exactly what to fix."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text("allowed_commands: []\n", encoding="utf-8")
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+
+    bad_config = str(tmp_path / "typo-config.yml")
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", bad_config)
+
+    result = _validate_startup()
+    assert result is not None
+    assert bad_config in result
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_explicit_config_present_passes(
+    mock_settings: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When NETMIKO_MCP_CONFIG points at a real file, _validate_startup should
+    not raise or return an error for that check."""
+    cfg_file = tmp_path / "netmiko-mcp.yml"
+    cfg_file.write_text("allow_pipe: false\n", encoding="utf-8")
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text("allowed_commands: []\n", encoding="utf-8")
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+
+    result = _validate_startup()
+    assert result is None
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_no_explicit_config_no_discovery_file_passes(
+    mock_settings: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When NETMIKO_MCP_CONFIG is not set and ~/.netmiko-mcp.yml does not exist,
+    _validate_startup should not raise or return an error — env-var-only and
+    defaults-only deployments are legitimate."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text("allowed_commands: []\n", encoding="utf-8")
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+
+    monkeypatch.delenv("NETMIKO_MCP_CONFIG", raising=False)
+
+    result = _validate_startup()
+    assert result is None
+
+
 # ---------------------------------------------------------------------------
 # MCP tools
 # ---------------------------------------------------------------------------
