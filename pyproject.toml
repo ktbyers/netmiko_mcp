@@ -39,6 +39,7 @@ dev = [
     "pytest-mypy>=1.0.1",
     "ruff>=0.15.15",
     "types-paramiko>=4.0.0.20260518",
+    "types-pyyaml>=6.0.12.20260518",
 ]
 
 [tool.uv]

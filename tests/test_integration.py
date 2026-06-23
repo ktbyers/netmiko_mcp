@@ -2,6 +2,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from mcp.client.session import ClientSession
@@ -22,12 +23,10 @@ async def test_ping_integration(mcp_client: ClientSession) -> None:
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires real inventory file (.netmiko.yml) which is not committed. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_list_groups_integration(mcp_client: ClientSession) -> None:
-    """list_groups returns the groups defined in the test inventory fixture.
-
-    The test fixture (tests/etc/.netmiko.yml) defines one group: 'cisco'.
-    Device entries and __meta__ should not appear in the result.
-    """
+async def test_list_groups_integration(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
+    """list_groups returns the groups defined in the test inventory fixture."""
     result = await mcp_client.call_tool("list_groups", arguments={})
 
     assert len(result.content) == 1
@@ -35,10 +34,10 @@ async def test_list_groups_integration(mcp_client: ClientSession) -> None:
     groups = json.loads(getattr(result.content[0], "text", ""))
 
     assert isinstance(groups, list)
-    assert "cisco" in groups
+    assert test_config["test_group"] in groups
     assert "__meta__" not in groups
-    assert "cisco1" not in groups
-    assert "cisco2" not in groups
+    for device in test_config["all_group_expected_devices"]:
+        assert device not in groups
 
 
 @pytest.mark.anyio
@@ -46,43 +45,39 @@ async def test_list_groups_integration(mcp_client: ClientSession) -> None:
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_live_device_connection(mcp_client: ClientSession) -> None:
-    """
-    End-to-end integration test against a real network device.
-    This simulates an MCP client asking for the inventory, and then executing a command.
-    """
+async def test_live_device_connection(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
+    """End-to-end integration test against a real network device."""
+    device = test_config["test_device"]
+
     # Test the inventory list
-    inv_result = await mcp_client.call_tool("list_devices", arguments={"device_or_group": "cisco1"})
+    inv_result = await mcp_client.call_tool("list_devices", arguments={"device_or_group": device})
 
     assert len(inv_result.content) == 1
     assert inv_result.content[0].type == "text"
     inventory = json.loads(getattr(inv_result.content[0], "text", ""))
 
-    # Assert cisco1 was found and credentials were sanitized
-    assert "cisco1" in inventory
-    assert inventory["cisco1"]["device_type"] == "cisco_ios"
-    assert "password" not in inventory["cisco1"]
+    assert device in inventory
+    assert inventory[device]["device_type"] == test_config["test_device_type"]
+    assert "password" not in inventory[device]
 
     # Test actual execution via the MCP tool
     cmd_result = await mcp_client.call_tool(
         "send_show_command",
-        arguments={"device_name": "cisco1", "command": "show version", "use_textfsm": False},
+        arguments={"device_name": device, "command": "show version", "use_textfsm": False},
     )
 
     assert len(cmd_result.content) == 1
     assert cmd_result.content[0].type == "text"
     output = getattr(cmd_result.content[0], "text", "")
-
-    # Assert the router actually responded with standard IOS output
-    assert (
-        "Cisco IOS Software" in output or "Cisco Internetwork Operating System Software" in output
-    )
+    assert test_config["show_version_contains"] in output
 
     # Test piped execution via the MCP tool
     piped_result = await mcp_client.call_tool(
         "send_show_command",
         arguments={
-            "device_name": "cisco1",
+            "device_name": device,
             "command": "show version | include Version",
             "use_textfsm": False,
         },
@@ -91,15 +86,13 @@ async def test_live_device_connection(mcp_client: ClientSession) -> None:
     assert len(piped_result.content) == 1
     assert piped_result.content[0].type == "text"
     piped_output = getattr(piped_result.content[0], "text", "")
+    assert test_config["show_version_pipe_contains"] in piped_output
+    assert test_config["show_version_pipe_excludes"] not in piped_output
 
-    # Assert the output was correctly filtered by the router
-    assert "Version 15.5(3)M8" in piped_output
-    assert "uptime is" not in piped_output  # Proves the output was filtered
-
-    # 4. Test execution of a benign but explicitly denied piped command
+    # Test execution of a benign but explicitly denied piped command
     cmd_result_denied = await mcp_client.call_tool(
         "send_show_command",
-        arguments={"device_name": "cisco1", "command": "show version | awk", "use_textfsm": False},
+        arguments={"device_name": device, "command": "show version | awk", "use_textfsm": False},
     )
 
     assert len(cmd_result_denied.content) == 1
@@ -107,11 +100,11 @@ async def test_live_device_connection(mcp_client: ClientSession) -> None:
     denied_output = getattr(cmd_result_denied.content[0], "text", "")
     assert "Security Error: Command 'show version | awk' is not permitted" in denied_output
 
-    # 5. Test command injection block against a wildcard pattern in the integration test
+    # Test command injection block
     cmd_result_inject = await mcp_client.call_tool(
         "send_show_command",
         arguments={
-            "device_name": "cisco1",
+            "device_name": device,
             "command": "show version ; reload",
             "use_textfsm": False,
         },
@@ -128,7 +121,9 @@ async def test_live_device_connection(mcp_client: ClientSession) -> None:
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_group_command_raw_output(mcp_client: ClientSession) -> None:
+async def test_group_command_raw_output(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
     """Group command returns a dict keyed by device name with raw output."""
     result = await mcp_client.call_tool(
         "send_show_command_to_group",
@@ -139,16 +134,14 @@ async def test_group_command_raw_output(mcp_client: ClientSession) -> None:
     assert result.content[0].type == "text"
     output = json.loads(getattr(result.content[0], "text", ""))
 
-    # Both devices should be in the result
-    assert "cisco1" in output
-    assert "cisco2" in output
+    for device in test_config["all_group_expected_devices"]:
+        assert device in output
 
-    # Each should contain real IOS output
     for device, text in output.items():
         assert isinstance(text, str), f"{device} output should be a string"
-        assert (
-            "Cisco IOS Software" in text or "Cisco Internetwork Operating System Software" in text
-        ), f"{device} output does not look like IOS: {text[:100]}"
+        assert test_config["show_version_contains"] in text, (
+            f"{device} output does not look like expected: {text[:100]}"
+        )
 
 
 @pytest.mark.anyio
@@ -156,7 +149,9 @@ async def test_group_command_raw_output(mcp_client: ClientSession) -> None:
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_group_command_save_output_false(mcp_client: ClientSession) -> None:
+async def test_group_command_save_output_false(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
     """save_output=False returns raw output, not file paths."""
     result = await mcp_client.call_tool(
         "send_show_command_to_group",
@@ -174,7 +169,9 @@ async def test_group_command_save_output_false(mcp_client: ClientSession) -> Non
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_group_command_save_output_true(mcp_client: ClientSession) -> None:
+async def test_group_command_save_output_true(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
     """save_output=True writes per-device files and returns their paths."""
     result = await mcp_client.call_tool(
         "send_show_command_to_group",
@@ -187,15 +184,13 @@ async def test_group_command_save_output_true(mcp_client: ClientSession) -> None
             f"{device}: expected save notification but got: {value}"
         )
         filename = str(value).split("'")[1]
-        # Verify the file actually exists under save_output_dir
         expected_base = Path("~/.netmiko_mcp_tmp").expanduser()
         file_path = expected_base / device / filename
         assert file_path.exists(), f"Expected file not found: {file_path}"
         content = file_path.read_text(encoding="utf-8")
-        assert (
-            "Cisco IOS Software" in content
-            or "Cisco Internetwork Operating System Software" in content
-        ), f"{device}: saved file does not contain IOS output"
+        assert test_config["show_version_contains"] in content, (
+            f"{device}: saved file does not contain expected output"
+        )
 
 
 @pytest.mark.anyio
@@ -206,15 +201,18 @@ async def test_group_command_save_output_true(mcp_client: ClientSession) -> None
 async def test_group_command_threading(
     mcp_client: ClientSession,
     mcp_client_sequential: ClientSession,
+    test_config: dict[str, Any],
 ) -> None:
     """Parallel execution (max_workers=10) should be significantly faster than sequential
-    (max_workers=1) across the cisco group of 4 devices.
+    (max_workers=1) across the test group.
     """
+    group = test_config["test_group"]
+
     # Sequential run (max_workers=1) — devices connect one at a time
     start = time.monotonic()
     await mcp_client_sequential.call_tool(
         "send_show_command_to_group",
-        arguments={"device_or_group": "cisco", "command": "show version", "save_output": False},
+        arguments={"device_or_group": group, "command": "show version", "save_output": False},
     )
     sequential_elapsed = time.monotonic() - start
 
@@ -222,16 +220,15 @@ async def test_group_command_threading(
     start = time.monotonic()
     result = await mcp_client.call_tool(
         "send_show_command_to_group",
-        arguments={"device_or_group": "cisco", "command": "show version", "save_output": False},
+        arguments={"device_or_group": group, "command": "show version", "save_output": False},
     )
     parallel_elapsed = time.monotonic() - start
 
     output = json.loads(getattr(result.content[0], "text", ""))
-    assert len(output) >= 2, "Expected at least 2 devices in cisco group"
+    assert len(output) >= test_config["test_group_min_devices"], (
+        f"Expected at least {test_config['test_group_min_devices']} devices in {group} group"
+    )
 
-    # With 4 devices, sequential should be significantly slower than parallel.
-    # Require at least 1.5x speedup as a conservative threshold — accounts for
-    # network variability while still proving concurrent execution.
     assert parallel_elapsed < sequential_elapsed / 1.5, (
         f"Parallel ({parallel_elapsed:.2f}s) not 1.5x faster than sequential "
         f"({sequential_elapsed:.2f}s) — threading may not be working correctly"
@@ -243,12 +240,15 @@ async def test_group_command_threading(
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_group_command_textfsm(mcp_client: ClientSession) -> None:
+async def test_group_command_textfsm(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
     """use_textfsm=True returns structured JSON for each device in the group."""
+    group = test_config["test_group"]
     result = await mcp_client.call_tool(
         "send_show_command_to_group",
         arguments={
-            "device_or_group": "cisco",
+            "device_or_group": group,
             "command": "show version",
             "use_textfsm": True,
             "save_output": False,
@@ -258,7 +258,9 @@ async def test_group_command_textfsm(mcp_client: ClientSession) -> None:
     assert len(result.content) == 1
     output = json.loads(getattr(result.content[0], "text", ""))
 
-    assert len(output) >= 2, "Expected at least 2 devices in cisco group"
+    assert len(output) >= test_config["test_group_min_devices"], (
+        f"Expected at least {test_config['test_group_min_devices']} devices in {group} group"
+    )
     for device, data in output.items():
         assert isinstance(data, list), (
             f"{device}: expected parsed list from textfsm but got {type(data).__name__}"
@@ -274,12 +276,16 @@ async def test_group_command_textfsm(mcp_client: ClientSession) -> None:
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_list_and_read_device_output_roundtrip(mcp_client: ClientSession) -> None:
+async def test_list_and_read_device_output_roundtrip(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
     """Full round-trip: save output, list it, read it back and verify content."""
-    # Step 1 — save output for the cisco group
+    group = test_config["test_group"]
+
+    # Step 1 — save output for the test group
     save_result = await mcp_client.call_tool(
         "send_show_command_to_group",
-        arguments={"device_or_group": "cisco", "command": "show version", "save_output": True},
+        arguments={"device_or_group": group, "command": "show version", "save_output": True},
     )
     saved = json.loads(getattr(save_result.content[0], "text", ""))
     assert all(str(v).startswith("Output saved as '") for v in saved.values()), (
@@ -289,7 +295,7 @@ async def test_list_and_read_device_output_roundtrip(mcp_client: ClientSession) 
     # Step 2 — list saved files for the group
     list_result = await mcp_client.call_tool(
         "list_device_outputs",
-        arguments={"device_or_group": "cisco"},
+        arguments={"device_or_group": group},
     )
     listing = json.loads(getattr(list_result.content[0], "text", ""))
     for device in saved:
@@ -304,11 +310,9 @@ async def test_list_and_read_device_output_roundtrip(mcp_client: ClientSession) 
             arguments={"device_name": device, "filename": filename},
         )
         content = getattr(read_result.content[0], "text", "")
-        # Content now includes a pagination header on line 1 followed by the output.
-        assert (
-            "Cisco IOS Software" in content
-            or "Cisco Internetwork Operating System Software" in content
-        ), f"{device}: read content does not look like IOS output"
+        assert test_config["show_version_contains"] in content, (
+            f"{device}: read content does not contain expected output"
+        )
 
 
 @pytest.mark.anyio
@@ -316,34 +320,34 @@ async def test_list_and_read_device_output_roundtrip(mcp_client: ClientSession) 
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_single_device_explicit_save(mcp_client: ClientSession) -> None:
+async def test_single_device_explicit_save(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
     """send_show_command with save_output=True saves to disk and returns a filename notification."""
+    device = test_config["test_device"]
     result = await mcp_client.call_tool(
         "send_show_command",
-        arguments={"device_name": "cisco1", "command": "show version", "save_output": True},
+        arguments={"device_name": device, "command": "show version", "save_output": True},
     )
     text = getattr(result.content[0], "text", "")
 
     assert text.startswith("Output saved as '"), f"Unexpected response: {text!r}"
     filename = text.split("'")[1]
 
-    # Verify the file is listed and readable
     list_result = await mcp_client.call_tool(
-        "list_device_outputs", arguments={"device_or_group": "cisco1"}
+        "list_device_outputs", arguments={"device_or_group": device}
     )
     listing = json.loads(getattr(list_result.content[0], "text", ""))
-    assert filename in listing.get("cisco1", []), (
+    assert filename in listing.get(device, []), (
         f"Saved file '{filename}' not found in listing: {listing}"
     )
 
     read_result = await mcp_client.call_tool(
         "read_device_output",
-        arguments={"device_name": "cisco1", "filename": filename},
+        arguments={"device_name": device, "filename": filename},
     )
     content = getattr(read_result.content[0], "text", "")
-    assert (
-        "Cisco IOS Software" in content or "Cisco Internetwork Operating System Software" in content
-    )
+    assert test_config["show_version_contains"] in content
 
 
 @pytest.mark.anyio
@@ -351,36 +355,36 @@ async def test_single_device_explicit_save(mcp_client: ClientSession) -> None:
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_single_device_auto_save(mcp_client_low_threshold: ClientSession) -> None:
+async def test_single_device_auto_save(
+    mcp_client_low_threshold: ClientSession, test_config: dict[str, Any]
+) -> None:
     """send_show_command auto-saves when output exceeds save_threshold.
     Uses a 5-line threshold so any real show command triggers it.
     """
+    device = test_config["test_device"]
     result = await mcp_client_low_threshold.call_tool(
         "send_show_command",
-        arguments={"device_name": "cisco1", "command": "show version", "save_output": False},
+        arguments={"device_name": device, "command": "show version", "save_output": False},
     )
     text = getattr(result.content[0], "text", "")
 
     assert "Automatically saved as '" in text, f"Expected auto-save notification, got: {text!r}"
     filename = text.split("Automatically saved as '")[1].split("'")[0]
 
-    # Verify the file is listed and readable
     list_result = await mcp_client_low_threshold.call_tool(
-        "list_device_outputs", arguments={"device_or_group": "cisco1"}
+        "list_device_outputs", arguments={"device_or_group": device}
     )
     listing = json.loads(getattr(list_result.content[0], "text", ""))
-    assert filename in listing.get("cisco1", []), (
+    assert filename in listing.get(device, []), (
         f"Auto-saved file '{filename}' not found in listing: {listing}"
     )
 
     read_result = await mcp_client_low_threshold.call_tool(
         "read_device_output",
-        arguments={"device_name": "cisco1", "filename": filename},
+        arguments={"device_name": device, "filename": filename},
     )
     content = getattr(read_result.content[0], "text", "")
-    assert (
-        "Cisco IOS Software" in content or "Cisco Internetwork Operating System Software" in content
-    )
+    assert test_config["show_version_contains"] in content
 
 
 @pytest.mark.anyio
@@ -388,17 +392,22 @@ async def test_single_device_auto_save(mcp_client_low_threshold: ClientSession) 
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_group_command_auto_save(mcp_client_low_threshold: ClientSession) -> None:
+async def test_group_command_auto_save(
+    mcp_client_low_threshold: ClientSession, test_config: dict[str, Any]
+) -> None:
     """send_show_command_to_group with save_output=False auto-saves per-device output
     when it exceeds save_threshold. Uses a 5-line threshold.
     """
+    group = test_config["test_group"]
     result = await mcp_client_low_threshold.call_tool(
         "send_show_command_to_group",
-        arguments={"device_or_group": "cisco", "command": "show version", "save_output": False},
+        arguments={"device_or_group": group, "command": "show version", "save_output": False},
     )
     output = json.loads(getattr(result.content[0], "text", ""))
 
-    assert len(output) >= 2, f"Expected at least 2 devices, got: {list(output.keys())}"
+    assert len(output) >= test_config["test_group_min_devices"], (
+        f"Expected at least {test_config['test_group_min_devices']} devices, got: {list(output.keys())}"
+    )
     for device, text in output.items():
         assert "Automatically saved as '" in str(text), (
             f"{device}: expected auto-save notification, got: {text!r}"
@@ -418,7 +427,9 @@ async def test_group_command_auto_save(mcp_client_low_threshold: ClientSession) 
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_read_device_output_pagination(mcp_client: ClientSession) -> None:
+async def test_read_device_output_pagination(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
     """Pagination round-trip: save show interfaces output, then read it back in 20-line pages.
 
     Verifies that:
@@ -427,30 +438,32 @@ async def test_read_device_output_pagination(mcp_client: ClientSession) -> None:
     - The second page header correctly shows 'Lines 21-40 of N'
     - Content from each page is distinct (no overlap)
     """
+    device = test_config["test_device"]
+
     # Step 1 — save 'show interfaces' output explicitly so we have a known file to paginate.
     # show interfaces typically produces well over 40 lines on any real IOS device.
     save_result = await mcp_client.call_tool(
         "send_show_command_to_group",
-        arguments={"device_or_group": "cisco1", "command": "show interfaces", "save_output": True},
+        arguments={"device_or_group": device, "command": "show interfaces", "save_output": True},
     )
     saved = json.loads(getattr(save_result.content[0], "text", ""))
-    assert "cisco1" in saved, f"Expected cisco1 in save result: {saved}"
+    assert device in saved, f"Expected {device} in save result: {saved}"
 
     # Step 2 — list saved files to get the filename.
     list_result = await mcp_client.call_tool(
         "list_device_outputs",
-        arguments={"device_or_group": "cisco1"},
+        arguments={"device_or_group": device},
     )
     listing = json.loads(getattr(list_result.content[0], "text", ""))
-    assert "cisco1" in listing and len(listing["cisco1"]) >= 1, (
-        f"No saved files found for cisco1: {listing}"
+    assert device in listing and len(listing[device]) >= 1, (
+        f"No saved files found for {device}: {listing}"
     )
-    filename = listing["cisco1"][0]  # newest file first
+    filename = listing[device][0]  # newest file first
 
     # Step 3 — read page 1 (lines 1-20).
     page1_result = await mcp_client.call_tool(
         "read_device_output",
-        arguments={"device_name": "cisco1", "filename": filename, "offset": 0, "limit": 20},
+        arguments={"device_name": device, "filename": filename, "offset": 0, "limit": 20},
     )
     page1 = getattr(page1_result.content[0], "text", "")
     page1_lines = page1.splitlines()
@@ -472,7 +485,7 @@ async def test_read_device_output_pagination(mcp_client: ClientSession) -> None:
     # Step 4 — read page 2 (lines 21 to min(40, total)).
     page2_result = await mcp_client.call_tool(
         "read_device_output",
-        arguments={"device_name": "cisco1", "filename": filename, "offset": 20, "limit": 20},
+        arguments={"device_name": device, "filename": filename, "offset": 20, "limit": 20},
     )
     page2 = getattr(page2_result.content[0], "text", "")
     page2_lines = page2.splitlines()
@@ -494,7 +507,9 @@ async def test_read_device_output_pagination(mcp_client: ClientSession) -> None:
     not os.environ.get("RUN_LIVE_TESTS"),
     reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
 )
-async def test_group_command_security_block(mcp_client: ClientSession) -> None:
+async def test_group_command_security_block(
+    mcp_client: ClientSession, test_config: dict[str, Any]
+) -> None:
     """A blocked command hard-stops without connecting to any device.
     Uses 'show running-config' which is not in the allowed_commands list —
     harmless if it somehow slipped through, unlike destructive commands.
