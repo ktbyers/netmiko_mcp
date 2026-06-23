@@ -24,7 +24,14 @@
 
 ## MCP Tool Implementation Rules
 
-- **Every tool must check `_startup_error` at entry.** If `_startup_error` is not `None`, the tool must return it immediately without executing. This ensures that a missing `command_file` (or any other startup failure captured in `_startup_error`) surfaces in-session through any tool call rather than being swallowed by the MCP client on stdio transport. New tools that do not follow this rule will silently misbehave when the server is misconfigured.
+- **Every tool must be decorated with `@check_startup_error` (below `@mcp.tool()`).** This decorator short-circuits the tool and returns `_startup_error` if it is set, ensuring that a missing `command_file` (or any other startup failure) surfaces in-session through any tool call rather than being swallowed by the MCP client on stdio transport. `@mcp.tool()` must be the outermost decorator so FastMCP registers the correctly-wrapped function with the right schema. New tools that omit `@check_startup_error` will silently misbehave when the server is misconfigured.
+
+  ```python
+  @mcp.tool()           # outermost — registers the tool with FastMCP
+  @check_startup_error  # innermost — short-circuits on startup error
+  def my_new_tool(...) -> str:
+      ...
+  ```
 
 ## Code Quality
 

@@ -1,7 +1,9 @@
+import functools
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import uvicorn
 from mcp.server.fastmcp import FastMCP
@@ -19,10 +21,32 @@ from netmiko_mcp.http_auth import BearerTokenMiddleware
 from netmiko_mcp.inventory import get_group_names, get_sanitized_inventory
 
 # Stores a startup error message when the server is running in stdio mode and a
-# required config file is missing. Set once in main() and never modified again.
-# All tools check this and return the error instead of executing, so the failure
-# surfaces in-session rather than being swallowed by the MCP client.
+# required config file is missing. Set once in _validate_startup() and never
+# modified again. All tools check this via @check_startup_error and return the
+# error instead of executing, so the failure surfaces in-session rather than
+# being swallowed by the MCP client.
 _startup_error: str | None = None
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def check_startup_error(func: _F) -> _F:
+    """Decorator that short-circuits a tool and returns _startup_error if set.
+
+    Apply below @mcp.tool() on every tool so that a misconfigured server
+    surfaces a clear error through any tool call rather than silently
+    misbehaving. functools.wraps preserves the original function metadata
+    so FastMCP generates the correct tool schema.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if _startup_error:
+            return _startup_error
+        return func(*args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
+
 
 # Initialize the FastMCP server. The HTTP settings (host, port, path) are passed
 # here so that streamable_http_app() uses the operator-configured values when the
@@ -37,13 +61,12 @@ mcp = FastMCP(
 
 
 @mcp.tool()
+@check_startup_error
 def list_groups() -> str:
     """
     List all device groups defined in the inventory.
     Returns a JSON-encoded list of group name strings.
     """
-    if _startup_error:
-        return json.dumps({"error": _startup_error})
     log_tool_invocation(tool="list_groups", arguments={})
     try:
         return json.dumps(get_group_names())
@@ -52,19 +75,19 @@ def list_groups() -> str:
 
 
 @mcp.tool()
+@check_startup_error
 def list_devices(device_or_group: str = "all") -> str:
     """
     List devices from the Netmiko inventory.
     You can query by 'all' (default), a specific 'group-name', or a 'device-name'.
     Returns a JSON string containing device configurations (excluding credentials).
     """
-    if _startup_error:
-        return json.dumps({"error": _startup_error})
     log_tool_invocation(tool="list_devices", arguments={"device_or_group": device_or_group})
     return get_sanitized_inventory(device_or_group)
 
 
 @mcp.tool()
+@check_startup_error
 def send_show_command(
     device_name: str,
     command: str,
@@ -87,12 +110,11 @@ def send_show_command(
     is returned instead. Use list_device_outputs and read_device_output to retrieve
     the saved content.
     """
-    if _startup_error:
-        return _startup_error
     return run_show_command(device_name, command, use_textfsm, save_output)
 
 
 @mcp.tool()
+@check_startup_error
 def send_show_command_to_group(
     device_or_group: str,
     command: str,
@@ -112,12 +134,11 @@ def send_show_command_to_group(
     Returns:
         A dict mapping each device name to its output (or saved file path).
     """
-    if _startup_error:
-        return {"error": _startup_error}
     return run_show_command_on_group(device_or_group, command, use_textfsm, save_output)
 
 
 @mcp.tool()
+@check_startup_error
 def list_device_outputs(device_or_group: str) -> dict[str, Any]:
     """
     List saved output files for a device, group, or all devices.
@@ -129,13 +150,12 @@ def list_device_outputs(device_or_group: str) -> dict[str, Any]:
         A dict mapping each device name to a list of saved filenames (newest first).
         Devices with no saved output are included with an empty list.
     """
-    if _startup_error:
-        return {"error": _startup_error}
     log_tool_invocation(tool="list_device_outputs", arguments={"device_or_group": device_or_group})
     return _list_device_outputs(device_or_group)
 
 
 @mcp.tool()
+@check_startup_error
 def read_device_output(
     device_name: str,
     filename: str,
@@ -154,8 +174,6 @@ def read_device_output(
     The response header shows the line range and total line count. If more lines
     remain, a continuation hint tells you which offset to use on the next call.
     """
-    if _startup_error:
-        return _startup_error
     log_tool_invocation(
         tool="read_device_output",
         arguments={
@@ -169,10 +187,9 @@ def read_device_output(
 
 
 @mcp.tool()
+@check_startup_error
 def ping() -> str:
     """A simple health check tool to verify the MCP server is responding."""
-    if _startup_error:
-        return _startup_error
     log_tool_invocation(tool="ping", arguments={})
     return "pong"
 

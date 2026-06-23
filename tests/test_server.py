@@ -278,29 +278,21 @@ def test_ping_returns_pong_when_no_startup_error() -> None:
 
 
 def test_list_groups_returns_startup_error_when_set() -> None:
-    """list_groups should return a JSON error when _startup_error is set."""
-    import json
-
+    """list_groups should return the startup error string when _startup_error is set."""
     original = server_module._startup_error
     try:
         server_module._startup_error = "Startup Error: command_file missing."
-        result = json.loads(list_groups())
-        assert "error" in result
-        assert result["error"] == server_module._startup_error
+        assert list_groups() == server_module._startup_error
     finally:
         server_module._startup_error = original
 
 
 def test_list_devices_returns_startup_error_when_set() -> None:
-    """list_devices should return a JSON error when _startup_error is set."""
-    import json
-
+    """list_devices should return the startup error string when _startup_error is set."""
     original = server_module._startup_error
     try:
         server_module._startup_error = "Startup Error: command_file missing."
-        result = json.loads(list_devices())
-        assert "error" in result
-        assert result["error"] == server_module._startup_error
+        assert list_devices() == server_module._startup_error
     finally:
         server_module._startup_error = original
 
@@ -317,25 +309,21 @@ def test_send_show_command_returns_startup_error_when_set() -> None:
 
 
 def test_send_show_command_to_group_returns_startup_error_when_set() -> None:
-    """send_show_command_to_group should return an error dict when _startup_error is set."""
+    """send_show_command_to_group should return the startup error string when _startup_error is set."""
     original = server_module._startup_error
     try:
         server_module._startup_error = "Startup Error: command_file missing."
-        result = send_show_command_to_group("core", "show version")
-        assert "error" in result
-        assert result["error"] == server_module._startup_error
+        assert send_show_command_to_group("core", "show version") == server_module._startup_error
     finally:
         server_module._startup_error = original
 
 
 def test_list_device_outputs_returns_startup_error_when_set() -> None:
-    """list_device_outputs should return an error dict when _startup_error is set."""
+    """list_device_outputs should return the startup error string when _startup_error is set."""
     original = server_module._startup_error
     try:
         server_module._startup_error = "Startup Error: command_file missing."
-        result = list_device_outputs("cisco")
-        assert "error" in result
-        assert result["error"] == server_module._startup_error
+        assert list_device_outputs("cisco") == server_module._startup_error
     finally:
         server_module._startup_error = original
 
