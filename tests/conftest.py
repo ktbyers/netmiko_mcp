@@ -70,7 +70,7 @@ def _require_inventory() -> None:
     """
     if not _INVENTORY_FILE.is_file():
         pytest.skip(
-            f"{_INVENTORY_FILE} not found — create this file with device "
+            "tests/etc/.netmiko.yml not found — create this file with device "
             "credentials before running live tests"
         )
 
