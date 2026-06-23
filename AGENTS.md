@@ -66,8 +66,8 @@
   what the design intent is, not an absolute guarantee.
 - When documenting MCP client integration, only document what has been **tested and
   confirmed to work**. Each MCP client (Claude Code, Claude Desktop, Cursor, etc.) handles
-  server registration and env var inheritance differently. Use a separate doc per client
-  under `docs/clients/` rather than a generic example that may not apply.
+  server registration and env var inheritance differently. Per-client configuration belongs
+  in `skills/mcp-client-config/SKILL.md`.
 
 ## Documentation & Examples
 
