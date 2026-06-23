@@ -40,17 +40,11 @@ def test_validate_startup_missing_command_file_http_raises(
 def test_validate_startup_missing_command_file_stdio_does_not_raise(
     mock_settings: Any, tmp_path: Path
 ) -> None:
-    """In stdio mode, _validate_startup should not raise for a missing command_file.
-    The error is stored in _startup_error so the MCP handshake can complete.
-    """
-    original = server_module._startup_error
-    try:
-        mock_settings.command_file = str(tmp_path / "nonexistent.yml")
-        mock_settings.transport = "stdio"
-        mock_settings.http_auth_enabled = False
-        _validate_startup()  # should not raise
-    finally:
-        server_module._startup_error = original
+    """In stdio mode, _validate_startup should not raise for a missing command_file."""
+    mock_settings.command_file = str(tmp_path / "nonexistent.yml")
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+    _validate_startup()  # should not raise
 
 
 @patch("netmiko_mcp.server.settings")
@@ -341,21 +335,17 @@ def test_read_device_output_returns_startup_error_when_set() -> None:
 
 
 @patch("netmiko_mcp.server.settings")
-def test_validate_startup_sets_startup_error_on_missing_command_file_stdio(
+def test_validate_startup_returns_error_on_missing_command_file_stdio(
     mock_settings: Any,
 ) -> None:
-    """_validate_startup() should set _startup_error and not raise when command_file
-    is missing in stdio mode."""
-    original = server_module._startup_error
-    try:
-        mock_settings.command_file = "/nonexistent/commands.yml"
-        mock_settings.transport = "stdio"
-        mock_settings.http_auth_enabled = False
-        _validate_startup()
-        assert server_module._startup_error is not None
-        assert "command_file" in server_module._startup_error
-    finally:
-        server_module._startup_error = original
+    """_validate_startup() should return an error string and not raise when
+    command_file is missing in stdio mode."""
+    mock_settings.command_file = "/nonexistent/commands.yml"
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+    result = _validate_startup()
+    assert result is not None
+    assert "command_file" in result
 
 
 @patch("netmiko_mcp.server.configure_audit_logger")
