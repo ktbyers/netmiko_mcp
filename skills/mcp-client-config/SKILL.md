@@ -49,6 +49,20 @@ claude mcp add netmiko-mcp -- uv run netmiko-mcp
 claude mcp add -s user netmiko-mcp -- uv run netmiko-mcp
 ```
 
+**User scope with source install (`uv sync`, not `uv tool install`):**
+`uv run netmiko-mcp` only works when Claude Code is invoked from the repo directory.
+For user scope, where Claude Code may be invoked from any directory, use `--directory`
+to pin the project root:
+
+```bash
+claude mcp add -s user \
+  -e NETMIKO_MCP_CONFIG="/abs/path/to/repo/.netmiko-mcp.yml" \
+  netmiko-mcp -- uv run --directory /abs/path/to/repo netmiko-mcp
+```
+
+`-e NETMIKO_MCP_CONFIG` is required here — without it the server falls back to
+home-dir discovery and may fail at startup if `~/commands.yml` does not exist.
+
 **With a custom config path:**
 ```bash
 claude mcp add -s user \
