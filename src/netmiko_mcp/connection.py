@@ -154,7 +154,9 @@ def run_show_command(
             # reading. Each case is caught, logged, and returned individually so
             # the LLM receives a precise error rather than a generic message.
             try:
-                output = net_connect.send_command(result.normalized_command, use_textfsm=use_textfsm)
+                output = net_connect.send_command(
+                    result.normalized_command, use_textfsm=use_textfsm
+                )
 
                 # use_textfsm falls back to raw text when no template exists. A string
                 # return when use_textfsm=True was requested indicates the fallback.

@@ -28,7 +28,9 @@ class McpConfig(BaseSettings):
     # Characters permitted in commands. The pipe character '|' is intentionally
     # absent — it is added to the effective allowed set automatically when
     # allow_pipe is True. Adding '|' here while allow_pipe is False is an error.
-    allowed_command_chars: str = Field(default="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,")
+    allowed_command_chars: str = Field(
+        default="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
     pipe_modifiers: list[str] = Field(default=["include", "exclude", "section", "begin", "count"])
     max_workers: int = Field(default=10)
     save_output_dir: str = Field(default="~/.netmiko_mcp_tmp")

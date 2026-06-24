@@ -14,7 +14,10 @@ def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.inventory_file is None
     assert config.command_file == "~/commands.yml"
     assert config.allow_pipe is False
-    assert config.allowed_command_chars == "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    assert (
+        config.allowed_command_chars
+        == "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
     assert config.pipe_modifiers == ["include", "exclude", "section", "begin", "count"]
     assert config.max_workers == 10
     assert config.save_output_dir == "~/.netmiko_mcp_tmp"
@@ -125,7 +128,9 @@ async def test_mcp_config_yaml_allowed_command_chars(
 ) -> None:
     """Test that allowed_command_chars set in a config file is respected."""
     cfg_file = tmp_path / "test-config.yml"
-    cfg_file.write_text('allowed_command_chars: "abcdefghijklmnopqrstuvwxyz 0123456789"\n', encoding="utf-8")
+    cfg_file.write_text(
+        'allowed_command_chars: "abcdefghijklmnopqrstuvwxyz 0123456789"\n', encoding="utf-8"
+    )
     monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
 
     config = McpConfig()
