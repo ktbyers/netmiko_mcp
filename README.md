@@ -28,6 +28,11 @@ Install using `uv`:
 uv tool install git+https://github.com/ktbyers/netmiko_mcp.git
 ```
 
+> **Note about uv tool install:**
+> Unlike git clone, the `uv tool install` command does not create a new project directory in the current folder. Instead, it installs the tool into uv’s managed tools directory (either the default location or a custom tools directory if configured) and only exposes the executable on your PATH. To see where the tool executables are installed, you can run:
+> `uv tool dir --bin`
+> This command shows the path to the directory where uv places the executables for installed tools.
+
 Or install from source:
 
 ```bash
