@@ -15,9 +15,9 @@ The controls in Netmiko-MCP are a best-effort layer and should not be your only 
 
 `netmiko-mcp` supports two transport modes:
 
-**stdio** — Your AI client launches the server as a local subprocess and communicates over standard input/output. No ports are opened and nothing listens on the network. The process starts when you open a session and stops when you close it. This is the simplest setup and the right choice for a single user running the server on their own machine.
+**stdio** - Your AI client launches the server as a local subprocess and communicates over standard input/output. No ports are opened and nothing listens on the network. The process starts when you open a session and stops when you close it. This is the simplest setup and the right choice for a single user running the server on their own machine.
 
-**Streamable HTTP** — The server runs as a standalone service that listens on a network port. Your AI client connects to it over HTTP rather than launching it as a subprocess. This allows the server to run on a remote host and be shared across multiple machines or clients. It also enables centralized control and auditing/logging of all device interactions in one place. The tradeoff is a slightly more involved deployment (you are responsible for starting the process and keeping it running).
+**Streamable HTTP** - The server runs as a standalone service that listens on a network port. Your AI client connects to it over HTTP rather than launching it as a subprocess. This allows the server to run on a remote host and be shared across multiple machines or clients. It also enables centralized control and auditing/logging of all device interactions in one place. The tradeoff is a slightly more involved deployment (you are responsible for starting the process and keeping it running).
 
 
 ## Installation
@@ -25,13 +25,8 @@ The controls in Netmiko-MCP are a best-effort layer and should not be your only 
 Install using `uv`:
 
 ```bash
-uv tool install git+https://github.com/ktbyers/netmiko_mcp.git
+uv tool install netmiko-mcp
 ```
-
-> **Note about uv tool install:**
-> Unlike git clone, the `uv tool install` command does not create a new project directory in the current folder. Instead, it installs the tool into uv’s managed tools directory (either the default location or a custom tools directory if configured) and only exposes the executable on your PATH. To see where the tool executables are installed, you can run:
-> `uv tool dir --bin`
-> This command shows the path to the directory where uv places the executables for installed tools.
 
 Or install from source:
 
@@ -57,7 +52,7 @@ export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"
 ```
 <br />
 
-### Step 1 — Create the Netmiko-MCP configuration file
+### Step 1 - Create the Netmiko-MCP configuration file
 
 Create `~/.netmiko-mcp.yml`:
 
@@ -71,7 +66,7 @@ Additional details on the Netmiko-MCP configuration file and corresponding envir
 <br />
 <br />
 
-### Step 2 — Create the device inventory
+### Step 2 - Create the device inventory
 
 Currently, device inventory is limited to Netmiko Tools' [device inventory](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory). It is likely this will be expanded in the future to support additional inventory sources.
 
@@ -83,7 +78,7 @@ Netmiko Tools AI [skill file](https://github.com/ktbyers/netmiko_mcp/blob/main/s
 <br />
 <br />
 
-### Step 3 — Create the commands whitelist
+### Step 3 - Create the commands whitelist
 
 Create `~/commands.yml` to define what the LLM is allowed to send to devices. By default
 **no commands are permitted**:
@@ -114,7 +109,7 @@ Full details on allowed/denied matching, globbing, pipes, and unsafe characters:
 
 ## Registering with Your AI Client
 
-With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. Each client has its own config file or CLI command for registering the server — see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions covering Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, and Kiro.
+With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. Each client has its own config file or CLI command for registering the server - see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions covering Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, and Kiro.
 
 
 ## Supported MCP Clients (June 2026)
@@ -126,10 +121,10 @@ With the server installed and the three config files in place, register `netmiko
 | Cursor | ✓ | ✓ | ✓ | Agent mode required; HTTP SSE fallback has known bug |
 | Devin Desktop (formerly Windsurf) | ✓ | ✓ | ✓ | Agent mode (Cascade) required |
 | VS Code + GitHub Copilot | ✓ | ✓ | ✓ | Agent mode only; free tier sufficient |
-| Kiro (AWS IDE) | ✓ | ✓ | — | Not tested; based on documentation |
-| Cline | ✓ | ✓ | — | Not tested |
-| Gemini CLI | ✓ | ✓ | — | Not tested |
-| Perplexity Mac app | ✓ | — | — | stdio via PerplexityXPC helper |
+| Kiro (AWS IDE) | ✓ | ✓ | - | Not tested; based on documentation |
+| Cline | ✓ | ✓ | - | Not tested |
+| Gemini CLI | ✓ | ✓ | - | Not tested |
+| Perplexity Mac app | ✓ | - | - | stdio via PerplexityXPC helper |
 | ChatGPT | ✗ | ✓ | ✗ | Business plan required; HTTP bridge needed; not working |
 | Perplexity web | ✗ | ✓ | ✗ | OAuth 2.1 discovery required; not working |
 <br />
@@ -222,4 +217,4 @@ The structured output is useful when you want to pipe results into another tool,
 
 The LLM will collect results for all devices and write one file per device. Being explicit about the filename convention (`<device-name>.json`) and the target location (`current directory`) prevents it from guessing.
 
-> **Tip:** If you omit the directory, the LLM will save files relative to whatever working directory your AI client is running from — which may not be where you expect. Specify an absolute path (e.g., `~/network/output/`) if you want the files in a particular location.
+> **Tip:** If you omit the directory, the LLM will save files relative to whatever working directory your AI client is running from - which may not be where you expect. Specify an absolute path (e.g., `~/network/output/`) if you want the files in a particular location.
