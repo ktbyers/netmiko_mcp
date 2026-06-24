@@ -6,8 +6,8 @@ Rules:
    The whitelist is empty by default.
 2. The blacklist (denied_commands) has precedence over the whitelist so if both
    blacklist and whitelist match a given command, the command is denied.
-3. Pipes are denied by default. Multi-command injection vectors (e.g. `;`, `\\n`, `\\r`,
-   `&`) are blocked via the unsafe_chars check before any other validation.
+3. Pipes are denied by default. Characters not in allowed_command_chars are rejected
+   before any other validation.
 4. Every attempted and executed command is logged for audit and compliance via the
    audit module. validate_command() returns a ValidationResult carrying both the
    boolean decision and a reason constant so the caller can emit a structured audit
@@ -63,41 +63,20 @@ class ValidationResult:
     reason: str
 
 
-def _to_regex_char(c: str) -> str:
-    """Return the regex character class representation of a single character.
-    Non-printable characters (e.g. newline, carriage return) are converted to
-    their escaped forms (e.g. \\n, \\r) so they are valid inside a [...] class.
-    """
-    return c.encode("unicode_escape").decode() if not c.isprintable() else c
-
-
-def _build_unsafe_re_class(chars: list[str]) -> str:
-    """Build a regex negated character class from a list of unsafe characters."""
-    escaped = "".join(_to_regex_char(c) for c in chars)
-    return f"[^{escaped}]"
-
-
-_UNSAFE_RE_CLASS = _build_unsafe_re_class(settings.unsafe_chars)
-
-
-def glob_to_regex(glob_pattern: str, block_unsafe: bool = True) -> re.Pattern[str]:
+def glob_to_regex(glob_pattern: str) -> re.Pattern[str]:
     """
     Convert a simple glob pattern containing '*' into a compiled regular expression.
 
-    When block_unsafe=True (the default, used for allow checks), the wildcard '*'
-    is restricted to match any character EXCEPT those in settings.unsafe_chars,
-    preventing command injection through wildcard expansion.
+    The wildcard '*' matches any character. Commands are validated against
+    allowed_command_chars before reaching this function, so no additional
+    wildcard restriction is needed here.
 
-    When block_unsafe=False (used for deny checks), the wildcard matches any
-    character — a deny pattern should be as broad as possible to catch more.
-
-    It also intelligently handles spaces preceding asterisks (e.g., 'show version *'
-    will match 'show version' with or without arguments).
+    A trailing ' *' (space then asterisk) is handled specially so that a pattern
+    like 'show version *' matches both 'show version' and 'show version detail'.
     """
-    wildcard = _UNSAFE_RE_CLASS if block_unsafe else "."
     escaped = re.escape(glob_pattern.strip())
-    escaped = escaped.replace(r"\ \*", rf"(?:\s+{wildcard}*)?")
-    escaped = escaped.replace(r"\*", rf"{wildcard}*")
+    escaped = escaped.replace(r"\ \*", r"(?:\s+.*)?")
+    escaped = escaped.replace(r"\*", r".*")
 
     return re.compile("^" + escaped + "$", re.IGNORECASE)
 
@@ -111,7 +90,7 @@ def deny_check(command: str, denied_commands: list[str]) -> bool:
     Denied always takes precedence over allowed.
     """
     for denied in denied_commands:
-        if glob_to_regex(denied.strip(), block_unsafe=False).match(command):
+        if glob_to_regex(denied.strip()).match(command):
             return True
     return False
 
