@@ -17,10 +17,6 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Topic :: System :: Networking",
 ]
-[project.urls]
-Homepage = "https://github.com/ktbyers/netmiko_mcp"
-Repository = "https://github.com/ktbyers/netmiko_mcp"
-
 dependencies = [
     "mcp>=1.27.1",
     "netmiko>=4.7.0",
@@ -29,6 +25,10 @@ dependencies = [
     "pyyaml>=6.0.3",
     "uvicorn>=0.48.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ktbyers/netmiko_mcp"
+Repository = "https://github.com/ktbyers/netmiko_mcp"
 
 [project.scripts]
 netmiko-mcp = "netmiko_mcp.server:main"
