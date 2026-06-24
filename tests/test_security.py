@@ -692,6 +692,10 @@ _CARVEOUT_DENIED = ["show version"]
             "show version\tshow ip interface brief",
             True,
         ),  # tab-chained: normalizes to invalid cmd, not 'show version'
+        ("show ve", False),      # abbreviation — BYPASS
+        ("show vers", False),    # abbreviation — BYPASS
+        ("sh version", False),   # abbreviation — may be blocked by allow check
+        ("sh vers", False),      # abbreviation — may be blocked by allow check
     ],
 )
 @patch("netmiko_mcp.security.settings")
