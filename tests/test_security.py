@@ -735,3 +735,93 @@ def test_deny_carveout_pipe_bypass(
 
     result = validate_command(command)
     assert result.allowed == expected_allowed
+
+
+# ---------------------------------------------------------------------------
+# Allowlist character rejection
+# Characters caught by the allowlist check (REASON_UNSAFE_CHAR).
+# Note: Python 3's str.split() (no args) treats all Unicode whitespace as
+# whitespace — including NBSP (\xa0), ideographic space (\u3000), tab,
+# newline, vertical tab, etc. — so those are normalized to spaces before
+# reaching the allowlist check. The allowlist catches non-whitespace special
+# characters that survive normalization.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "show version; reload",      # semicolon — not whitespace, not in allowlist
+        "show version & reload",     # ampersand — not whitespace, not in allowlist
+    ],
+)
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_allowlist_rejects_disallowed_chars(
+    mock_load: Any, mock_settings: Any, command: str
+) -> None:
+    """Characters not in allowed_command_chars must be rejected with
+    REASON_UNSAFE_CHAR before any deny/allow matching."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command(command)
+    assert not result.allowed
+    assert result.reason == REASON_UNSAFE_CHAR
+
+
+# ---------------------------------------------------------------------------
+# Pipe auto-add: '|' in effective_allowed only when allow_pipe=True
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_pipe_char_allowed_when_allow_pipe_true(
+    mock_load: Any, mock_settings: Any
+) -> None:
+    """'|' is not in allowed_command_chars but must pass the character check
+    when allow_pipe=True because it is added to the effective allowed set."""
+    _vc_setup(mock_load, mock_settings, allow_pipe=True)
+    assert "|" not in mock_settings.allowed_command_chars
+    result = validate_command("show version | include IOS")
+    assert result.allowed
+    assert result.reason == REASON_ALLOWED
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_pipe_char_rejected_when_allow_pipe_false(
+    mock_load: Any, mock_settings: Any
+) -> None:
+    """'|' must be rejected by the allowlist check (REASON_UNSAFE_CHAR) when
+    allow_pipe=False because it is not added to the effective allowed set."""
+    _vc_setup(mock_load, mock_settings, allow_pipe=False)
+    result = validate_command("show version | include IOS")
+    assert not result.allowed
+    assert result.reason == REASON_UNSAFE_CHAR
+
+
+# ---------------------------------------------------------------------------
+# normalized_command: whitespace collapsed, capitalization preserved
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command,expected_normalized",
+    [
+        ("show version", "show version"),          # already clean
+        ("Show   Version", "Show Version"),        # caps preserved, spaces collapsed
+        ("  show version  ", "show version"),      # leading/trailing stripped
+        ("SHOW\tVERSION", "SHOW VERSION"),         # tab normalized, caps preserved
+        ("show  ip  route", "show ip route"),      # multiple internal spaces
+    ],
+)
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_normalized_command_in_result(
+    mock_load: Any, mock_settings: Any, command: str, expected_normalized: str
+) -> None:
+    """normalized_command in ValidationResult must reflect whitespace-collapsed,
+    capitalization-preserved form regardless of allowed/denied outcome."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command(command)
+    assert result.normalized_command == expected_normalized

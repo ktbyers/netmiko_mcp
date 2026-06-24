@@ -28,6 +28,25 @@ def test_mcp_config_validation() -> None:
         McpConfig(inventory_type="invalid_type")  # type: ignore
 
 
+def test_mcp_config_pipe_char_in_allowed_chars_without_allow_pipe_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Adding '|' to allowed_command_chars while allow_pipe=False must raise
+    ValidationError. The pipe character is managed via allow_pipe, not this setting."""
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", "/nonexistent/path.yml")
+    with pytest.raises(ValidationError, match="allow_pipe"):
+        McpConfig(allowed_command_chars="abcdefghijklmnopqrstuvwxyz |", allow_pipe=False)
+
+
+def test_mcp_config_pipe_char_in_allowed_chars_with_allow_pipe_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Adding '|' to allowed_command_chars when allow_pipe=True must not raise."""
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", "/nonexistent/path.yml")
+    config = McpConfig(allowed_command_chars="abcdefghijklmnopqrstuvwxyz |", allow_pipe=True)
+    assert "|" in config.allowed_command_chars
+
+
 @pytest.mark.anyio
 async def test_mcp_config_default_file_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
