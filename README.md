@@ -71,7 +71,7 @@ Both install methods below support both transport modes (stdio and HTTP).
 **Option 1 — uv tool (recommended for most users):**
 
 ```bash
-uv tool install git+https://github.com/ktbyers/netmiko_mcp.git
+uv tool install netmiko-mcp
 ```
 
 Installs the `netmiko-mcp` command globally. Required when clients like Claude Desktop, Cursor, or Devin Desktop spawn the server as a subprocess (stdio mode) — those clients launch from their own working directory and cannot find a project-local virtual environment.
@@ -104,7 +104,7 @@ export NETMIKO_MCP_CONFIG="$HOME/.netmiko-mcp.yml"
 ```
 <br />
 
-### Step 1 — Create the Netmiko-MCP configuration file
+### Step 1 - Create the Netmiko-MCP configuration file
 
 Create `~/.netmiko-mcp.yml`:
 
@@ -118,7 +118,7 @@ Additional details on the Netmiko-MCP configuration file and corresponding envir
 <br />
 <br />
 
-### Step 2 — Create the device inventory
+### Step 2 - Create the device inventory
 
 Currently, device inventory is limited to Netmiko Tools' [device inventory](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory). It is likely this will be expanded in the future to support additional inventory sources.
 
@@ -151,7 +151,7 @@ Netmiko Tools AI [skill file](https://github.com/ktbyers/netmiko_mcp/blob/main/s
 <br />
 <br />
 
-### Step 3 — Create the commands whitelist
+### Step 3 - Create the commands whitelist
 
 Create `~/commands.yml` to define what the LLM is allowed to send to devices. By default
 **no commands are permitted**:
@@ -182,12 +182,16 @@ Full details on allowed/denied matching, globbing, pipes, and unsafe characters:
 
 ## Registering with Your AI Client
 
+<<<<<<< HEAD
 With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. Each client has its own config file or CLI command for registering the server.  See the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions covering Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, and Kiro.
 
 
 ## Verifying the Connection
 
 With the server registered, open a session with your AI client and send:
+=======
+With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. Each client has its own config file or CLI command for registering the server - see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions covering Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, and Kiro.
+>>>>>>> upstream/main
 
 > ping
 
@@ -206,10 +210,10 @@ The agent will call `list_devices` and return the names of everything in your `~
 | Cursor | ✓ | ✓ | ✓ | Agent mode required; HTTP SSE fallback has known bug |
 | Devin Desktop (formerly Windsurf) | ✓ | ✓ | ✓ | Agent mode (Cascade) required |
 | VS Code + GitHub Copilot | ✓ | ✓ | ✓ | Agent mode only; free tier sufficient |
-| Kiro (AWS IDE) | ✓ | ✓ | — | Not tested; based on documentation |
-| Cline | ✓ | ✓ | — | Not tested |
-| Gemini CLI | ✓ | ✓ | — | Not tested |
-| Perplexity Mac app | ✓ | — | — | stdio via PerplexityXPC helper |
+| Kiro (AWS IDE) | ✓ | ✓ | - | Not tested; based on documentation |
+| Cline | ✓ | ✓ | - | Not tested |
+| Gemini CLI | ✓ | ✓ | - | Not tested |
+| Perplexity Mac app | ✓ | - | - | stdio via PerplexityXPC helper |
 | ChatGPT | ✗ | ✓ | ✗ | Business plan required; HTTP bridge needed; not working |
 | Perplexity web | ✗ | ✓ | ✗ | OAuth 2.1 discovery required; not working |
 <br />
@@ -342,6 +346,7 @@ The structured output is useful when you want to pipe results into another tool,
 
 The LLM will collect results for all devices and write one file per device. Being explicit about the filename convention (`<device-name>.json`) and the target location (`current directory`) prevents it from guessing.
 
+<<<<<<< HEAD
 > **Tip:** If you omit the directory, the LLM will save files relative to whatever working directory your AI client is running from — which may not be where you expect. Specify an absolute path (e.g., `~/network/output/`) if you want the files in a particular location.
 
 
@@ -358,3 +363,6 @@ access01,cEOSLab,B1AFD6AA33B7A826E56244D42BBD9B8C,001c.7333.16be,4.35.2F-4622146
 ```
 
 CSV is useful when you want to open results in Excel, import them into a CMDB, or feed them into another tool. The LLM writes the file directly.  No copy-paste required or manual manipulation.
+=======
+> **Tip:** If you omit the directory, the LLM will save files relative to whatever working directory your AI client is running from - which may not be where you expect. Specify an absolute path (e.g., `~/network/output/`) if you want the files in a particular location.
+>>>>>>> upstream/main
