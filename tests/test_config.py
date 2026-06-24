@@ -14,7 +14,7 @@ def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.inventory_file is None
     assert config.command_file == "~/commands.yml"
     assert config.allow_pipe is False
-    assert config.unsafe_chars == [";", "\n", "\r", "&"]
+    assert config.allowed_command_chars == "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
     assert config.pipe_modifiers == ["include", "exclude", "section", "begin", "count"]
     assert config.max_workers == 10
     assert config.save_output_dir == "~/.netmiko_mcp_tmp"
@@ -55,7 +55,7 @@ async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NETMIKO_MCP_INVENTORY_FILE", "/env/path.yml")
     monkeypatch.setenv("NETMIKO_MCP_COMMAND_FILE", "/env/commands.yml")
     monkeypatch.setenv("NETMIKO_MCP_ALLOW_PIPE", "true")
-    monkeypatch.setenv("NETMIKO_MCP_UNSAFE_CHARS", '[";" , "|", "!"]')
+    monkeypatch.setenv("NETMIKO_MCP_ALLOWED_COMMAND_CHARS", "abcdefghijklmnopqrstuvwxyz 0123456789")
     monkeypatch.setenv("NETMIKO_MCP_PIPE_MODIFIERS", '["include", "exclude", "grep"]')
     monkeypatch.setenv("NETMIKO_MCP_MAX_WORKERS", "20")
     monkeypatch.setenv("NETMIKO_MCP_SAVE_OUTPUT_DIR", "/tmp/mcp_out")
@@ -65,7 +65,7 @@ async def test_mcp_config_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.inventory_file == "/env/path.yml"
     assert config.command_file == "/env/commands.yml"
     assert config.allow_pipe is True
-    assert config.unsafe_chars == [";", "|", "!"]
+    assert config.allowed_command_chars == "abcdefghijklmnopqrstuvwxyz 0123456789"
     assert config.pipe_modifiers == ["include", "exclude", "grep"]
     assert config.max_workers == 20
     assert config.save_output_dir == "/tmp/mcp_out"
@@ -101,16 +101,16 @@ async def test_mcp_config_yaml_pipe_modifiers(
 
 
 @pytest.mark.anyio
-async def test_mcp_config_yaml_unsafe_chars(
+async def test_mcp_config_yaml_allowed_command_chars(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test that unsafe_chars set in a config file is respected."""
+    """Test that allowed_command_chars set in a config file is respected."""
     cfg_file = tmp_path / "test-config.yml"
-    cfg_file.write_text('unsafe_chars: [";", "\\n", "\\r", "&", "|"]\n', encoding="utf-8")
+    cfg_file.write_text('allowed_command_chars: "abcdefghijklmnopqrstuvwxyz 0123456789"\n', encoding="utf-8")
     monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
 
     config = McpConfig()
-    assert config.unsafe_chars == [";", "\n", "\r", "&", "|"]
+    assert config.allowed_command_chars == "abcdefghijklmnopqrstuvwxyz 0123456789"
 
 
 @pytest.mark.anyio
