@@ -36,6 +36,10 @@ uv tool install -e /path/to/netmiko_mcp
 uv tool list   # netmiko-mcp should appear
 ```
 
+`uv tool install` does not create a directory in the current folder — it installs into
+uv's managed tools directory and exposes only the executable on PATH. To find the
+executable location: `uv tool dir --bin`
+
 ---
 
 ## Claude Code
