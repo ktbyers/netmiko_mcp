@@ -37,7 +37,6 @@ from netmiko_mcp.audit import (
     REASON_INVALID_PIPE_MODIFIER,
     REASON_MULTIPLE_PIPES,
     REASON_NO_ALLOW_MATCH,
-    REASON_PIPE_NOT_ALLOWED,
     REASON_UNSAFE_CHAR,
 )
 from netmiko_mcp.config import settings
@@ -57,10 +56,15 @@ class ValidationResult:
     of the REASON_* constants from the audit module and describes why the
     command was allowed or denied. The reason is intended to be recorded
     verbatim in the audit log.
+
+    normalized_command holds the whitespace-normalized form of the submitted
+    command. When allowed is True this is the exact string that should be
+    forwarded to the network device.
     """
 
     allowed: bool
     reason: str
+    normalized_command: str = ""
 
 
 def glob_to_regex(glob_pattern: str) -> re.Pattern[str]:
@@ -115,11 +119,16 @@ def validate_command(command: str) -> ValidationResult:
     Returns a ValidationResult with allowed=True and reason=REASON_ALLOWED if the
     command passes all checks, or allowed=False with a specific reason constant
     indicating why it was rejected. The reason is intended to be recorded in the
-    audit log by the caller.
+    audit log by the caller. normalized_command in the result is the whitespace-
+    normalized form that should be forwarded to the network device when allowed.
 
     Rules applied in order:
-    - Command must NOT contain any character in settings.unsafe_chars.
-    - Command must NOT match any entry in denied_commands (supports glob patterns).
+    - Whitespace is normalized: all ASCII whitespace runs collapsed to a single
+      space, leading/trailing whitespace stripped.
+    - Command must contain only characters in allowed_command_chars (plus '|' when
+      allow_pipe is True). Rejects Unicode space lookalikes and injection chars.
+    - Command must NOT match any entry in denied_commands (checked against the
+      base command before any pipe, supports glob patterns).
     - If a pipe is present, allow_pipe must be True, and the modifier must be in
       the configured pipe_modifiers list. Multiple pipes are always rejected.
     - Base command (before any pipe) must match an entry in allowed_commands.
@@ -129,44 +138,56 @@ def validate_command(command: str) -> ValidationResult:
     allowed_commands = commands.get("allowed_commands", DEFAULT_ALLOWED_COMMANDS)
     denied_commands = commands.get("denied_commands", DEFAULT_DENIED_COMMANDS)
 
-    # Reject any command containing an unsafe character.
-    if any(char in command for char in settings.unsafe_chars):
-        return ValidationResult(allowed=False, reason=REASON_UNSAFE_CHAR)
+    # Normalize whitespace: collapse all ASCII whitespace runs (spaces, tabs,
+    # vertical tabs, etc.) to a single space and strip leading/trailing
+    # whitespace. This is the form forwarded to the network device on success.
+    normalized = " ".join(command.split())
 
-    # Test command against the denied_commands list.
-    if deny_check(command, denied_commands):
-        return ValidationResult(allowed=False, reason=REASON_DENY_MATCH)
+    # Allowlist check: reject any character not in the effective allowed set.
+    # The pipe character is added automatically when allow_pipe is True.
+    # This catches Unicode space lookalikes (NBSP, ideographic space, etc.)
+    # and injection characters that survive whitespace normalization.
+    effective_allowed = set(settings.allowed_command_chars)
+    if settings.allow_pipe:
+        effective_allowed.add("|")
+    if any(c not in effective_allowed for c in normalized):
+        return ValidationResult(allowed=False, reason=REASON_UNSAFE_CHAR, normalized_command=normalized)
 
     # Extract base command and potential pipe segment.
-    parts = command.split("|", 1)
+    parts = normalized.split("|", 1)
     base_command = parts[0].strip()
 
-    # Pipe check: validate if a pipe exists.
-    if len(parts) > 1:
-        if not settings.allow_pipe:
-            return ValidationResult(allowed=False, reason=REASON_PIPE_NOT_ALLOWED)
+    # Deny check runs against base_command (after pipe split) so that a denied
+    # command cannot bypass the check by appending a pipe modifier.
+    if deny_check(base_command, denied_commands):
+        return ValidationResult(allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized)
 
+    # Pipe check: validate if a pipe exists. When allow_pipe is False, the
+    # pipe character never reaches this point — it is rejected by the allowlist
+    # check above since '|' is only added to effective_allowed when allow_pipe
+    # is True.
+    if len(parts) > 1:
         pipe_modifier = parts[1].strip().lower()
 
         # Multiple pipes are never allowed.
         if "|" in pipe_modifier:
-            return ValidationResult(allowed=False, reason=REASON_MULTIPLE_PIPES)
+            return ValidationResult(allowed=False, reason=REASON_MULTIPLE_PIPES, normalized_command=normalized)
 
         if pipe_modifier:
             modifier_keyword = pipe_modifier.split()[0]
             if modifier_keyword not in settings.pipe_modifiers:
-                return ValidationResult(allowed=False, reason=REASON_INVALID_PIPE_MODIFIER)
+                return ValidationResult(allowed=False, reason=REASON_INVALID_PIPE_MODIFIER, normalized_command=normalized)
         else:
-            return ValidationResult(allowed=False, reason=REASON_INVALID_PIPE_MODIFIER)
+            return ValidationResult(allowed=False, reason=REASON_INVALID_PIPE_MODIFIER, normalized_command=normalized)
 
-    # Test command against the allowed_commands list.
+    # Test base command against the allowed_commands list.
     for allowed in allowed_commands:
         if "*" in allowed:
             pattern = glob_to_regex(allowed)
             if pattern.match(base_command):
-                return ValidationResult(allowed=True, reason=REASON_ALLOWED)
+                return ValidationResult(allowed=True, reason=REASON_ALLOWED, normalized_command=normalized)
         elif base_command.lower() == allowed.strip().lower():
-            return ValidationResult(allowed=True, reason=REASON_ALLOWED)
+            return ValidationResult(allowed=True, reason=REASON_ALLOWED, normalized_command=normalized)
 
     # If it matches no allowed entry, deny it.
-    return ValidationResult(allowed=False, reason=REASON_NO_ALLOW_MATCH)
+    return ValidationResult(allowed=False, reason=REASON_NO_ALLOW_MATCH, normalized_command=normalized)

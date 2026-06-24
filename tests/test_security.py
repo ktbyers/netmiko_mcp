@@ -11,7 +11,6 @@ from netmiko_mcp.audit import (
     REASON_INVALID_PIPE_MODIFIER,
     REASON_MULTIPLE_PIPES,
     REASON_NO_ALLOW_MATCH,
-    REASON_PIPE_NOT_ALLOWED,
     REASON_UNSAFE_CHAR,
 )
 from netmiko_mcp.security import (
@@ -586,11 +585,12 @@ def test_validate_command_reason_deny_match(mock_load: Any, mock_settings: Any) 
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
 def test_validate_command_reason_pipe_not_allowed(mock_load: Any, mock_settings: Any) -> None:
-    """A piped command when allow_pipe=False should return REASON_PIPE_NOT_ALLOWED."""
+    """A piped command when allow_pipe=False is rejected at the allowlist check
+    since '|' is only in effective_allowed when allow_pipe is True."""
     _vc_setup(mock_load, mock_settings, allow_pipe=False)
     result = validate_command("show version | include IOS")
     assert not result.allowed
-    assert result.reason == REASON_PIPE_NOT_ALLOWED
+    assert result.reason == REASON_UNSAFE_CHAR
 
 
 @patch("netmiko_mcp.security.settings")
@@ -681,7 +681,7 @@ _CARVEOUT_DENIED = ["show version"]
         ("show\xa0version", False),       # NBSP (U+00A0) — BYPASS
         ("show\u3000version", False),     # ideographic space (U+3000) — BYPASS
         ("show\x0bversion", False),       # vertical tab (U+000B) — BYPASS
-        ("show version\tshow ip interface brief", False),  # tab-chained commands — BYPASS
+        ("show version\tshow ip interface brief", True),   # tab-chained: normalizes to invalid cmd, not 'show version'
     ],
 )
 @patch("netmiko_mcp.security.settings")
