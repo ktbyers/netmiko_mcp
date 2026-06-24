@@ -3,6 +3,8 @@ name: netmiko-tools-yml
 description: Workflows and references for using the Netmiko CLI tools .netmiko.yml format for device inventory, credential management, and encryption.
 ---
 
+> **For humans:** This file is reference documentation for the device inventory format used by netmiko-mcp. You can read it directly, but its real purpose is to be installed as a skill in your AI client — once loaded into Claude's context, you can ask it to help you build your inventory file, encrypt your credentials, or integrate with a secrets manager and it already has everything it needs. See the [Claude Code Skills](../../README.md#claude-code-skills) section in the README for installation instructions.
+
 # Netmiko Tools YAML (.netmiko.yml)
 
 The `.netmiko.yml` file is the standard inventory and credential storage mechanism for Netmiko's built-in CLI tools (`netmiko-show`, `netmiko-cfg`, `netmiko-grep`). For the Netmiko MCP server, this format is used to securely load device details without forcing the LLM to handle plaintext passwords.
