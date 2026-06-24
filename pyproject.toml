@@ -5,6 +5,7 @@ description = "MCP Server for Netmiko Network Automation Library."
 authors = [{ name = "Kirk Byers", email = "ktbyers@twb-tech.com" }]
 license = { text = "Apache-2.0" }
 readme = "README.md"
+keywords = ["netmiko", "mcp", "network-automation", "ssh"]
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
