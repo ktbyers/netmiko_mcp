@@ -151,7 +151,9 @@ def validate_command(command: str) -> ValidationResult:
     if settings.allow_pipe:
         effective_allowed.add("|")
     if any(c not in effective_allowed for c in normalized):
-        return ValidationResult(allowed=False, reason=REASON_UNSAFE_CHAR, normalized_command=normalized)
+        return ValidationResult(
+            allowed=False, reason=REASON_UNSAFE_CHAR, normalized_command=normalized
+        )
 
     # Extract base command and potential pipe segment.
     parts = normalized.split("|", 1)
@@ -160,7 +162,9 @@ def validate_command(command: str) -> ValidationResult:
     # Deny check runs against base_command (after pipe split) so that a denied
     # command cannot bypass the check by appending a pipe modifier.
     if deny_check(base_command, denied_commands):
-        return ValidationResult(allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized)
+        return ValidationResult(
+            allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized
+        )
 
     # Pipe check: validate if a pipe exists. When allow_pipe is False, the
     # pipe character never reaches this point — it is rejected by the allowlist
@@ -171,23 +175,37 @@ def validate_command(command: str) -> ValidationResult:
 
         # Multiple pipes are never allowed.
         if "|" in pipe_modifier:
-            return ValidationResult(allowed=False, reason=REASON_MULTIPLE_PIPES, normalized_command=normalized)
+            return ValidationResult(
+                allowed=False, reason=REASON_MULTIPLE_PIPES, normalized_command=normalized
+            )
 
         if pipe_modifier:
             modifier_keyword = pipe_modifier.split()[0]
             if modifier_keyword not in settings.pipe_modifiers:
-                return ValidationResult(allowed=False, reason=REASON_INVALID_PIPE_MODIFIER, normalized_command=normalized)
+                return ValidationResult(
+                    allowed=False,
+                    reason=REASON_INVALID_PIPE_MODIFIER,
+                    normalized_command=normalized,
+                )
         else:
-            return ValidationResult(allowed=False, reason=REASON_INVALID_PIPE_MODIFIER, normalized_command=normalized)
+            return ValidationResult(
+                allowed=False, reason=REASON_INVALID_PIPE_MODIFIER, normalized_command=normalized
+            )
 
     # Test base command against the allowed_commands list.
     for allowed in allowed_commands:
         if "*" in allowed:
             pattern = glob_to_regex(allowed)
             if pattern.match(base_command):
-                return ValidationResult(allowed=True, reason=REASON_ALLOWED, normalized_command=normalized)
+                return ValidationResult(
+                    allowed=True, reason=REASON_ALLOWED, normalized_command=normalized
+                )
         elif base_command.lower() == allowed.strip().lower():
-            return ValidationResult(allowed=True, reason=REASON_ALLOWED, normalized_command=normalized)
+            return ValidationResult(
+                allowed=True, reason=REASON_ALLOWED, normalized_command=normalized
+            )
 
     # If it matches no allowed entry, deny it.
-    return ValidationResult(allowed=False, reason=REASON_NO_ALLOW_MATCH, normalized_command=normalized)
+    return ValidationResult(
+        allowed=False, reason=REASON_NO_ALLOW_MATCH, normalized_command=normalized
+    )

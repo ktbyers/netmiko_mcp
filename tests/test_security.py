@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -149,7 +148,9 @@ def test_validate_command_default_denied(mock_load: Any, mock_settings: Any) -> 
     """Test that commands are denied by default when no whitelist is configured."""
     mock_load.return_value = {}  # Simulate missing or empty commands file
     mock_settings.allow_pipe = False
-    mock_settings.allowed_command_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    mock_settings.allowed_command_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
 
     # Pipes are blocked when allow_pipe is False
     assert not validate_command("show run | include password").allowed
@@ -181,7 +182,9 @@ def test_validate_command_custom_yaml(mock_load: Any) -> None:
 def test_validate_command_pipes_disabled(mock_load: Any, mock_settings: Any) -> None:
     """Test that pipes are rejected when allow_pipe is False."""
     mock_settings.allow_pipe = False
-    mock_settings.allowed_command_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    mock_settings.allowed_command_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
     mock_settings.pipe_modifiers = ["include", "exclude", "section", "begin", "count"]
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
@@ -196,7 +199,9 @@ def test_validate_command_pipes_disabled(mock_load: Any, mock_settings: Any) -> 
 def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any) -> None:
     """Test that safe pipes are permitted when allow_pipe is True."""
     mock_settings.allow_pipe = True
-    mock_settings.allowed_command_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    mock_settings.allowed_command_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
     # Simulate a user who has added IOS and NX-OS modifiers to their config
     mock_settings.pipe_modifiers = [
         "include",
@@ -254,7 +259,9 @@ def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any)
 def test_validate_command_pipes_enabled_dangerous(mock_load: Any, mock_settings: Any) -> None:
     """Test that dangerous pipes are rejected even when allow_pipe is True."""
     mock_settings.allow_pipe = True
-    mock_settings.allowed_command_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    mock_settings.allowed_command_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
     mock_settings.pipe_modifiers = ["include", "exclude", "section", "begin", "count"]
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
@@ -670,18 +677,21 @@ _CARVEOUT_DENIED = ["show version"]
 @pytest.mark.parametrize(
     "command,expected_allowed",
     [
-        ("show version", False),          # exact match — denied correctly today
-        ("SHOW VERSION", False),           # all caps
-        ("Show Version", False),           # mixed case
-        (" show version", False),         # leading space — BYPASS
-        ("show version ", False),         # trailing space — BYPASS
-        ("\tshow version", False),        # leading tab — BYPASS
-        ("show  version", False),         # double space — BYPASS
-        ("show\tversion", False),         # internal tab — BYPASS
-        ("show\xa0version", False),       # NBSP (U+00A0) — BYPASS
-        ("show\u3000version", False),     # ideographic space (U+3000) — BYPASS
-        ("show\x0bversion", False),       # vertical tab (U+000B) — BYPASS
-        ("show version\tshow ip interface brief", True),   # tab-chained: normalizes to invalid cmd, not 'show version'
+        ("show version", False),  # exact match — denied correctly today
+        ("SHOW VERSION", False),  # all caps
+        ("Show Version", False),  # mixed case
+        (" show version", False),  # leading space — BYPASS
+        ("show version ", False),  # trailing space — BYPASS
+        ("\tshow version", False),  # leading tab — BYPASS
+        ("show  version", False),  # double space — BYPASS
+        ("show\tversion", False),  # internal tab — BYPASS
+        ("show\xa0version", False),  # NBSP (U+00A0) — BYPASS
+        ("show\u3000version", False),  # ideographic space (U+3000) — BYPASS
+        ("show\x0bversion", False),  # vertical tab (U+000B) — BYPASS
+        (
+            "show version\tshow ip interface brief",
+            True,
+        ),  # tab-chained: normalizes to invalid cmd, not 'show version'
     ],
 )
 @patch("netmiko_mcp.security.settings")
@@ -712,9 +722,9 @@ def test_deny_carveout_bypass(
 @pytest.mark.parametrize(
     "command,expected_allowed",
     [
-        ("show version | include Cisco", False),   # BYPASS: pipe with spaces
-        ("show version|include Cisco", False),       # BYPASS: pipe with no spaces
-        ("show version | count", False),             # BYPASS: count modifier
+        ("show version | include Cisco", False),  # BYPASS: pipe with spaces
+        ("show version|include Cisco", False),  # BYPASS: pipe with no spaces
+        ("show version | count", False),  # BYPASS: count modifier
     ],
 )
 @patch("netmiko_mcp.security.settings")
@@ -751,8 +761,8 @@ def test_deny_carveout_pipe_bypass(
 @pytest.mark.parametrize(
     "command",
     [
-        "show version; reload",      # semicolon — not whitespace, not in allowlist
-        "show version & reload",     # ampersand — not whitespace, not in allowlist
+        "show version; reload",  # semicolon — not whitespace, not in allowlist
+        "show version & reload",  # ampersand — not whitespace, not in allowlist
     ],
 )
 @patch("netmiko_mcp.security.settings")
@@ -775,9 +785,7 @@ def test_allowlist_rejects_disallowed_chars(
 
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
-def test_pipe_char_allowed_when_allow_pipe_true(
-    mock_load: Any, mock_settings: Any
-) -> None:
+def test_pipe_char_allowed_when_allow_pipe_true(mock_load: Any, mock_settings: Any) -> None:
     """'|' is not in allowed_command_chars but must pass the character check
     when allow_pipe=True because it is added to the effective allowed set."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
@@ -789,9 +797,7 @@ def test_pipe_char_allowed_when_allow_pipe_true(
 
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
-def test_pipe_char_rejected_when_allow_pipe_false(
-    mock_load: Any, mock_settings: Any
-) -> None:
+def test_pipe_char_rejected_when_allow_pipe_false(mock_load: Any, mock_settings: Any) -> None:
     """'|' must be rejected by the allowlist check (REASON_UNSAFE_CHAR) when
     allow_pipe=False because it is not added to the effective allowed set."""
     _vc_setup(mock_load, mock_settings, allow_pipe=False)
@@ -808,11 +814,11 @@ def test_pipe_char_rejected_when_allow_pipe_false(
 @pytest.mark.parametrize(
     "command,expected_normalized",
     [
-        ("show version", "show version"),          # already clean
-        ("Show   Version", "Show Version"),        # caps preserved, spaces collapsed
-        ("  show version  ", "show version"),      # leading/trailing stripped
-        ("SHOW\tVERSION", "SHOW VERSION"),         # tab normalized, caps preserved
-        ("show  ip  route", "show ip route"),      # multiple internal spaces
+        ("show version", "show version"),  # already clean
+        ("Show   Version", "Show Version"),  # caps preserved, spaces collapsed
+        ("  show version  ", "show version"),  # leading/trailing stripped
+        ("SHOW\tVERSION", "SHOW VERSION"),  # tab normalized, caps preserved
+        ("show  ip  route", "show ip route"),  # multiple internal spaces
     ],
 )
 @patch("netmiko_mcp.security.settings")
