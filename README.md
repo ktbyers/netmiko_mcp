@@ -25,7 +25,7 @@ The controls in Netmiko-MCP are a best-effort layer and should not be your only 
 Install using `uv`:
 
 ```bash
-uv tool install git+https://github.com/ktbyers/netmiko_mcp.git
+uv tool install netmiko-mcp
 ```
 
 > **Note about uv tool install:**

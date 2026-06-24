@@ -19,9 +19,9 @@ Use `NETMIKO_MCP_CONFIG` to point to a non-default config path. Use `NETMIKO_TOO
 
 ## Making the Server Available to All Clients
 
-All clients except Claude Code launch the server from their own working directory and require a global installation. `uv pip install -e .` only installs into the project's local `.venv`.
+All clients except Claude Code launch the server from their own working directory and require a global installation. `uv sync` only installs into the project's local `.venv`.
 
-**Install from PyPI (future):**
+**Install from PyPI (recommended):**
 ```bash
 uv tool install netmiko-mcp
 ```
