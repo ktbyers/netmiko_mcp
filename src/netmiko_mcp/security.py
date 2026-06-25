@@ -159,25 +159,66 @@ class AbbreviationDenyFilter:
         self._root = TrieNode()
 
     def add(self, deny_entry: str) -> None:
-        """Insert a plain deny entry into the trie hierarchy.
+        """Insert a deny entry (plain or trailing-glob) into the trie hierarchy.
 
-        Entries containing '*' are silently ignored — glob patterns are handled
-        by the existing regex path in deny_check().
+        Supported forms:
+          plain:        "show ip interface"   — exact word count match.
+          inline glob:  "show ip interface*"  — last word stem + any suffix
+                                                chars or extra words OK.
+          space glob:   "show ip interface *" — prefix-only last word, requires
+                                                at least one more submitted word.
+
+        Entries with '*' in any non-trailing position are silently ignored.
         """
-        if "*" in deny_entry:
-            return
         words = deny_entry.strip().lower().split()
         if not words:
             return
+
+        last = words[-1]
+
+        if last == "*":
+            # Space glob: e.g. "show ip interface *"
+            prefix_words = words[:-1]
+            if not prefix_words:
+                return  # bare "*" — skip
+            if any("*" in w for w in prefix_words):
+                return  # glob in non-trailing position — unsupported
+            is_inline_glob = False
+            is_space_glob = True
+            effective_words = prefix_words
+        elif last.endswith("*"):
+            # Inline glob: e.g. "show ip interface*"
+            stem = last[:-1]
+            if not stem:
+                return  # degenerate — skip
+            if any("*" in w for w in words[:-1]):
+                return  # glob in non-trailing position — unsupported
+            is_inline_glob = True
+            is_space_glob = False
+            effective_words = words[:-1] + [stem]
+        else:
+            # Plain entry: no glob
+            if "*" in deny_entry:
+                return  # '*' in unexpected position — unsupported
+            is_inline_glob = False
+            is_space_glob = False
+            effective_words = words
+
         node = self._root
-        for i, word in enumerate(words):
+        for i, word in enumerate(effective_words):
             for char in word:
                 if char not in node.children:
                     node.children[char] = TrieNode()
                 node = node.children[char]
             node.word_end = True
-            if i == len(words) - 1:
-                node.final_word = True
+            is_last = i == len(effective_words) - 1
+            if is_last:
+                if is_inline_glob:
+                    node.glob_suffix = True
+                elif is_space_glob:
+                    node.glob_next_word = True
+                else:
+                    node.final_word = True
             else:
                 if node.next_word_trie is None:
                     node.next_word_trie = TrieNode()
