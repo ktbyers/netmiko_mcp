@@ -1,23 +1,23 @@
 """
 Security validation and command verification layer for the Netmiko MCP server.
 
-## How command verificaiton layer (should) work.
+# How command verificaiton layer (should) work.
 
-### 1. Default Deny
+# 1. Default Deny
 An empty allow/deny list denies everything. Nothing is permitted unless explicitly
 added to the allow list (allowed_commands).
 
-### 2. Deny Takes Precedence
+# 2. Deny Takes Precedence
 If a command matches both the deny list and the allow list, it is denied. The deny
 list always takes precedence over the allow list.
 
-### 3. Allow List Does Not Cover Abbreviations
+# 3. Allow List Does Not Cover Abbreviations
 The allow list performs exact or glob matching only — it does not subsume
 abbreviations. For example, allowed: ["show version"] does not
 automatically permit "sh ver". LLMs and users are expected to send full,
 un-abbreviated commands.
 
-### 4. Deny List Covers All Abbreviations of the Same Word Count
+# 4. Deny List Covers All Abbreviations of the Same Word Count
 A plain deny entry covers all abbreviated forms of the same word count.
 For example, denied: ["show version"] denies "sh ver", "sho ver",
 "show ver", etc. It does NOT deny a command with fewer words — "sh" alone
@@ -26,7 +26,7 @@ with more words. Denied: ["show ip interface"] does NOT block "show ip
 interface brief". Use a glob entry to cover additional arguments
 (see point 5).
 
-### 5. Deny List Does Not Cover Additional Arguments by Default
+# 5. Deny List Does Not Cover Additional Arguments by Default
 A plain deny entry covers only commands with the exact same word count.
 denied: ["show ip interface"] denies "sh ip int" but NOT "sh ip int brief".
 To deny a command and its arguments, use a glob entry:
@@ -35,14 +35,14 @@ To deny a command and its arguments, use a glob entry:
   - "show ip interface *" — denies only invocations with at least one additional
                               argument; does NOT deny the base command alone.
 
-### 6. Pipe Handling
+# 6. Pipe Handling
 The pipe character is disabled by default and must be explicitly enabled via
 allow_pipe. When enabled:
   - Only the base command (before the pipe) is evaluated against allow/deny lists.
   - The pipe modifier must appear in the configured pipe_modifiers list.
   - Multiple pipes are always rejected.
 
-### 7. Command Normalization and Allowed Characters
+# 7. Command Normalization and Allowed Characters
 Commands are always normalized before validation:
   - All ASCII whitespace runs are collapsed to a single space; leading and
     trailing whitespace is stripped.
@@ -50,32 +50,31 @@ Commands are always normalized before validation:
     excludes newline, carriage return, tab, and Unicode space lookalikes
     (NBSP, ideographic space, etc.).
 
-### 8. Audit Logging
+# 8. Audit Logging
 Every command attempt is logged with a specific reason: allowed, unsafe char,
 deny match, pipe violation (multiple pipes or invalid modifier), or no allow
 match.
 
-### 9. Configuration Changes Have No Supported Tool
+# 9. Configuration Changes Have No Supported Tool
 Currently there is no tool to support configuration changes. A future
 Netmiko-MCP tool will support configuration changes. You should still be careful
 NOT to allow any configuration commands via your allowed command list.
 
-### 10. Glob Patterns
+# 10. Glob Patterns
 Glob patterns ("show *") are supported in both the allow and deny lists.
 
 Allow list: glob patterns are converted to regular expressions internally.
 Abbreviations are NOT expanded on the allow side — "show *" does not permit
 "sh version".
 
-Deny list: two trailing glob forms are supported, both handled by the
-trie-based AbbreviationDenyFilter so that abbreviated first words are covered:
-  - "show ip interface*"  — the last word has an inline glob. The submitted
-    word must be a prefix of or extend beyond the stem "interface". Extra
-    submitted words are also permitted.
-  - "show ip interface *" — the glob is a separate trailing word. The submitted
-    word must be a prefix of "interface" (abbreviations only, no extensions).
+Deny list: two trailing glob forms are supported, both cover abbreviated words:
+  - "show ip interface*"  — the last word has an inline glob. Denies "show ip 
+    interface" (including abbreviated forms), denies "show ip interfaces" (extra
+    letter), denies "show ip interface brief" (extra word).
+  - "show ip interface *" — the glob is a separate trailing word.
     At least one additional submitted word is required; the base command alone
-    is not denied.
+    is NOT denied. denies "show ip interface brief" (including abbreviated forms),
+    does NOT deny "show ip interface".
 
 """
 
