@@ -868,11 +868,15 @@ def _make_filter(*deny_entries: str) -> AbbreviationDenyFilter:
 # --- add() edge cases -------------------------------------------------------
 
 
-def test_abbreviation_filter_glob_entries_ignored() -> None:
-    """Glob deny entries are skipped — handled by the regex path."""
+def test_abbreviation_filter_space_glob_denies_with_extra_word() -> None:
+    """Space-glob deny entries require at least one extra submitted word."""
     f = _make_filter("show *", "configure *")
-    assert not f.is_denied("show version")
-    assert not f.is_denied("configure terminal")
+    assert f.is_denied("show version")
+    assert f.is_denied("sh version")
+    assert f.is_denied("configure terminal")
+    assert f.is_denied("conf ter")
+    assert not f.is_denied("show")
+    assert not f.is_denied("configure")
 
 
 def test_abbreviation_filter_empty_entry_ignored() -> None:

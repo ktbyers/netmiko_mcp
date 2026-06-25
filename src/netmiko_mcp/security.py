@@ -240,6 +240,10 @@ class AbbreviationDenyFilter:
         reachable terminal nodes and evaluate deny logic."""
         node = trie_root
         for char in words[word_idx]:
+            if node.glob_suffix:
+                # Submitted word extends past the deny stem — inline glob
+                # covers the extra characters. Extra submitted words also OK.
+                return True
             if char not in node.children:
                 return False
             node = node.children[char]
@@ -266,10 +270,18 @@ class AbbreviationDenyFilter:
         """
         if node.word_end:
             if node.final_word and last_word:
-                # A deny entry ends here and the submitted command has no
-                # remaining words. Exact word count match — denied.
+                # Plain entry: exact word count match — denied.
                 return True
-            # Deny entry continues. Recurse if submitted has another word.
+            if node.glob_suffix:
+                # Inline glob: submitted word is a prefix of the deny stem.
+                # Extra submitted words are also fine.
+                return True
+            if node.glob_next_word and not last_word:
+                # Space glob: submitted word matched the deny stem (prefix or
+                # exact) and at least one more submitted word exists.
+                return True
+            # Deny entry continues to the next word. Recurse if submitted has
+            # another word.
             if not last_word and node.next_word_trie is not None:
                 if self.match_word(trie_root=node.next_word_trie, words=words, word_idx=word_idx + 1):
                     return True
