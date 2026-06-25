@@ -1145,9 +1145,7 @@ def test_p2_exact_deny_beats_glob_allow(mock_load: Any, mock_settings: Any) -> N
 @pytest.mark.parametrize("command", ["sh ver", "sh version", "s version", "sho ver"])
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
-def test_p3_exact_allow_no_abbreviations(
-    mock_load: Any, mock_settings: Any, command: str
-) -> None:
+def test_p3_exact_allow_no_abbreviations(mock_load: Any, mock_settings: Any, command: str) -> None:
     """Principle 3: allowed: ['show version'] does not permit abbreviated forms."""
     mock_load.return_value = {
         "allowed_commands": ["show version"],
@@ -1164,9 +1162,7 @@ def test_p3_exact_allow_no_abbreviations(
 @pytest.mark.parametrize("command", ["sh version", "sh ip route", "s version", "sho ip"])
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
-def test_p3_glob_allow_no_abbreviations(
-    mock_load: Any, mock_settings: Any, command: str
-) -> None:
+def test_p3_glob_allow_no_abbreviations(mock_load: Any, mock_settings: Any, command: str) -> None:
     """Principle 3: allowed: ['show *'] does not permit abbreviated first words."""
     mock_load.return_value = {
         "allowed_commands": ["show *"],
@@ -1188,8 +1184,15 @@ def test_p3_glob_allow_no_abbreviations(
 @pytest.mark.parametrize(
     "command",
     [
-        "show version", "sh version", "s version", "sho version",
-        "show vers", "sh vers", "s vers", "sh ver", "s v",
+        "show version",
+        "sh version",
+        "s version",
+        "sho version",
+        "show vers",
+        "sh vers",
+        "s vers",
+        "sh ver",
+        "s v",
     ],
 )
 def test_p4_covers_all_abbreviations_same_word_count(command: str) -> None:
@@ -1230,22 +1233,22 @@ def test_p4_three_word_deny_no_extra_args() -> None:
 def test_p5_inline_glob_denies_base_and_args() -> None:
     """Principle 5: 'show ip interface*' denies base, extra chars, and extra words."""
     f = _make_filter("show ip interface*")
-    assert f.is_denied("show ip interface")         # exact base
-    assert f.is_denied("sh ip int")                # abbreviated base
-    assert f.is_denied("show ip interface brief")   # extra word
-    assert f.is_denied("sh ip int brief")           # abbreviated + extra word
-    assert f.is_denied("show ip interfaces")        # extra chars on last word
-    assert not f.is_denied("show ip")              # too few words
+    assert f.is_denied("show ip interface")  # exact base
+    assert f.is_denied("sh ip int")  # abbreviated base
+    assert f.is_denied("show ip interface brief")  # extra word
+    assert f.is_denied("sh ip int brief")  # abbreviated + extra word
+    assert f.is_denied("show ip interfaces")  # extra chars on last word
+    assert not f.is_denied("show ip")  # too few words
 
 
 def test_p5_space_glob_denies_args_only() -> None:
     """Principle 5: 'show ip interface *' requires extra word; base alone not denied."""
     f = _make_filter("show ip interface *")
-    assert not f.is_denied("show ip interface")     # base alone — NOT denied
-    assert not f.is_denied("sh ip int")            # abbreviated base — NOT denied
-    assert f.is_denied("show ip interface brief")   # extra word
-    assert f.is_denied("sh ip int brief")           # abbreviated + extra word
-    assert not f.is_denied("show ip interfaces")   # extra chars, no extra word — NOT denied
+    assert not f.is_denied("show ip interface")  # base alone — NOT denied
+    assert not f.is_denied("sh ip int")  # abbreviated base — NOT denied
+    assert f.is_denied("show ip interface brief")  # extra word
+    assert f.is_denied("sh ip int brief")  # abbreviated + extra word
+    assert not f.is_denied("show ip interfaces")  # extra chars, no extra word — NOT denied
 
 
 # ---------------------------------------------------------------------------

@@ -12,8 +12,8 @@ If a command matches both the deny list and the allow list, it is denied. The de
 list always takes precedence over the allow list.
 
 ### 3. Allow List Does Not Cover Abbreviations
-The allow list performs exact or glob matching only — it does not subsume 
-abbreviations. For example, allowed: ["show version"] does not 
+The allow list performs exact or glob matching only — it does not subsume
+abbreviations. For example, allowed: ["show version"] does not
 automatically permit "sh ver". LLMs and users are expected to send full,
 un-abbreviated commands.
 
@@ -23,7 +23,7 @@ For example, denied: ["show version"] denies "sh ver", "sho ver",
 "show ver", etc. It does NOT deny a command with fewer words — "sh" alone
 is not denied by denied: ["show version"]. It also does NOT deny commands
 with more words. Denied: ["show ip interface"] does NOT block "show ip
-interface brief". Use a glob entry to cover additional arguments 
+interface brief". Use a glob entry to cover additional arguments
 (see point 5).
 
 ### 5. Deny List Does Not Cover Additional Arguments by Default
@@ -56,7 +56,7 @@ deny match, pipe violation (multiple pipes or invalid modifier), or no allow
 match.
 
 ### 9. Configuration Changes Have No Supported Tool
-Currently there is no tool to support configuration changes. A future 
+Currently there is no tool to support configuration changes. A future
 Netmiko-MCP tool will support configuration changes. You should still be careful
 NOT to allow any configuration commands via your allowed command list.
 
@@ -298,7 +298,9 @@ class AbbreviationDenyFilter:
             # Deny entry continues to the next word. Recurse if submitted has
             # another word.
             if not last_word and node.next_word_trie is not None:
-                if self.match_word(trie_root=node.next_word_trie, words=words, word_idx=word_idx + 1):
+                if self.match_word(
+                    trie_root=node.next_word_trie, words=words, word_idx=word_idx + 1
+                ):
                     return True
         # DFS into character children — the submitted word may be a shorter
         # prefix of a longer deny word.
@@ -434,7 +436,9 @@ def validate_command(command: str) -> ValidationResult:
         return ValidationResult(
             allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized
         )
-    if build_abbreviation_filter(denied_commands=tuple(denied_commands)).is_denied(submitted=base_command):
+    if build_abbreviation_filter(denied_commands=tuple(denied_commands)).is_denied(
+        submitted=base_command
+    ):
         return ValidationResult(
             allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized
         )
