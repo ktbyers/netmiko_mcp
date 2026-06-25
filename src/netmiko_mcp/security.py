@@ -115,14 +115,22 @@ class TrieNode:
 
     children maps each character to the next TrieNode at this word level.
     word_end marks the end of a complete word for a deny entry.
-    final_word marks the last word of a complete deny entry.
-    next_word_trie is the next word in a given deny entry.
+    final_word marks the last word of a plain deny entry (exact word count).
+    glob_suffix marks the last word of an inline-glob deny entry (e.g.
+      "interface*"). The submitted word may be a prefix of or extend beyond
+      the stem, and extra submitted words are also permitted.
+    glob_next_word marks the last word before a trailing space-glob (e.g.
+      "interface *"). The submitted word must be a prefix of the stem only;
+      at least one additional submitted word is required.
+    next_word_trie is the root trie for the next word in a multi-word deny entry.
     """
 
     def __init__(self) -> None:
         self.children: dict[str, "TrieNode"] = {}
         self.word_end: bool = False
         self.final_word: bool = False
+        self.glob_suffix: bool = False
+        self.glob_next_word: bool = False
         self.next_word_trie: "TrieNode | None" = None
 
 
