@@ -68,7 +68,7 @@ Abbreviations are NOT expanded on the allow side — "show *" does not permit
 "sh version".
 
 Deny list: two trailing glob forms are supported, both cover abbreviated words:
-  - "show ip interface*"  — the last word has an inline glob. Denies "show ip 
+  - "show ip interface*"  — the last word has an inline glob. Denies "show ip
     interface" (including abbreviated forms), denies "show ip interfaces" (extra
     letter), denies "show ip interface brief" (extra word).
   - "show ip interface *" — the glob is a separate trailing word.
@@ -194,7 +194,8 @@ class AbbreviationDenyFilter:
           space glob:   "show ip interface *" — prefix-only last word, requires
                                                 at least one more submitted word.
 
-        Entries with '*' in any non-trailing position are silently ignored.
+        Entries with unsupported glob patterns are rejected at startup by
+        validate_command_lists() before they can reach this method.
         """
         words = deny_entry.strip().lower().split()
         if not words:
@@ -324,6 +325,84 @@ class AbbreviationDenyFilter:
             ):
                 return True
         return False
+
+
+def _invalid_glob_entries(entries: list[str]) -> list[str]:
+    """Return entries that violate the single trailing-only glob rule.
+
+    Both the allow and deny lists share the same rule: at most one '*', and it
+    must appear only as a trailing word ('cmd *') or trailing character ('cmd*').
+    A bare '*' with no prefix is also invalid.
+
+    Invalid forms include:
+      - A bare '*' alone (no prefix words).
+      - '*' in any non-trailing word position (e.g. 'show * interface').
+      - '*' mid-word in a non-trailing word (e.g. 'sh*w version').
+      - More than one '*' in the entry.
+    """
+    invalid = []
+    for entry in entries:
+        words = entry.strip().split()
+        if not words:
+            continue  # empty entries are harmlessly ignored
+        if entry.count("*") > 1:
+            invalid.append(entry)  # multiple globs never supported
+            continue
+        last = words[-1]
+        if last == "*":
+            prefix_words = words[:-1]
+            if not prefix_words or any("*" in w for w in prefix_words):
+                invalid.append(entry)
+        elif last.endswith("*"):
+            if not last[:-1] or any("*" in w for w in words[:-1]):
+                invalid.append(entry)
+        elif "*" in entry:
+            invalid.append(entry)  # '*' in unexpected position
+    return invalid
+
+
+def validate_allow_commands(allowed_commands: list[str]) -> list[str]:
+    """Return allow entries that contain unsupported glob patterns.
+
+    A bad allow-side glob is a security hole — it may permit commands that
+    should not be allowed. These are surfaced as startup errors.
+    """
+    return _invalid_glob_entries(entries=allowed_commands)
+
+
+def validate_deny_commands(denied_commands: list[str]) -> list[str]:
+    """Return deny entries that contain unsupported glob patterns.
+
+    A bad deny-side glob would be silently ignored by AbbreviationDenyFilter,
+    failing to deny commands it should. These are surfaced as startup errors.
+    """
+    return _invalid_glob_entries(entries=denied_commands)
+
+
+def validate_command_lists(
+    allowed_commands: list[str],
+    denied_commands: list[str],
+) -> list[str]:
+    """Validate both allow and deny command lists and return all error messages.
+
+    Returns an empty list when both lists are valid. Each entry in the returned
+    list is a human-readable error string describing which list has a problem
+    and which entries are invalid.
+    """
+    errors: list[str] = []
+    invalid_allow = validate_allow_commands(allowed_commands=allowed_commands)
+    if invalid_allow:
+        errors.append(
+            f"allowed_commands contains unsupported glob pattern(s): {invalid_allow}. "
+            f"'*' must appear only as a trailing word ('cmd *') or trailing character ('cmd*')."
+        )
+    invalid_deny = validate_deny_commands(denied_commands=denied_commands)
+    if invalid_deny:
+        errors.append(
+            f"denied_commands contains unsupported glob pattern(s): {invalid_deny}. "
+            f"'*' must appear only as a trailing word ('cmd *') or trailing character ('cmd*')."
+        )
+    return errors
 
 
 def glob_to_regex(glob_pattern: str) -> re.Pattern[str]:
