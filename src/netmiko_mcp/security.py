@@ -123,17 +123,23 @@ class ValidationResult:
 
 
 class TrieNode:
-    """TrieNode in a character-level prefix trie for a single command word.
+    """TrieNode in a character-level tree (prefix trie) for a single command
+    word.
 
     children maps each character to the next TrieNode at this word level.
+
     word_end marks the end of a complete word for a deny entry.
-    final_word marks the last word of a plain deny entry (exact word count).
+
+    final_word marks the last word of a plain deny entry (no glob).
+
     glob_suffix marks the last word of an inline-glob deny entry (e.g.
       "interface*"). The submitted word may be a prefix of or extend beyond
       the stem, and extra submitted words are also permitted.
+
     glob_next_word marks the last word before a trailing space-glob (e.g.
       "interface *"). The submitted word must be a prefix of the stem only;
       at least one additional submitted word is required.
+
     next_word_trie is the root trie for the next word in a multi-word deny entry.
     """
 
@@ -150,21 +156,27 @@ class AbbreviationDenyFilter:
     """Checks whether a submitted command is an abbreviation of any plain
     (non-glob) entry in the denied_commands list.
 
-    Each deny entry is indexed in a hierarchy of character-level tries, one
-    level per word. At each level the submitted word is matched as a prefix of
-    the deny word, so 'sh ver' matches 'show version'.
+    Each deny entry is indexed in a hierarchy of character-level nodes (tries),
+    one index per word. At each level the submitted word can match as a prefix of
+    the deny word, so 'sh ver' can match 'show version'.
 
     A submitted command is denied if:
     - Every word of the deny entry is matched by the corresponding submitted word
-      as a prefix (case-insensitive), AND
+      including prefixes (case-insensitive), AND
     - The submitted command has exactly the same number of words as the deny entry.
 
     Extra submitted words are NOT covered — 'sh ver sum' is NOT denied by
     'show version'. Use a glob deny entry ('show version *') to cover additional
     arguments.
 
-    All three forms cover abbreviated first words — 'sh ip int' is denied by
-    any of the plain, inline-glob, or space-glob forms of 'show ip interface'.
+    Abbreviated starting words are covered by all three forms, but word count
+    rules still apply:
+      - plain 'show ip interface'     denies 'sh ip int' (exact 3 words),
+                                      but NOT 'sh ip int brief' (extra word).
+      - inline-glob 'show ip interface*' denies both 'sh ip int' and
+                                      'sh ip int brief'.
+      - space-glob 'show ip interface *' denies 'sh ip int brief' (extra word
+                                      satisfies the *), but NOT 'sh ip int' alone.
 
     Build once at load time via add(), then query per command via is_denied().
     """
