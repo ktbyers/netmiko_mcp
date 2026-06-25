@@ -61,8 +61,21 @@ Netmiko-MCP tool will support configuration changes. You should still be careful
 NOT to allow any configuration commands via your allowed command list.
 
 ### 10. Glob Patterns
-Glob patterns ("show *") are supported in both the allow and deny lists and are
-converted to regular expressions internally.
+Glob patterns ("show *") are supported in both the allow and deny lists.
+
+Allow list: glob patterns are converted to regular expressions internally.
+Abbreviations are NOT expanded on the allow side — "show *" does not permit
+"sh version".
+
+Deny list: two trailing glob forms are supported, both handled by the
+trie-based AbbreviationDenyFilter so that abbreviated first words are covered:
+  - "show ip interface*"  — the last word has an inline glob. The submitted
+    word must be a prefix of or extend beyond the stem "interface". Extra
+    submitted words are also permitted.
+  - "show ip interface *" — the glob is a separate trailing word. The submitted
+    word must be a prefix of "interface" (abbreviations only, no extensions).
+    At least one additional submitted word is required; the base command alone
+    is not denied.
 
 """
 
@@ -151,8 +164,10 @@ class AbbreviationDenyFilter:
     'show version'. Use a glob deny entry ('show version *') to cover additional
     arguments.
 
+    All three forms cover abbreviated first words — 'sh ip int' is denied by
+    any of the plain, inline-glob, or space-glob forms of 'show ip interface'.
+
     Build once at load time via add(), then query per command via is_denied().
-    Glob entries ('show *') are ignored — those are handled by the regex path.
     """
 
     def __init__(self) -> None:
@@ -347,9 +362,10 @@ def load_commands() -> dict[str, Any]:
 def build_abbreviation_filter(denied_commands: tuple[str, ...]) -> AbbreviationDenyFilter:
     """Build and cache an AbbreviationDenyFilter from the denied_commands list.
 
-    Plain (non-glob) deny entries are loaded into the trie so that abbreviated
-    forms of denied commands are caught at validation time. Glob entries are
-    skipped here — they are handled by the regex path in deny_check().
+    All deny entries are loaded into the trie — plain, inline-glob, and
+    space-glob. The trie handles abbreviation matching for all forms so that
+    abbreviated first words are caught. The regex path in deny_check() continues
+    to handle exact and glob matches for fully-expanded commands.
 
     The cache is keyed on the denied_commands tuple so that different
     configurations get independent cached filters without requiring a server
