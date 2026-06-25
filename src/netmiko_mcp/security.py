@@ -1,26 +1,69 @@
 """
 Security validation and command verification layer for the Netmiko MCP server.
 
-Rules:
-1. Default Deny: Nothing is allowed unless it is added to the whitelist (allowed_commands).
-   The whitelist is empty by default.
-2. The blacklist (denied_commands) has precedence over the whitelist so if both
-   blacklist and whitelist match a given command, the command is denied.
-3. Pipes are denied by default. Characters not in allowed_command_chars are rejected
-   before any other validation.
-4. Every attempted and executed command is logged for audit and compliance via the
-   audit module. validate_command() returns a ValidationResult carrying both the
-   boolean decision and a reason constant so the caller can emit a structured audit
-   record with the specific rejection cause (unsafe char, deny match, pipe violation,
-   no allow match, etc.).
-5. Configuration changes are disallowed by default, both at the Netmiko-level
-   (no send_config_set) and at the command-validation level.
-6. Globbing is supported ("show *") in both the whitelist and the blacklist.
-   Glob patterns are converted to regular expressions internally.
+## How command verificaiton layer (should) work.
 
-Questions:
-1. How to handle the command abbreviation issue?
-2. Should we support explicit regular expressions in allowed/denied list?
+### 1. Default Deny
+An empty allow/deny list denies everything. Nothing is permitted unless explicitly
+added to the allow list (allowed_commands).
+
+### 2. Deny Takes Precedence
+If a command matches both the deny list and the allow list, it is denied. The deny
+list always takes precedence over the allow list.
+
+### 3. Allow List Does Not Cover Abbreviations
+The allow list performs exact or glob matching only — it does not subsume 
+abbreviations. For example, allowed: ["show version"] does not 
+automatically permit "sh ver". LLMs and users are expected to send full,
+un-abbreviated commands.
+
+### 4. Deny List Covers All Abbreviations of the Same Word Count
+A plain deny entry covers all abbreviated forms of the same word count.
+For example, denied: ["show version"] denies "sh ver", "sho ver",
+"show ver", etc. It does NOT deny a command with fewer words — "sh" alone
+is not denied by denied: ["show version"]. It also does NOT deny commands
+with more words. Denied: ["show ip interface"] does NOT block "show ip
+interface brief". Use a glob entry to cover additional arguments 
+(see point 5).
+
+### 5. Deny List Does Not Cover Additional Arguments by Default
+A plain deny entry covers only commands with the exact same word count.
+denied: ["show ip interface"] denies "sh ip int" but NOT "sh ip int brief".
+To deny a command and its arguments, use a glob entry:
+  - "show ip interface*"  — denies the base command and anything immediately
+                              following with no space boundary.
+  - "show ip interface *" — denies only invocations with at least one additional
+                              argument; does NOT deny the base command alone.
+
+### 6. Pipe Handling
+The pipe character is disabled by default and must be explicitly enabled via
+allow_pipe. When enabled:
+  - Only the base command (before the pipe) is evaluated against allow/deny lists.
+  - The pipe modifier must appear in the configured pipe_modifiers list.
+  - Multiple pipes are always rejected.
+
+### 7. Command Normalization and Allowed Characters
+Commands are always normalized before validation:
+  - All ASCII whitespace runs are collapsed to a single space; leading and
+    trailing whitespace is stripped.
+  - Only characters in allowed_command_chars are permitted. By default this
+    excludes newline, carriage return, tab, and Unicode space lookalikes
+    (NBSP, ideographic space, etc.).
+
+### 8. Audit Logging
+Every command attempt is logged with a specific reason: allowed, unsafe char,
+deny match, pipe violation (multiple pipes or invalid modifier), or no allow
+match.
+
+### 9. Configuration Changes Have No Supported Tool
+Currently there is no tool to support configuration changes. A future 
+Netmiko-MCP tool will support configuration changes. You should still be careful
+NOT to allow any configuration commands via your allowed command list.
+
+### 10. Glob Patterns
+Glob patterns ("show *") are supported in both the allow and deny lists and are
+converted to regular expressions internally.
+
 """
 
 import re
@@ -67,6 +110,133 @@ class ValidationResult:
     normalized_command: str = ""
 
 
+class TrieNode:
+    """TrieNode in a character-level prefix trie for a single command word.
+
+    children maps each character to the next TrieNode at this word level.
+    word_end marks the end of a complete word for a deny entry.
+    final_word marks the last word of a complete deny entry.
+    next_word_trie is the next word in a given deny entry.
+    """
+
+    def __init__(self) -> None:
+        self.children: dict[str, "TrieNode"] = {}
+        self.word_end: bool = False
+        self.final_word: bool = False
+        self.next_word_trie: "TrieNode | None" = None
+
+
+class AbbreviationDenyFilter:
+    """Checks whether a submitted command is an abbreviation of any plain
+    (non-glob) entry in the denied_commands list.
+
+    Each deny entry is indexed in a hierarchy of character-level tries, one
+    level per word. At each level the submitted word is matched as a prefix of
+    the deny word, so 'sh ver' matches 'show version'.
+
+    A submitted command is denied if:
+    - Every word of the deny entry is matched by the corresponding submitted word
+      as a prefix (case-insensitive), AND
+    - The submitted command has exactly the same number of words as the deny entry.
+
+    Extra submitted words are NOT covered — 'sh ver sum' is NOT denied by
+    'show version'. Use a glob deny entry ('show version *') to cover additional
+    arguments.
+
+    Build once at load time via add(), then query per command via is_denied().
+    Glob entries ('show *') are ignored — those are handled by the regex path.
+    """
+
+    def __init__(self) -> None:
+        self._root = TrieNode()
+
+    def add(self, deny_entry: str) -> None:
+        """Insert a plain deny entry into the trie hierarchy.
+
+        Entries containing '*' are silently ignored — glob patterns are handled
+        by the existing regex path in deny_check().
+        """
+        if "*" in deny_entry:
+            return
+        words = deny_entry.strip().lower().split()
+        if not words:
+            return
+        node = self._root
+        for i, word in enumerate(words):
+            for char in word:
+                if char not in node.children:
+                    node.children[char] = TrieNode()
+                node = node.children[char]
+            node.word_end = True
+            if i == len(words) - 1:
+                node.final_word = True
+            else:
+                if node.next_word_trie is None:
+                    node.next_word_trie = TrieNode()
+                node = node.next_word_trie
+
+    def is_denied(self, submitted: str) -> bool:
+        """Return True if submitted is an abbreviation of any deny entry.
+
+        submitted should be the whitespace-normalized command string.
+        Comparison is case-insensitive.
+        """
+        words = submitted.strip().lower().split()
+        if not words:
+            return False
+        return self.match_word(trie_root=self._root, words=words, word_idx=0)
+
+    def match_word(self, trie_root: TrieNode, words: list[str], word_idx: int) -> bool:
+        """Traverse trie_root with words[word_idx]'s characters, then DFS for
+        reachable terminal nodes and evaluate deny logic."""
+        node = trie_root
+        for char in words[word_idx]:
+            if char not in node.children:
+                return False
+            node = node.children[char]
+        last_word = word_idx == len(words) - 1
+        return self.find_word_end(
+            node=node,
+            words=words,
+            word_idx=word_idx,
+            last_word=last_word,
+        )
+
+    def find_word_end(
+        self,
+        node: TrieNode,
+        words: list[str],
+        word_idx: int,
+        last_word: bool,
+    ) -> bool:
+        """DFS from node to find reachable is_terminal nodes and apply deny logic.
+
+        The submitted word for word_idx ended somewhere inside the character trie.
+        The submitted word may be a prefix of a longer deny word, so we DFS to
+        find all complete deny words reachable from the current position.
+        """
+        if node.word_end:
+            if node.final_word and last_word:
+                # A deny entry ends here and the submitted command has no
+                # remaining words. Exact word count match — denied.
+                return True
+            # Deny entry continues. Recurse if submitted has another word.
+            if not last_word and node.next_word_trie is not None:
+                if self.match_word(trie_root=node.next_word_trie, words=words, word_idx=word_idx + 1):
+                    return True
+        # DFS into character children — the submitted word may be a shorter
+        # prefix of a longer deny word.
+        for child in node.children.values():
+            if self.find_word_end(
+                node=child,
+                words=words,
+                word_idx=word_idx,
+                last_word=last_word,
+            ):
+                return True
+        return False
+
+
 def glob_to_regex(glob_pattern: str) -> re.Pattern[str]:
     """
     Convert a simple glob pattern containing '*' into a compiled regular expression.
@@ -110,6 +280,24 @@ def load_commands() -> dict[str, Any]:
     if file_path.is_file():
         return load_yaml_file(str(file_path))
     return {}
+
+
+@lru_cache(maxsize=128)
+def build_abbreviation_filter(denied_commands: tuple[str, ...]) -> AbbreviationDenyFilter:
+    """Build and cache an AbbreviationDenyFilter from the denied_commands list.
+
+    Plain (non-glob) deny entries are loaded into the trie so that abbreviated
+    forms of denied commands are caught at validation time. Glob entries are
+    skipped here — they are handled by the regex path in deny_check().
+
+    The cache is keyed on the denied_commands tuple so that different
+    configurations get independent cached filters without requiring a server
+    restart when tests supply different mock data.
+    """
+    deny_filter = AbbreviationDenyFilter()
+    for entry in denied_commands:
+        deny_filter.add(deny_entry=entry)
+    return deny_filter
 
 
 def validate_command(command: str) -> ValidationResult:
@@ -161,7 +349,15 @@ def validate_command(command: str) -> ValidationResult:
 
     # Deny check runs against base_command (after pipe split) so that a denied
     # command cannot bypass the check by appending a pipe modifier.
-    if deny_check(base_command, denied_commands):
+    # Two paths are run:
+    #   1. deny_check() — regex/glob path, catches exact and glob deny entries.
+    #   2. build_abbreviation_filter() — trie path, catches abbreviated forms of
+    #      plain deny entries (e.g. "sh ver" denied by "show version").
+    if deny_check(command=base_command, denied_commands=denied_commands):
+        return ValidationResult(
+            allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized
+        )
+    if build_abbreviation_filter(denied_commands=tuple(denied_commands)).is_denied(submitted=base_command):
         return ValidationResult(
             allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized
         )
