@@ -206,6 +206,7 @@ class AbbreviationDenyFilter:
         if last == "*":
             # Space glob: e.g. "show ip interface *"
             prefix_words = words[:-1]
+            # Defensive: both should be caught by _invalid_glob_entries()
             if not prefix_words:
                 return  # bare "*" — skip
             if any("*" in w for w in prefix_words):
@@ -215,16 +216,18 @@ class AbbreviationDenyFilter:
             effective_words = prefix_words
         elif last.endswith("*"):
             # Inline glob: e.g. "show ip interface*"
-            stem = last[:-1]
-            if not stem:
-                return  # degenerate — skip
+            base_word = last[:-1]
+            # Defensive: shouldn't happen (both the below cases).
+            if not base_word:
+                return
             if any("*" in w for w in words[:-1]):
                 return  # glob in non-trailing position — unsupported
             is_inline_glob = True
             is_space_glob = False
-            effective_words = words[:-1] + [stem]
+            effective_words = words[:-1] + [base_word]
         else:
             # Plain entry: no glob
+            # Defensive: shouldn't happen
             if "*" in deny_entry:
                 return  # '*' in unexpected position — unsupported
             is_inline_glob = False
@@ -232,13 +235,13 @@ class AbbreviationDenyFilter:
             effective_words = words
 
         node = self._root
-        for i, word in enumerate(effective_words):
+        for word_idx, word in enumerate(effective_words):
             for char in word:
                 if char not in node.children:
                     node.children[char] = TrieNode()
                 node = node.children[char]
             node.word_end = True
-            is_last = i == len(effective_words) - 1
+            is_last = word_idx == len(effective_words) - 1
             if is_last:
                 if is_inline_glob:
                     node.glob_suffix = True
@@ -274,6 +277,9 @@ class AbbreviationDenyFilter:
             if char not in node.children:
                 return False
             node = node.children[char]
+        # We reached the end of this submitted word and the deny pattern
+        # still matches (potentially as an abbreviation). Find end of deny pattern
+        # word so that we can continue checking.
         last_word = word_idx == len(words) - 1
         return self.find_word_end(
             node=node,
@@ -291,9 +297,10 @@ class AbbreviationDenyFilter:
     ) -> bool:
         """DFS from node to find reachable is_terminal nodes and apply deny logic.
 
-        The submitted word for word_idx ended somewhere inside the character trie.
+        The submitted word for word_idx ended somewhere inside the deny pattern word.
+
         The submitted word may be a prefix of a longer deny word, so we DFS to
-        find all complete deny words reachable from the current position.
+        find all complete deny pattern words reachable from the current position.
         """
         if node.word_end:
             if node.final_word and last_word:
