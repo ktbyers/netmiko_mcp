@@ -278,12 +278,12 @@ across characters already confirmed to be permitted.
 
 | Pattern | Matches | Does not match |
 |---|---|---|
-| `"show version"` | `show version` | `show version detail`, `sh ver` |
-| `"show version*"` | `show version`, `show versions`, `show version detail` | `sh ver`, `show ip route` |
-| `"show version *"` | `show version detail` | `show version`, `show versio`, `sh ver detail` |
+| `"show version"` | `show version` | `show version detail`, `configure terminal` |
+| `"show version*"` | `show version`, `show versions`, `show version detail` | `show ip route`, `configure terminal` |
+| `"show version *"` | `show version detail` | `show version`, `configure terminal` |
 | `"show ip *"` | `show ip route`, `show ip int brief`, `show ip bgp summary` | `show ip`, `show version`, `show ipv6 route` |
-| `"show *"` | `show version`, `show ip route` | `show`, `sh ver`, `configure terminal` |
-| `"debug *"` | `debug ip packet`, `debug ip ospf adj` | `debug`, `show debug` |
+| `"show *"` | `show version`, `show ip route` | `show`, `configure terminal` |
+| `"debug *"` | `debug ip ospf events`, `debug ip ospf adj` | `debug`, `show debug` |
 | `"show ip route *"` | `show ip route 10.0.0.0` | `show ip route`, `show ip interface` |
 <br />
 <br />
