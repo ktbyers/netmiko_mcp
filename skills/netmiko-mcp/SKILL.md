@@ -21,7 +21,7 @@ inventory_type: "netmiko_tools"          # default: netmiko_tools (only supporte
 # inventory_file: "~/.netmiko.yml"       # default: null — uses native Netmiko search paths
 command_file: "~/commands.yml"           # default: ~/commands.yml
 allow_pipe: false                        # default: false
-unsafe_chars: [";", "\n", "\r", "&"]    # default: these four
+allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,\""  # default
 pipe_modifiers: ["include", "exclude", "section", "begin", "count"]  # default: these five
 max_workers: 10                          # default: 10 (thread cap for send_show_command_to_group)
 save_output_dir: "~/.netmiko_mcp_tmp"   # default: ~/.netmiko_mcp_tmp (all saved output lands here)
@@ -42,33 +42,47 @@ audit_log_transcript_dir: "~/.netmiko_mcp_transcripts"  # default: ~/.netmiko_mc
 
 ## Security Whitelist (`~/commands.yml`)
 
-Default: all commands denied. Path set by `command_file`. Both lists use the same matching rules:
-- A **plain string** (e.g. `"reload"`) matches only that exact command — anchored at both ends.
-- A **glob** (e.g. `"reload *"`) matches the bare command or any command starting with that prefix followed by arguments.
+Default: all commands denied. Path set by `command_file`.
+
+### Matching rules
+
+**Allow list** (`allowed_commands`):
+- A **plain string** (e.g. `"show version"`) matches only that exact command — case-insensitive, anchored at both ends. Abbreviations are NOT supported (`"sh ver"` does not match).
+- An **inline glob** (e.g. `"show version*"`) matches the bare command and any suffix: `show version`, `show versions`, `show version detail` all match.
+- A **space glob** (e.g. `"show version *"`) requires at least one additional word: `show version detail` matches, but `show version` alone does NOT.
+
+**Deny list** (`denied_commands`):
+- A **plain string** (e.g. `"clear counters"`) denies that exact command AND all abbreviated forms of the same word count — `cl count`, `cle counters`, etc. are all denied. Commands with more or fewer words are NOT covered.
+- An **inline glob** (e.g. `"clear*"`) denies the bare command and any suffix, including abbreviated first words.
+- A **space glob** (e.g. `"clear *"`) denies commands with at least one additional word, including abbreviated forms. The bare command alone is NOT denied.
 - `denied_commands` always takes precedence over `allowed_commands`.
 
 ```yaml
 ---
 allowed_commands:
-  - "show version *"
+  - "show version*"    # matches bare 'show version' and any arguments
   - "show ip int brief"
 denied_commands:
-  - "configure *"   # blocks "configure terminal", "configure replace", etc.
-  - "reload"        # blocks only the bare "reload" command
+  - "configure*"  # blocks 'configure', 'configure terminal', 'conf t', etc.
+  - "clear*"      # blocks 'clear', 'clear counters', 'cle count', etc.
 ```
 
-## Unsafe Characters (`unsafe_chars`)
+## Allowed Characters (`allowed_command_chars`)
 
-Characters unconditionally rejected before whitelist matching or glob evaluation. Default: `[";", "\n", "\r", "&"]`. Only add to this list — do not remove the defaults.
+Allowlist of characters permitted in commands. Any character not in this set is rejected before any deny/allow matching. Default covers `a-z A-Z 0-9` and `<space> . / : _ - , "`.
 
-Override in `~/.netmiko-mcp.yml`:
+Whitespace normalization runs before this check: all ASCII whitespace runs (tabs, multiple spaces, etc.) are collapsed to a single space and leading/trailing whitespace is stripped. The normalized form is what is validated and forwarded to the device — capitalization is preserved.
+
+The pipe character `|` must not be added here when `allow_pipe` is `false`. It is added to the effective allowed set automatically when `allow_pipe` is `true`.
+
+Extend in `~/.netmiko-mcp.yml`:
 ```yaml
-unsafe_chars: [";", "\n", "\r", "&", "|"]
+allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,\""
 ```
 
-Or via environment variable (JSON array):
+Or via environment variable:
 ```
-NETMIKO_MCP_UNSAFE_CHARS='[";", "\n", "\r", "&", "|"]'
+NETMIKO_MCP_ALLOWED_COMMAND_CHARS='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"'
 ```
 
 ## Pipe Support (`allow_pipe` and `pipe_modifiers`)
@@ -92,10 +106,7 @@ pipe_modifiers:
   - "section"
   - "begin"
   - "count"
-  - "grep"
-  - "egrep"
   - "json"
-  - "json-pretty"
   - "xml"
   - "no-more"
 ```

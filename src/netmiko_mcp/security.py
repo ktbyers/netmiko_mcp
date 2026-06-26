@@ -1,26 +1,87 @@
 """
 Security validation and command verification layer for the Netmiko MCP server.
 
-Rules:
-1. Default Deny: Nothing is allowed unless it is added to the whitelist (allowed_commands).
-   The whitelist is empty by default.
-2. The blacklist (denied_commands) has precedence over the whitelist so if both
-   blacklist and whitelist match a given command, the command is denied.
-3. Pipes are denied by default. Multi-command injection vectors (e.g. `;`, `\\n`, `\\r`,
-   `&`) are blocked via the unsafe_chars check before any other validation.
-4. Every attempted and executed command is logged for audit and compliance via the
-   audit module. validate_command() returns a ValidationResult carrying both the
-   boolean decision and a reason constant so the caller can emit a structured audit
-   record with the specific rejection cause (unsafe char, deny match, pipe violation,
-   no allow match, etc.).
-5. Configuration changes are disallowed by default, both at the Netmiko-level
-   (no send_config_set) and at the command-validation level.
-6. Globbing is supported ("show *") in both the whitelist and the blacklist.
-   Glob patterns are converted to regular expressions internally.
+# How command verificaiton layer (should) work.
 
-Questions:
-1. How to handle the command abbreviation issue?
-2. Should we support explicit regular expressions in allowed/denied list?
+# 1. Default Deny
+An empty allow/deny list denies everything. Nothing is permitted unless explicitly
+added to the allow list (allowed_commands).
+
+# 2. Deny Takes Precedence
+If a command matches both the deny list and the allow list, it is denied. The deny
+list always takes precedence over the allow list.
+
+# 3. Allow List Does Not Cover Abbreviations
+The allow list performs exact or glob matching only — it does not subsume
+abbreviations. For example, allowed: ["show version"] does not
+automatically permit "sh ver". LLMs and users are expected to send full,
+un-abbreviated commands.
+
+# 4. Deny List Covers All Abbreviations of the Same Word Count
+A plain deny entry covers all abbreviated forms of the same word count.
+For example, denied: ["show version"] denies "sh ver", "sho ver",
+"show ver", etc. It does NOT deny a command with fewer words — "sh" alone
+is not denied by denied: ["show version"]. It also does NOT deny commands
+with more words. Denied: ["show ip interface"] does NOT block "show ip
+interface brief". Use a glob entry to cover additional arguments
+(see point 5).
+
+# 5. Deny List Does Not Cover Additional Arguments by Default
+A plain deny entry covers only commands with the exact same word count.
+denied: ["show ip interface"] denies "sh ip int" but NOT "sh ip int brief".
+To deny a command and its arguments, use a glob entry:
+  - "show ip interface*"  — denies the base command and anything immediately
+                              following with no space boundary.
+  - "show ip interface *" — denies only invocations with at least one additional
+                              argument; does NOT deny the base command alone.
+
+# 6. Pipe Handling
+The pipe character is disabled by default and must be explicitly enabled via
+allow_pipe. When enabled:
+  - Only the base command (before the pipe) is evaluated against allow/deny lists.
+  - The pipe modifier must appear in the configured pipe_modifiers list.
+  - Multiple pipes are always rejected.
+
+# 7. Command Normalization and Allowed Characters
+Commands are always normalized before validation:
+  - All ASCII whitespace runs are collapsed to a single space; leading and
+    trailing whitespace is stripped.
+  - Only characters in allowed_command_chars are permitted. By default this
+    excludes newline, carriage return, tab, and Unicode space lookalikes
+    (NBSP, ideographic space, etc.).
+
+# 8. Audit Logging
+Every command attempt is logged with a specific reason: allowed, unsafe char,
+deny match, pipe violation (multiple pipes or invalid modifier), or no allow
+match.
+
+# 9. Configuration Changes Have No Supported Tool
+Currently there is no tool to support configuration changes. A future
+Netmiko-MCP tool will support configuration changes. You should still be careful
+NOT to allow any configuration commands via your allowed command list.
+
+# 10. Glob Patterns
+Glob patterns ("show *") are supported in both the allow and deny lists.
+Only a single '*' is permitted per entry, it must appear at the end of the
+string (either as a trailing word 'cmd *' or as a trailing character 'cmd*'),
+and a bare '*' alone is not allowed. Globs in the middle of a string (e.g.
+'show * interface') are rejected at startup.
+
+Both the allow list and deny list support the same two trailing glob forms:
+  - "show ip interface*"  — inline glob. Matches/denies "show ip interface"
+    (including abbreviated forms on the deny side), "show ip interfaces"
+    (extra letter), and "show ip interface brief" (extra word).
+  - "show ip interface *" — space glob. At least one additional submitted word
+    is required; the base command alone is NOT matched/denied. Matches/denies
+    "show ip interface brief" but NOT "show ip interface" alone.
+
+Allow list: glob patterns are converted to regular expressions internally.
+Abbreviations are NOT expanded on the allow side — "show *" does not permit
+"sh version".
+
+Deny list: the same two glob forms apply and additionally cover abbreviated
+words via the abbreviation trie.
+
 """
 
 import re
@@ -37,7 +98,6 @@ from netmiko_mcp.audit import (
     REASON_INVALID_PIPE_MODIFIER,
     REASON_MULTIPLE_PIPES,
     REASON_NO_ALLOW_MATCH,
-    REASON_PIPE_NOT_ALLOWED,
     REASON_UNSAFE_CHAR,
 )
 from netmiko_mcp.config import settings
@@ -57,47 +117,334 @@ class ValidationResult:
     of the REASON_* constants from the audit module and describes why the
     command was allowed or denied. The reason is intended to be recorded
     verbatim in the audit log.
+
+    normalized_command holds the whitespace-normalized form of the submitted
+    command. When allowed is True this is the exact string that should be
+    forwarded to the network device.
     """
 
     allowed: bool
     reason: str
+    normalized_command: str = ""
 
 
-def _to_regex_char(c: str) -> str:
-    """Return the regex character class representation of a single character.
-    Non-printable characters (e.g. newline, carriage return) are converted to
-    their escaped forms (e.g. \\n, \\r) so they are valid inside a [...] class.
+class TrieNode:
+    """TrieNode in a character-level tree (prefix trie) for a single command
+    word.
+
+    children maps each character to the next TrieNode at this word level.
+
+    word_end marks the end of a complete word for a deny entry.
+
+    final_word marks the last word of a plain deny entry (no glob).
+
+    glob_suffix marks the last word of an inline-glob deny entry (e.g.
+      "interface*"). The submitted word may be a prefix of or extend beyond
+      the stem, and extra submitted words are also permitted.
+
+    glob_next_word marks the last word before a trailing space-glob (e.g.
+      "interface *"). The submitted word must be a prefix of the stem only;
+      at least one additional submitted word is required.
+
+    next_word_trie is the root trie for the next word in a multi-word deny entry.
     """
-    return c.encode("unicode_escape").decode() if not c.isprintable() else c
+
+    def __init__(self) -> None:
+        self.children: dict[str, "TrieNode"] = {}
+        self.word_end: bool = False
+        self.final_word: bool = False
+        self.glob_suffix: bool = False
+        self.glob_next_word: bool = False
+        self.next_word_trie: "TrieNode | None" = None
 
 
-def _build_unsafe_re_class(chars: list[str]) -> str:
-    """Build a regex negated character class from a list of unsafe characters."""
-    escaped = "".join(_to_regex_char(c) for c in chars)
-    return f"[^{escaped}]"
+class AbbreviationDenyFilter:
+    """Checks whether a submitted command is an abbreviation of any plain
+    (non-glob) entry in the denied_commands list.
+
+    Each deny entry is indexed in a hierarchy of character-level nodes (tries),
+    one index per word. At each level the submitted word can match as a prefix of
+    the deny word, so 'sh ver' can match 'show version'.
+
+    A submitted command is denied if:
+    - Every word of the deny entry is matched by the corresponding submitted word
+      including prefixes (case-insensitive), AND
+    - The submitted command has exactly the same number of words as the deny entry.
+
+    Extra submitted words are NOT covered — 'sh ver sum' is NOT denied by
+    'show version'. Use a glob deny entry ('show version *') to cover additional
+    arguments.
+
+    Abbreviated starting words are covered by all three forms, but word count
+    rules still apply:
+      - plain 'show ip interface'     denies 'sh ip int' (exact 3 words),
+                                      but NOT 'sh ip int brief' (extra word).
+      - inline-glob 'show ip interface*' denies both 'sh ip int' and
+                                      'sh ip int brief'.
+      - space-glob 'show ip interface *' denies 'sh ip int brief' (extra word
+                                      satisfies the *), but NOT 'sh ip int' alone.
+
+    Build once at load time via add(), then query per command via is_denied().
+    """
+
+    def __init__(self) -> None:
+        self._root = TrieNode()
+
+    def add(self, deny_entry: str) -> None:
+        """Insert a deny entry (plain or trailing-glob) into the trie hierarchy.
+
+        Supported forms:
+          plain:        "show ip interface"   — exact word count match.
+          inline glob:  "show ip interface*"  — last word stem + any suffix
+                                                chars or extra words OK.
+          space glob:   "show ip interface *" — prefix-only last word, requires
+                                                at least one more submitted word.
+
+        Entries with unsupported glob patterns are rejected at startup by
+        validate_command_lists() before they can reach this method.
+        """
+        words = deny_entry.strip().lower().split()
+        if not words:
+            return
+
+        last = words[-1]
+
+        if last == "*":
+            # Space glob: e.g. "show ip interface *"
+            prefix_words = words[:-1]
+            # Defensive: both should be caught by _invalid_glob_entries()
+            if not prefix_words:
+                return  # bare "*" — skip
+            if any("*" in w for w in prefix_words):
+                return  # glob in non-trailing position — unsupported
+            is_inline_glob = False
+            is_space_glob = True
+            effective_words = prefix_words
+        elif last.endswith("*"):
+            # Inline glob: e.g. "show ip interface*"
+            base_word = last[:-1]
+            # Defensive: shouldn't happen (both the below cases).
+            if not base_word:
+                return
+            if any("*" in w for w in words[:-1]):
+                return  # glob in non-trailing position — unsupported
+            is_inline_glob = True
+            is_space_glob = False
+            effective_words = words[:-1] + [base_word]
+        else:
+            # Plain entry: no glob
+            # Defensive: shouldn't happen
+            if "*" in deny_entry:
+                return  # '*' in unexpected position — unsupported
+            is_inline_glob = False
+            is_space_glob = False
+            effective_words = words
+
+        node = self._root
+        for word_idx, word in enumerate(effective_words):
+            for char in word:
+                if char not in node.children:
+                    node.children[char] = TrieNode()
+                node = node.children[char]
+            node.word_end = True
+            is_last = word_idx == len(effective_words) - 1
+            if is_last:
+                if is_inline_glob:
+                    node.glob_suffix = True
+                elif is_space_glob:
+                    node.glob_next_word = True
+                else:
+                    node.final_word = True
+            else:
+                if node.next_word_trie is None:
+                    node.next_word_trie = TrieNode()
+                node = node.next_word_trie
+
+    def is_denied(self, submitted: str) -> bool:
+        """Return True if submitted is an abbreviation of any deny entry.
+
+        submitted should be the whitespace-normalized command string.
+        Comparison is case-insensitive.
+        """
+        words = submitted.strip().lower().split()
+        if not words:
+            return False
+        return self.match_word(trie_root=self._root, words=words, word_idx=0)
+
+    def match_word(self, trie_root: TrieNode, words: list[str], word_idx: int) -> bool:
+        """Traverse trie_root with words[word_idx]'s characters, then DFS for
+        reachable terminal nodes and evaluate deny logic.
+
+        match_word and find_word_end call each other mutually to chain through
+        successive patterns of a multi-word deny entry.
+        """
+        node = trie_root
+        for char in words[word_idx]:
+            if node.glob_suffix:
+                # Submitted word extends past the deny stem — inline glob
+                # covers the extra characters. Extra submitted words also OK.
+                return True
+            if char not in node.children:
+                return False
+            node = node.children[char]
+        # We reached the end of this submitted word and the deny pattern
+        # still matches (potentially as an abbreviation). Find end of deny pattern
+        # word so that we can continue checking.
+        last_word = word_idx == len(words) - 1
+        return self.find_word_end(
+            node=node,
+            words=words,
+            word_idx=word_idx,
+            last_word=last_word,
+        )
+
+    def find_word_end(
+        self,
+        node: TrieNode,
+        words: list[str],
+        word_idx: int,
+        last_word: bool,
+    ) -> bool:
+        """DFS from node to find reachable is_terminal nodes and apply deny logic.
+
+        The submitted word for word_idx ended somewhere inside the deny pattern word.
+
+        The submitted word may be a prefix of a longer deny word, so we DFS to
+        find all complete deny pattern words reachable from the current position.
+
+        match_word and find_word_end call each other mutually to chain through
+        successive patterns of a multi-word deny entry.
+
+        find_word_end also recurses into itself directly to DFS through character
+        children when the submitted word ends mid-way through a deny pattern.
+        """
+        if node.word_end:
+            if node.final_word and last_word:
+                # Plain entry: exact word count match — denied.
+                return True
+            if node.glob_suffix:
+                # Inline glob: submitted word is a prefix of the deny stem.
+                # Extra submitted words are also fine.
+                return True
+            if node.glob_next_word and not last_word:
+                # Space glob: submitted word matched the deny stem (prefix or
+                # exact) and at least one more submitted word exists.
+                return True
+            # Deny entry continues to the next word. Recurse if submitted has
+            # another word.
+            if not last_word and node.next_word_trie is not None:
+                if self.match_word(
+                    trie_root=node.next_word_trie, words=words, word_idx=word_idx + 1
+                ):
+                    return True
+        # DFS into character children — the submitted word may be a shorter
+        # prefix of a longer deny word.
+        for child in node.children.values():
+            if self.find_word_end(
+                node=child,
+                words=words,
+                word_idx=word_idx,
+                last_word=last_word,
+            ):
+                return True
+        return False
 
 
-_UNSAFE_RE_CLASS = _build_unsafe_re_class(settings.unsafe_chars)
+def _invalid_glob_entries(entries: list[str]) -> list[str]:
+    """Return entries that violate the single trailing-only glob rule.
+
+    Both the allow and deny lists share the same rule: at most one '*', and it
+    must appear only as a trailing word ('cmd *') or trailing character ('cmd*').
+    A bare '*' with no prefix is also invalid.
+
+    Invalid forms include:
+      - A bare '*' alone (no prefix words).
+      - '*' in any non-trailing word position (e.g. 'show * interface').
+      - '*' mid-word in a non-trailing word (e.g. 'sh*w version').
+      - More than one '*' in the entry.
+    """
+    invalid = []
+    for entry in entries:
+        words = entry.strip().split()
+        if not words:
+            continue  # empty entries are harmlessly ignored
+        if entry.count("*") > 1:
+            invalid.append(entry)  # multiple globs never supported
+            continue
+        last = words[-1]
+        if last == "*":
+            prefix_words = words[:-1]
+            if not prefix_words or any("*" in w for w in prefix_words):
+                invalid.append(entry)
+        elif last.endswith("*"):
+            if not last[:-1] or any("*" in w for w in words[:-1]):
+                invalid.append(entry)
+        elif "*" in entry:
+            invalid.append(entry)  # '*' in unexpected position
+    return invalid
 
 
-def glob_to_regex(glob_pattern: str, block_unsafe: bool = True) -> re.Pattern[str]:
+def validate_allow_commands(allowed_commands: list[str]) -> list[str]:
+    """Return allow entries that contain unsupported glob patterns.
+
+    A bad allow-side glob is a security hole — it may permit commands that
+    should not be allowed. These are surfaced as startup errors.
+    """
+    return _invalid_glob_entries(entries=allowed_commands)
+
+
+def validate_deny_commands(denied_commands: list[str]) -> list[str]:
+    """Return deny entries that contain unsupported glob patterns.
+
+    A bad deny-side glob would be silently ignored by AbbreviationDenyFilter,
+    failing to deny commands it should. These are surfaced as startup errors.
+    """
+    return _invalid_glob_entries(entries=denied_commands)
+
+
+def validate_command_lists(
+    allowed_commands: list[str],
+    denied_commands: list[str],
+) -> list[str]:
+    """Validate both allow and deny command lists and return all error messages.
+
+    Returns an empty list when both lists are valid. Each entry in the returned
+    list is a human-readable error string describing which list has a problem
+    and which entries are invalid.
+    """
+    errors: list[str] = []
+    invalid_allow = validate_allow_commands(allowed_commands=allowed_commands)
+    if invalid_allow:
+        errors.append(
+            f"allowed_commands contains unsupported glob pattern(s): {invalid_allow}. "
+            f"'*' must appear only as a trailing word ('cmd *') or trailing character ('cmd*')."
+        )
+    invalid_deny = validate_deny_commands(denied_commands=denied_commands)
+    if invalid_deny:
+        errors.append(
+            f"denied_commands contains unsupported glob pattern(s): {invalid_deny}. "
+            f"'*' must appear only as a trailing word ('cmd *') or trailing character ('cmd*')."
+        )
+    return errors
+
+
+def glob_to_regex(glob_pattern: str) -> re.Pattern[str]:
     """
     Convert a simple glob pattern containing '*' into a compiled regular expression.
 
-    When block_unsafe=True (the default, used for allow checks), the wildcard '*'
-    is restricted to match any character EXCEPT those in settings.unsafe_chars,
-    preventing command injection through wildcard expansion.
+    The wildcard '*' matches any character. Commands are validated against
+    allowed_command_chars before reaching this function, so no additional
+    wildcard restriction is needed here.
 
-    When block_unsafe=False (used for deny checks), the wildcard matches any
-    character — a deny pattern should be as broad as possible to catch more.
-
-    It also intelligently handles spaces preceding asterisks (e.g., 'show version *'
-    will match 'show version' with or without arguments).
+    A trailing ' *' (space then asterisk) requires at least one additional word
+    after the prefix. Commands are always normalized to a single space before
+    validation, so a literal space followed by .* is sufficient.
+    'show version *' matches 'show version brief' but NOT 'show version' alone.
+    Use 'show version*' (inline glob) to also match the bare command.
     """
-    wildcard = _UNSAFE_RE_CLASS if block_unsafe else "."
     escaped = re.escape(glob_pattern.strip())
-    escaped = escaped.replace(r"\ \*", rf"(?:\s+{wildcard}*)?")
-    escaped = escaped.replace(r"\*", rf"{wildcard}*")
+    escaped = escaped.replace(r"\ \*", r"\ .*")
+    escaped = escaped.replace(r"\*", r".*")
 
     return re.compile("^" + escaped + "$", re.IGNORECASE)
 
@@ -106,12 +453,12 @@ def deny_check(command: str, denied_commands: list[str]) -> bool:
     """Return True if the command matches any entry in denied_commands.
 
     Every entry is evaluated via glob_to_regex — the same logic as the allow
-    check. A plain string (e.g. 'reload') matches only that exact command.
-    A glob (e.g. 'reload *') matches any command starting with 'reload'.
+    check.
+
     Denied always takes precedence over allowed.
     """
     for denied in denied_commands:
-        if glob_to_regex(denied.strip(), block_unsafe=False).match(command):
+        if glob_to_regex(denied.strip()).match(command):
             return True
     return False
 
@@ -129,6 +476,25 @@ def load_commands() -> dict[str, Any]:
     return {}
 
 
+@lru_cache(maxsize=128)
+def build_abbreviation_filter(denied_commands: tuple[str, ...]) -> AbbreviationDenyFilter:
+    """Build and cache an AbbreviationDenyFilter from the denied_commands list.
+
+    All deny entries are loaded into the trie — plain, inline-glob, and
+    space-glob. The trie handles abbreviation matching for all forms so that
+    abbreviated first words are caught. The regex path in deny_check() continues
+    to handle exact and glob matches for fully-expanded commands.
+
+    The cache is keyed on the denied_commands tuple so that different
+    configurations get independent cached filters without requiring a server
+    restart when tests supply different mock data.
+    """
+    deny_filter = AbbreviationDenyFilter()
+    for entry in denied_commands:
+        deny_filter.add(deny_entry=entry)
+    return deny_filter
+
+
 def validate_command(command: str) -> ValidationResult:
     """
     Validate that the requested command is safe to execute.
@@ -136,11 +502,16 @@ def validate_command(command: str) -> ValidationResult:
     Returns a ValidationResult with allowed=True and reason=REASON_ALLOWED if the
     command passes all checks, or allowed=False with a specific reason constant
     indicating why it was rejected. The reason is intended to be recorded in the
-    audit log by the caller.
+    audit log by the caller. normalized_command in the result is the whitespace-
+    normalized form that should be forwarded to the network device when allowed.
 
     Rules applied in order:
-    - Command must NOT contain any character in settings.unsafe_chars.
-    - Command must NOT match any entry in denied_commands (supports glob patterns).
+    - Whitespace is normalized: all ASCII whitespace runs collapsed to a single
+      space, leading/trailing whitespace stripped.
+    - Command must contain only characters in allowed_command_chars (plus '|' when
+      allow_pipe is True). Rejects Unicode space lookalikes and injection chars.
+    - Command must NOT match any entry in denied_commands (checked against the
+      base command before any pipe, supports glob patterns).
     - If a pipe is present, allow_pipe must be True, and the modifier must be in
       the configured pipe_modifiers list. Multiple pipes are always rejected.
     - Base command (before any pipe) must match an entry in allowed_commands.
@@ -150,44 +521,84 @@ def validate_command(command: str) -> ValidationResult:
     allowed_commands = commands.get("allowed_commands", DEFAULT_ALLOWED_COMMANDS)
     denied_commands = commands.get("denied_commands", DEFAULT_DENIED_COMMANDS)
 
-    # Reject any command containing an unsafe character.
-    if any(char in command for char in settings.unsafe_chars):
-        return ValidationResult(allowed=False, reason=REASON_UNSAFE_CHAR)
+    # Normalize whitespace: collapse all ASCII whitespace runs (spaces, tabs,
+    # vertical tabs, etc.) to a single space and strip leading/trailing
+    # whitespace. This is the form forwarded to the network device on success.
+    normalized = " ".join(command.split())
 
-    # Test command against the denied_commands list.
-    if deny_check(command, denied_commands):
-        return ValidationResult(allowed=False, reason=REASON_DENY_MATCH)
+    # Allowlist check: reject any character not in the effective allowed set.
+    # The pipe character is added automatically when allow_pipe is True.
+    # This catches Unicode space lookalikes (NBSP, ideographic space, etc.)
+    # and injection characters that survive whitespace normalization.
+    effective_allowed = set(settings.allowed_command_chars)
+    if settings.allow_pipe:
+        effective_allowed.add("|")
+    if any(c not in effective_allowed for c in normalized):
+        return ValidationResult(
+            allowed=False, reason=REASON_UNSAFE_CHAR, normalized_command=normalized
+        )
 
     # Extract base command and potential pipe segment.
-    parts = command.split("|", 1)
+    parts = normalized.split("|", 1)
     base_command = parts[0].strip()
 
-    # Pipe check: validate if a pipe exists.
-    if len(parts) > 1:
-        if not settings.allow_pipe:
-            return ValidationResult(allowed=False, reason=REASON_PIPE_NOT_ALLOWED)
+    # Deny check runs against base_command (after pipe split) so that a denied
+    # command cannot bypass the check by appending a pipe modifier.
+    # Two paths are run:
+    #   1. deny_check() — regex/glob path, catches exact and glob deny entries.
+    #   2. build_abbreviation_filter() — trie path, catches abbreviated forms of
+    #      plain deny entries (e.g. "sh ver" denied by "show version").
+    if deny_check(command=base_command, denied_commands=denied_commands):
+        return ValidationResult(
+            allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized
+        )
+    if build_abbreviation_filter(denied_commands=tuple(denied_commands)).is_denied(
+        submitted=base_command
+    ):
+        return ValidationResult(
+            allowed=False, reason=REASON_DENY_MATCH, normalized_command=normalized
+        )
 
+    # Pipe check: validate if a pipe exists. When allow_pipe is False, the
+    # pipe character never reaches this point — it is rejected by the allowlist
+    # check above since '|' is only added to effective_allowed when allow_pipe
+    # is True.
+    if len(parts) > 1:
         pipe_modifier = parts[1].strip().lower()
 
         # Multiple pipes are never allowed.
         if "|" in pipe_modifier:
-            return ValidationResult(allowed=False, reason=REASON_MULTIPLE_PIPES)
+            return ValidationResult(
+                allowed=False, reason=REASON_MULTIPLE_PIPES, normalized_command=normalized
+            )
 
         if pipe_modifier:
             modifier_keyword = pipe_modifier.split()[0]
             if modifier_keyword not in settings.pipe_modifiers:
-                return ValidationResult(allowed=False, reason=REASON_INVALID_PIPE_MODIFIER)
+                return ValidationResult(
+                    allowed=False,
+                    reason=REASON_INVALID_PIPE_MODIFIER,
+                    normalized_command=normalized,
+                )
         else:
-            return ValidationResult(allowed=False, reason=REASON_INVALID_PIPE_MODIFIER)
+            return ValidationResult(
+                allowed=False, reason=REASON_INVALID_PIPE_MODIFIER, normalized_command=normalized
+            )
 
-    # Test command against the allowed_commands list.
+    # Test base command against the allowed_commands list.
     for allowed in allowed_commands:
         if "*" in allowed:
             pattern = glob_to_regex(allowed)
             if pattern.match(base_command):
-                return ValidationResult(allowed=True, reason=REASON_ALLOWED)
+                return ValidationResult(
+                    allowed=True, reason=REASON_ALLOWED, normalized_command=normalized
+                )
         elif base_command.lower() == allowed.strip().lower():
-            return ValidationResult(allowed=True, reason=REASON_ALLOWED)
+            return ValidationResult(
+                allowed=True, reason=REASON_ALLOWED, normalized_command=normalized
+            )
 
     # If it matches no allowed entry, deny it.
-    return ValidationResult(allowed=False, reason=REASON_NO_ALLOW_MATCH)
+    return ValidationResult(
+        allowed=False, reason=REASON_NO_ALLOW_MATCH, normalized_command=normalized
+    )

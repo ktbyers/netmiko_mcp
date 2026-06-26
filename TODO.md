@@ -6,11 +6,6 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ## Security (`security.py`)
 
-- **Command abbreviation handling** `[open question in docstring]` - `sh ip int br` is not
-  the same as `show ip interface brief` to the validator even though network devices accept
-  both. No resolution yet - document this limitation clearly for users and consider whether
-  abbreviation expansion is in scope.
-
 - **Explicit regex support** `[open question in docstring]` - Should `allowed_commands` and
   `denied_commands` support raw regular expressions in addition to globs? Currently only
   `*` glob syntax is supported.

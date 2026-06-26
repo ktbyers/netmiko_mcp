@@ -1,7 +1,8 @@
-import re
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+
+import pytest
 
 from netmiko_mcp.audit import (
     REASON_ALLOWED,
@@ -9,89 +10,17 @@ from netmiko_mcp.audit import (
     REASON_INVALID_PIPE_MODIFIER,
     REASON_MULTIPLE_PIPES,
     REASON_NO_ALLOW_MATCH,
-    REASON_PIPE_NOT_ALLOWED,
     REASON_UNSAFE_CHAR,
 )
 from netmiko_mcp.security import (
+    AbbreviationDenyFilter,
+    TrieNode,
     ValidationResult,
-    _build_unsafe_re_class,
-    _to_regex_char,
+    deny_check,
     glob_to_regex,
     load_commands,
     validate_command,
 )
-
-
-# ---------------------------------------------------------------------------
-# _to_regex_char
-# ---------------------------------------------------------------------------
-
-
-def test_to_regex_char_newline() -> None:
-    """Newline must be converted to its escaped form for use inside a regex class."""
-    assert _to_regex_char("\n") == "\\n"
-
-
-def test_to_regex_char_carriage_return() -> None:
-    """Carriage return must be converted to its escaped form."""
-    assert _to_regex_char("\r") == "\\r"
-
-
-def test_to_regex_char_semicolon() -> None:
-    """Semicolon is printable and must pass through unchanged."""
-    assert _to_regex_char(";") == ";"
-
-
-def test_to_regex_char_ampersand() -> None:
-    """Ampersand is printable and must pass through unchanged."""
-    assert _to_regex_char("&") == "&"
-
-
-def test_to_regex_char_printable_passthrough() -> None:
-    """Arbitrary printable characters must pass through unchanged."""
-    for c in ("a", "Z", "|", " ", "0", "-"):
-        assert _to_regex_char(c) == c
-
-
-# ---------------------------------------------------------------------------
-# _build_unsafe_re_class
-# ---------------------------------------------------------------------------
-
-
-def test_build_unsafe_re_class_default_string() -> None:
-    """Default unsafe chars must produce the exact expected character class string."""
-    result = _build_unsafe_re_class([";", "\n", "\r", "&"])
-    assert result == "[^;\\n\\r&]"
-
-
-def test_build_unsafe_re_class_blocks_default_chars() -> None:
-    """The compiled class must reject each of the four default unsafe characters."""
-    pattern = re.compile(_build_unsafe_re_class([";", "\n", "\r", "&"]))
-    for unsafe in (";", "\n", "\r", "&"):
-        assert not pattern.fullmatch(unsafe), f"Expected {unsafe!r} to be blocked"
-
-
-def test_build_unsafe_re_class_allows_safe_chars() -> None:
-    """The compiled class must accept characters that are not in the unsafe list."""
-    pattern = re.compile(_build_unsafe_re_class([";", "\n", "\r", "&"]))
-    for safe in ("a", "Z", "0", " ", "-", "|", ".", "/"):
-        assert pattern.fullmatch(safe), f"Expected {safe!r} to be allowed"
-
-
-def test_build_unsafe_re_class_custom_chars() -> None:
-    """Additional chars beyond the defaults must also be blocked when added."""
-    pattern = re.compile(_build_unsafe_re_class([";", "\n", "\r", "&", "|"]))
-    assert not pattern.fullmatch("|")
-    assert pattern.fullmatch("a")
-
-
-def test_build_unsafe_re_class_blocks_within_string() -> None:
-    """Unsafe chars embedded inside a longer string must prevent a full match."""
-    pattern = re.compile(_build_unsafe_re_class([";", "\n", "\r", "&"]) + "*")
-    assert pattern.fullmatch("show ip interface brief")
-    assert not pattern.fullmatch("show ip interface brief; reboot")
-    assert not pattern.fullmatch("show ip interface brief\nreboot")
-    assert not pattern.fullmatch("show ip interface brief & reboot")
 
 
 # ---------------------------------------------------------------------------
@@ -116,10 +45,10 @@ def test_glob_to_regex_trailing_wildcard_matches_arguments() -> None:
     assert p.match("show bgp summary")
 
 
-def test_glob_to_regex_trailing_wildcard_matches_bare_command() -> None:
-    """'show *' must also match 'show' with no arguments (the group is optional)."""
+def test_glob_to_regex_space_glob_does_not_match_bare_command() -> None:
+    """'show *' must NOT match 'show' alone — space-glob requires at least one extra word."""
     p = glob_to_regex("show *")
-    assert p.match("show")
+    assert not p.match("show")
 
 
 def test_glob_to_regex_is_case_insensitive() -> None:
@@ -140,38 +69,9 @@ def test_glob_to_regex_trailing_wildcard_with_multiword_prefix() -> None:
     p = glob_to_regex("show ip *")
     assert p.match("show ip interface brief")
     assert p.match("show ip route")
-    assert p.match("show ip")  # bare — wildcard group is optional
+    assert not p.match("show ip")  # bare — space-glob requires at least one extra word
     assert not p.match("show version")  # wrong prefix
     assert not p.match("show ipv6 route")  # 'ipv6' != 'ip'
-
-
-# --- bypass attempts --------------------------------------------------------
-
-
-def test_glob_to_regex_wildcard_cannot_match_semicolon() -> None:
-    """The '*' wildcard must never expand across a semicolon."""
-    p = glob_to_regex("show *")
-    assert not p.match("show version; reboot")
-    assert not p.match("show version;reboot")
-
-
-def test_glob_to_regex_wildcard_cannot_match_newline() -> None:
-    """The '*' wildcard must never expand across a newline."""
-    p = glob_to_regex("show *")
-    assert not p.match("show version\nreboot")
-
-
-def test_glob_to_regex_wildcard_cannot_match_carriage_return() -> None:
-    """The '*' wildcard must never expand across a carriage return."""
-    p = glob_to_regex("show *")
-    assert not p.match("show version\rreboot")
-
-
-def test_glob_to_regex_wildcard_cannot_match_ampersand() -> None:
-    """The '*' wildcard must never expand across an ampersand."""
-    p = glob_to_regex("show *")
-    assert not p.match("show version && reboot")
-    assert not p.match("show version &")
 
 
 def test_glob_to_regex_regex_special_chars_in_pattern_are_neutralised() -> None:
@@ -186,35 +86,26 @@ def test_glob_to_regex_wildcard_does_not_match_empty_with_mandatory_prefix() -> 
     """A pattern like 'show *' must not match an unrelated command."""
     p = glob_to_regex("show *")
     assert not p.match("configure terminal")
-    assert not p.match("debug ip packet")
+    assert not p.match("debug ip ospf events")
 
 
-# --- block_unsafe=False (deny check mode) -----------------------------------
+def test_glob_to_regex_space_glob_matches_extra_word() -> None:
+    """Space-glob 'show version *' matches when at least one extra word follows."""
+    p = glob_to_regex("show version *")
+    assert p.match("show version brief")
+    assert p.match("show version detail extra")
+    assert not p.match("show version")  # no extra word
+    assert not p.match("show versio")  # abbreviated and no extra word
 
 
-def test_glob_to_regex_block_unsafe_false_matches_unsafe_chars() -> None:
-    """With block_unsafe=False the wildcard must match unsafe characters."""
-    p = glob_to_regex("reload *", block_unsafe=False)
-    assert p.match("reload in 5")
-    assert p.match("reload cancel")
-
-
-def test_glob_to_regex_block_unsafe_false_wildcard_broader_than_default() -> None:
-    """block_unsafe=False must match strings that block_unsafe=True would reject."""
-    blocked = glob_to_regex("reload *", block_unsafe=True)
-    broad = glob_to_regex("reload *", block_unsafe=False)
-    # Default (block_unsafe=True) rejects a command containing a semicolon
-    assert not blocked.match("reload ;bad")
-    # Deny mode (block_unsafe=False) matches it
-    assert broad.match("reload ;bad")
-
-
-def test_glob_to_regex_block_unsafe_false_exact_pattern_unchanged() -> None:
-    """block_unsafe=False must not affect exact patterns (no wildcard)."""
-    p = glob_to_regex("reload", block_unsafe=False)
-    assert p.match("reload")
-    assert not p.match("reload in 5")
-    assert not p.match("show version")
+def test_glob_to_regex_inline_glob_matches_base_and_extensions() -> None:
+    """Inline-glob 'show version*' matches the bare command, extended words, and extra args."""
+    p = glob_to_regex("show version*")
+    assert p.match("show version")  # bare command
+    assert p.match("show versions")  # extra letter
+    assert p.match("show version brief")  # extra word
+    assert not p.match("show ver")  # abbreviated — allow side does not expand
+    assert not p.match("show ip route")  # wrong command
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +129,7 @@ def test_load_commands_valid_file(tmp_path: Path) -> None:
     load_commands.cache_clear()
     cfg = tmp_path / "commands.yml"
     cfg.write_text(
-        'allowed_commands: ["show version"]\ndenied_commands: ["reload"]\n',
+        'allowed_commands: ["show version"]\ndenied_commands: ["clear counters"]\n',
         encoding="utf-8",
     )
     with patch("netmiko_mcp.security.settings") as mock_settings:
@@ -246,7 +137,7 @@ def test_load_commands_valid_file(tmp_path: Path) -> None:
         result = load_commands()
     load_commands.cache_clear()
     assert result["allowed_commands"] == ["show version"]
-    assert result["denied_commands"] == ["reload"]
+    assert result["denied_commands"] == ["clear counters"]
 
 
 def test_load_commands_result_is_cached(tmp_path: Path) -> None:
@@ -279,13 +170,15 @@ def test_validate_command_default_denied(mock_load: Any, mock_settings: Any) -> 
     """Test that commands are denied by default when no whitelist is configured."""
     mock_load.return_value = {}  # Simulate missing or empty commands file
     mock_settings.allow_pipe = False
-    mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
+    mock_settings.allowed_command_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
 
     # Pipes are blocked when allow_pipe is False
     assert not validate_command("show run | include password").allowed
     # Nothing is allowed without a whitelist
     assert not validate_command("clear ip ospf process").allowed
-    assert not validate_command("debug ip packet").allowed
+    assert not validate_command("debug ip ospf events").allowed
 
 
 @patch("netmiko_mcp.security.load_commands")
@@ -311,7 +204,9 @@ def test_validate_command_custom_yaml(mock_load: Any) -> None:
 def test_validate_command_pipes_disabled(mock_load: Any, mock_settings: Any) -> None:
     """Test that pipes are rejected when allow_pipe is False."""
     mock_settings.allow_pipe = False
-    mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
+    mock_settings.allowed_command_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
     mock_settings.pipe_modifiers = ["include", "exclude", "section", "begin", "count"]
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
@@ -326,7 +221,9 @@ def test_validate_command_pipes_disabled(mock_load: Any, mock_settings: Any) -> 
 def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any) -> None:
     """Test that safe pipes are permitted when allow_pipe is True."""
     mock_settings.allow_pipe = True
-    mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
+    mock_settings.allowed_command_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
     # Simulate a user who has added IOS and NX-OS modifiers to their config
     mock_settings.pipe_modifiers = [
         "include",
@@ -384,7 +281,9 @@ def test_validate_command_pipes_enabled_safe(mock_load: Any, mock_settings: Any)
 def test_validate_command_pipes_enabled_dangerous(mock_load: Any, mock_settings: Any) -> None:
     """Test that dangerous pipes are rejected even when allow_pipe is True."""
     mock_settings.allow_pipe = True
-    mock_settings.unsafe_chars = [";", "\n", "\r", "&"]
+    mock_settings.allowed_command_chars = (
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+    )
     mock_settings.pipe_modifiers = ["include", "exclude", "section", "begin", "count"]
     mock_load.return_value = {"allowed_commands": ["show version"], "denied_commands": []}
 
@@ -418,12 +317,12 @@ _VC_ALLOWED = [
 ]
 _VC_DENIED = [
     "configure *",
-    "reload",
+    "clear *",
     "debug *",
     "clear *",
 ]
 _VC_PIPE_MODIFIERS = ["include", "exclude", "section", "begin", "count"]
-_VC_UNSAFE_CHARS = [";", "\n", "\r", "&"]
+_VC_ALLOWED_COMMAND_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
 
 
 def _vc_setup(mock_load: Any, mock_settings: Any, allow_pipe: bool = False) -> None:
@@ -433,7 +332,7 @@ def _vc_setup(mock_load: Any, mock_settings: Any, allow_pipe: bool = False) -> N
         "denied_commands": _VC_DENIED,
     }
     mock_settings.allow_pipe = allow_pipe
-    mock_settings.unsafe_chars = _VC_UNSAFE_CHARS
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
     mock_settings.pipe_modifiers = _VC_PIPE_MODIFIERS
 
 
@@ -445,8 +344,8 @@ def _vc_setup(mock_load: Any, mock_settings: Any, allow_pipe: bool = False) -> N
 def test_vc_rule4_semicolon_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 4: Commands containing ';' are unconditionally rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert not validate_command("show version; reload").allowed
-    assert not validate_command("show version;reload").allowed
+    assert not validate_command("show version; show clock").allowed
+    assert not validate_command("show version;show clock").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -454,7 +353,7 @@ def test_vc_rule4_semicolon_blocked(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule4_newline_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 4: Commands containing a newline are unconditionally rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert not validate_command("show version\nreload").allowed
+    assert not validate_command("show version\nshow clock").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -462,7 +361,7 @@ def test_vc_rule4_newline_blocked(mock_load: Any, mock_settings: Any) -> None:
 def test_vc_rule4_carriage_return_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 4: Commands containing a carriage return are unconditionally rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert not validate_command("show version\rreload").allowed
+    assert not validate_command("show version\rshow clock").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -470,7 +369,7 @@ def test_vc_rule4_carriage_return_blocked(mock_load: Any, mock_settings: Any) ->
 def test_vc_rule4_ampersand_blocked(mock_load: Any, mock_settings: Any) -> None:
     """Rule 4: Commands containing '&' are unconditionally rejected."""
     _vc_setup(mock_load, mock_settings)
-    assert not validate_command("show version && reload").allowed
+    assert not validate_command("show version && show clock").allowed
     assert not validate_command("show version &").allowed
 
 
@@ -492,21 +391,21 @@ def test_vc_rule4_unsafe_char_in_allowed_command_still_blocked(
 def test_vc_rule1_exact_deny(mock_load: Any, mock_settings: Any) -> None:
     """Rule 1: A plain denied string matches only that exact command."""
     _vc_setup(mock_load, mock_settings)
-    assert not validate_command("reload").allowed
+    assert not validate_command("clear counters").allowed
 
 
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
 def test_vc_rule1_exact_deny_no_substring_match(mock_load: Any, mock_settings: Any) -> None:
-    """Rule 1: Exact deny 'reload' must NOT block commands that merely contain 'reload'."""
+    """Rule 1: Exact deny 'clear counters' must NOT block commands that merely contain the word."""
     mock_load.return_value = {
-        "allowed_commands": _VC_ALLOWED + ["show reload-cause"],
-        "denied_commands": ["reload"],
+        "allowed_commands": _VC_ALLOWED + ["show interface counters"],
+        "denied_commands": ["clear counters"],
     }
     mock_settings.allow_pipe = False
-    mock_settings.unsafe_chars = _VC_UNSAFE_CHARS
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
     mock_settings.pipe_modifiers = _VC_PIPE_MODIFIERS
-    assert validate_command("show reload-cause").allowed
+    assert validate_command("show interface counters").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -517,7 +416,7 @@ def test_vc_rule1_glob_deny(mock_load: Any, mock_settings: Any) -> None:
     assert not validate_command("configure terminal").allowed
     assert not validate_command("configure replace flash:cfg").allowed
     assert not validate_command("configure").allowed
-    assert not validate_command("debug ip packet").allowed
+    assert not validate_command("debug ip ospf events").allowed
     assert not validate_command("debug ip ospf adj").allowed
     assert not validate_command("clear ip ospf process").allowed
     assert not validate_command("clear counters").allowed
@@ -532,7 +431,7 @@ def test_vc_rule1_denied_beats_allowed(mock_load: Any, mock_settings: Any) -> No
         "denied_commands": _VC_DENIED,
     }
     mock_settings.allow_pipe = False
-    mock_settings.unsafe_chars = _VC_UNSAFE_CHARS
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
     mock_settings.pipe_modifiers = _VC_PIPE_MODIFIERS
     assert not validate_command("configure terminal").allowed
 
@@ -574,12 +473,13 @@ def test_vc_rule2_glob_with_args(mock_load: Any, mock_settings: Any) -> None:
 
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
-def test_vc_rule2_glob_bare_command(mock_load: Any, mock_settings: Any) -> None:
-    """Rule 2: Glob patterns also match the bare command with no arguments."""
+def test_vc_rule2_space_glob_requires_extra_word(mock_load: Any, mock_settings: Any) -> None:
+    """Rule 2: Space-glob ('show ip route *') requires at least one extra word —
+    the bare command alone is NOT allowed."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show ip route").allowed
-    assert validate_command("show bgp").allowed
-    assert validate_command("display").allowed
+    assert not validate_command("show ip route").allowed
+    assert not validate_command("show bgp").allowed
+    assert not validate_command("display").allowed
 
 
 @patch("netmiko_mcp.security.settings")
@@ -671,7 +571,7 @@ def test_vc_rule3_denied_base_command_with_pipe_blocked(mock_load: Any, mock_set
     """Rule 3: A denied base command is still blocked even with a valid pipe."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
     assert not validate_command("configure terminal | include ip").allowed
-    assert not validate_command("debug ip packet | include error").allowed
+    assert not validate_command("debug ip ospf events | include error").allowed
 
 
 # ---------------------------------------------------------------------------
@@ -697,7 +597,7 @@ def test_validation_result_denied() -> None:
 def test_validate_command_reason_unsafe_char(mock_load: Any, mock_settings: Any) -> None:
     """A command with an unsafe character should return REASON_UNSAFE_CHAR."""
     _vc_setup(mock_load, mock_settings)
-    result = validate_command("show version; reload")
+    result = validate_command("show version; show clock")
     assert not result.allowed
     assert result.reason == REASON_UNSAFE_CHAR
 
@@ -707,7 +607,7 @@ def test_validate_command_reason_unsafe_char(mock_load: Any, mock_settings: Any)
 def test_validate_command_reason_deny_match(mock_load: Any, mock_settings: Any) -> None:
     """A command matching denied_commands should return REASON_DENY_MATCH."""
     _vc_setup(mock_load, mock_settings)
-    result = validate_command("reload")
+    result = validate_command("clear counters")
     assert not result.allowed
     assert result.reason == REASON_DENY_MATCH
 
@@ -715,11 +615,12 @@ def test_validate_command_reason_deny_match(mock_load: Any, mock_settings: Any) 
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
 def test_validate_command_reason_pipe_not_allowed(mock_load: Any, mock_settings: Any) -> None:
-    """A piped command when allow_pipe=False should return REASON_PIPE_NOT_ALLOWED."""
+    """A piped command when allow_pipe=False is rejected at the allowlist check
+    since '|' is only in effective_allowed when allow_pipe is True."""
     _vc_setup(mock_load, mock_settings, allow_pipe=False)
     result = validate_command("show version | include IOS")
     assert not result.allowed
-    assert result.reason == REASON_PIPE_NOT_ALLOWED
+    assert result.reason == REASON_UNSAFE_CHAR
 
 
 @patch("netmiko_mcp.security.settings")
@@ -781,6 +682,844 @@ def test_validate_command_unsafe_char_takes_precedence_over_deny(
 ) -> None:
     """UNSAFE_CHAR should be reported before DENY_MATCH even if the command also matches denied."""
     _vc_setup(mock_load, mock_settings)
-    result = validate_command("reload; rm -rf /")
+    result = validate_command("show version; show clock")
     assert not result.allowed
     assert result.reason == REASON_UNSAFE_CHAR
+
+
+# ---------------------------------------------------------------------------
+# Deny carve-out bypass scenarios
+# allowed: ["show *"], denied: ["show version"]
+# Each case should be denied. Cases marked BYPASS are known to slip through today.
+# ---------------------------------------------------------------------------
+
+_CARVEOUT_ALLOWED = ["show *"]
+_CARVEOUT_DENIED = ["show version"]
+
+
+@pytest.mark.parametrize(
+    "command,expected_allowed",
+    [
+        ("show version", False),  # exact match — denied correctly today
+        ("SHOW VERSION", False),  # all caps
+        ("Show Version", False),  # mixed case
+        (" show version", False),  # leading space — BYPASS
+        ("show version ", False),  # trailing space — BYPASS
+        ("\tshow version", False),  # leading tab — BYPASS
+        ("show  version", False),  # double space — BYPASS
+        ("show\tversion", False),  # internal tab — BYPASS
+        ("show\xa0version", False),  # NBSP (U+00A0) — BYPASS
+        ("show\u3000version", False),  # ideographic space (U+3000) — BYPASS
+        ("show\x0bversion", False),  # vertical tab (U+000B) — BYPASS
+        (
+            "show version\tshow ip interface brief",
+            True,
+        ),  # tab-chained: normalizes to 'show version show ip interface brief' — not denied (extra words)
+        ("show ve", False),  # abbreviation — BYPASS
+        ("show vers", False),  # abbreviation — BYPASS
+        ("sh version", False),  # abbreviation — may be blocked by allow check
+        ("sh vers", False),  # abbreviation — may be blocked by allow check
+    ],
+)
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_deny_carveout_bypass(
+    mock_load: Any, mock_settings: Any, command: str, expected_allowed: bool
+) -> None:
+    """A broad allow-list with a specific deny carve-out should block cosmetic
+    variants of the denied command. Cases that currently bypass the deny check
+    are included to document the known failure modes."""
+    mock_load.return_value = {
+        "allowed_commands": _CARVEOUT_ALLOWED,
+        "denied_commands": _CARVEOUT_DENIED,
+    }
+    mock_settings.allow_pipe = False
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = _VC_PIPE_MODIFIERS
+
+    result = validate_command(command)
+    assert result.allowed == expected_allowed
+
+
+# ---------------------------------------------------------------------------
+# Pipe bypass: deny check runs on full command string, not base command
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command,expected_allowed",
+    [
+        ("show version | include Cisco", False),  # BYPASS: pipe with spaces
+        ("show version|include Cisco", False),  # BYPASS: pipe with no spaces
+        ("show version | count", False),  # BYPASS: count modifier
+    ],
+)
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_deny_carveout_pipe_bypass(
+    mock_load: Any, mock_settings: Any, command: str, expected_allowed: bool
+) -> None:
+    """With allow_pipe=True, the deny check runs against the full command string
+    including the pipe segment. A denied base command with a valid pipe modifier
+    currently slips through because the full string does not match the deny pattern."""
+    mock_load.return_value = {
+        "allowed_commands": _CARVEOUT_ALLOWED,
+        "denied_commands": _CARVEOUT_DENIED,
+    }
+    mock_settings.allow_pipe = True
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = _VC_PIPE_MODIFIERS
+
+    result = validate_command(command)
+    assert result.allowed == expected_allowed
+
+
+# ---------------------------------------------------------------------------
+# Allowlist character rejection
+# Characters caught by the allowlist check (REASON_UNSAFE_CHAR).
+# Note: Python 3's str.split() (no args) treats all Unicode whitespace as
+# whitespace — including NBSP (\xa0), ideographic space (\u3000), tab,
+# newline, vertical tab, etc. — so those are normalized to spaces before
+# reaching the allowlist check. The allowlist catches non-whitespace special
+# characters that survive normalization.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "show version; show clock",  # semicolon — not whitespace, not in allowlist
+        "show version & show clock",  # ampersand — not whitespace, not in allowlist
+    ],
+)
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_allowlist_rejects_disallowed_chars(
+    mock_load: Any, mock_settings: Any, command: str
+) -> None:
+    """Characters not in allowed_command_chars must be rejected with
+    REASON_UNSAFE_CHAR before any deny/allow matching."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command(command)
+    assert not result.allowed
+    assert result.reason == REASON_UNSAFE_CHAR
+
+
+# ---------------------------------------------------------------------------
+# Pipe auto-add: '|' in effective_allowed only when allow_pipe=True
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_pipe_char_allowed_when_allow_pipe_true(mock_load: Any, mock_settings: Any) -> None:
+    """'|' is not in allowed_command_chars but must pass the character check
+    when allow_pipe=True because it is added to the effective allowed set."""
+    _vc_setup(mock_load, mock_settings, allow_pipe=True)
+    assert "|" not in mock_settings.allowed_command_chars
+    result = validate_command("show version | include IOS")
+    assert result.allowed
+    assert result.reason == REASON_ALLOWED
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_pipe_char_rejected_when_allow_pipe_false(mock_load: Any, mock_settings: Any) -> None:
+    """'|' must be rejected by the allowlist check (REASON_UNSAFE_CHAR) when
+    allow_pipe=False because it is not added to the effective allowed set."""
+    _vc_setup(mock_load, mock_settings, allow_pipe=False)
+    result = validate_command("show version | include IOS")
+    assert not result.allowed
+    assert result.reason == REASON_UNSAFE_CHAR
+
+
+# ---------------------------------------------------------------------------
+# normalized_command: whitespace collapsed, capitalization preserved
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command,expected_normalized",
+    [
+        ("show version", "show version"),  # already clean
+        ("Show   Version", "Show Version"),  # caps preserved, spaces collapsed
+        ("  show version  ", "show version"),  # leading/trailing stripped
+        ("SHOW\tVERSION", "SHOW VERSION"),  # tab normalized, caps preserved
+        ("show  ip  route", "show ip route"),  # multiple internal spaces
+        ("show\nversion", "show version"),  # newline normalized
+        ("show\rversion", "show version"),  # carriage return normalized
+        ("show\r\nversion", "show version"),  # CRLF normalized
+    ],
+)
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_normalized_command_in_result(
+    mock_load: Any, mock_settings: Any, command: str, expected_normalized: str
+) -> None:
+    """normalized_command in ValidationResult must reflect whitespace-collapsed,
+    capitalization-preserved form regardless of allowed/denied outcome."""
+    _vc_setup(mock_load, mock_settings)
+    result = validate_command(command)
+    assert result.normalized_command == expected_normalized
+
+
+# ---------------------------------------------------------------------------
+# TrieNode
+# ---------------------------------------------------------------------------
+
+
+def test_trienode_default_state() -> None:
+    """TrieNode initialises with empty children and all flags False."""
+    node = TrieNode()
+    assert node.children == {}
+    assert node.word_end is False
+    assert node.final_word is False
+    assert node.next_word_trie is None
+
+
+# ---------------------------------------------------------------------------
+# deny_check
+# ---------------------------------------------------------------------------
+
+
+def test_deny_check_exact_match_denied() -> None:
+    """A plain entry matches only the exact command."""
+    assert deny_check(command="reload", denied_commands=["reload"])
+
+
+def test_deny_check_exact_match_case_insensitive() -> None:
+    """Matching is case-insensitive."""
+    assert deny_check(command="RELOAD", denied_commands=["reload"])
+    assert deny_check(command="Reload", denied_commands=["reload"])
+
+
+def test_deny_check_no_match_returns_false() -> None:
+    """A command that matches no deny entry returns False."""
+    assert not deny_check(command="show version", denied_commands=["reload"])
+
+
+def test_deny_check_empty_denied_list_returns_false() -> None:
+    """An empty deny list never denies anything."""
+    assert not deny_check(command="reload", denied_commands=[])
+
+
+def test_deny_check_anchored_no_substring_match() -> None:
+    """A plain entry must not match a command where it appears only as a substring."""
+    assert not deny_check(command="show reload-cause", denied_commands=["reload"])
+    assert not deny_check(command="show reload cause", denied_commands=["reload"])
+
+
+def test_deny_check_space_glob_denies_with_extra_word() -> None:
+    """Space-glob requires at least one extra word after the prefix."""
+    assert deny_check(command="reload in 5", denied_commands=["reload *"])
+    assert deny_check(command="reload cancel", denied_commands=["reload *"])
+
+
+def test_deny_check_space_glob_does_not_deny_bare_command() -> None:
+    """Space-glob does NOT deny the bare command alone."""
+    assert not deny_check(command="reload", denied_commands=["reload *"])
+
+
+def test_deny_check_inline_glob_denies_base_command() -> None:
+    """Inline-glob matches the bare command."""
+    assert deny_check(command="reload", denied_commands=["reload*"])
+
+
+def test_deny_check_inline_glob_denies_with_suffix() -> None:
+    """Inline-glob matches the base command with any suffix."""
+    assert deny_check(command="reload in 5", denied_commands=["reload*"])
+    assert deny_check(command="reload cancel", denied_commands=["reload*"])
+
+
+def test_deny_check_multiple_entries_first_matches() -> None:
+    """Returns True when the first entry matches."""
+    assert deny_check(command="reload", denied_commands=["reload", "configure terminal"])
+
+
+def test_deny_check_multiple_entries_second_matches() -> None:
+    """Returns True when only the second entry matches."""
+    assert deny_check(
+        command="configure terminal", denied_commands=["reload", "configure terminal"]
+    )
+
+
+def test_deny_check_multiple_entries_neither_matches() -> None:
+    """Returns False when no entry matches."""
+    assert not deny_check(command="show version", denied_commands=["reload", "configure terminal"])
+
+
+def test_deny_check_multiword_exact_match() -> None:
+    """A multi-word plain entry matches only that exact phrase."""
+    assert deny_check(command="configure terminal", denied_commands=["configure terminal"])
+    assert not deny_check(command="configure", denied_commands=["configure terminal"])
+    assert not deny_check(command="configure terminal now", denied_commands=["configure terminal"])
+
+
+def test_deny_check_multiword_space_glob() -> None:
+    """Multi-word space-glob denies commands with at least one extra word."""
+    assert deny_check(command="configure terminal", denied_commands=["configure *"])
+    assert deny_check(command="configure replace flash:cfg", denied_commands=["configure *"])
+    assert not deny_check(command="configure", denied_commands=["configure *"])
+
+
+def test_deny_check_multiword_inline_glob() -> None:
+    """Multi-word inline-glob denies the base command and any extension."""
+    assert deny_check(command="configure", denied_commands=["configure*"])
+    assert deny_check(command="configure terminal", denied_commands=["configure*"])
+    assert deny_check(command="configure replace flash:cfg", denied_commands=["configure*"])
+
+
+# ---------------------------------------------------------------------------
+# AbbreviationDenyFilter
+# ---------------------------------------------------------------------------
+
+
+def _make_filter(*deny_entries: str) -> AbbreviationDenyFilter:
+    f = AbbreviationDenyFilter()
+    for entry in deny_entries:
+        f.add(entry)
+    return f
+
+
+# --- add() edge cases -------------------------------------------------------
+
+
+def test_abbreviation_filter_space_glob_denies_with_extra_word() -> None:
+    """Space-glob deny entries require at least one extra submitted word."""
+    f = _make_filter("show *", "configure *")
+    assert f.is_denied("show version")
+    assert f.is_denied("sh version")
+    assert f.is_denied("configure terminal")
+    assert f.is_denied("conf ter")
+    assert not f.is_denied("show")
+    assert not f.is_denied("configure")
+
+
+def test_abbreviation_filter_empty_entry_ignored() -> None:
+    """Empty or whitespace-only entries are silently ignored."""
+    f = _make_filter("", "   ")
+    assert not f.is_denied("show version")
+
+
+def test_abbreviation_filter_empty_submitted() -> None:
+    """An empty submitted command is never denied."""
+    f = _make_filter("show version")
+    assert not f.is_denied("")
+    assert not f.is_denied("   ")
+
+
+def test_abbreviation_filter_no_entries() -> None:
+    """A filter with no entries denies nothing."""
+    f = AbbreviationDenyFilter()
+    assert not f.is_denied("show version")
+
+
+# --- exact match ------------------------------------------------------------
+
+
+def test_abbreviation_filter_exact_match() -> None:
+    """An exact match is denied."""
+    f = _make_filter("show version")
+    assert f.is_denied("show version")
+
+
+def test_abbreviation_filter_exact_match_case_insensitive() -> None:
+    """Exact matching is case-insensitive."""
+    f = _make_filter("show version")
+    assert f.is_denied("SHOW VERSION")
+    assert f.is_denied("Show Version")
+
+
+# --- first word abbreviated -------------------------------------------------
+
+
+@pytest.mark.parametrize("command", ["sh version", "sho version", "s version"])
+def test_abbreviation_filter_first_word_abbreviated(command: str) -> None:
+    """Abbreviations of the first word are denied."""
+    f = _make_filter("show version")
+    assert f.is_denied(command)
+
+
+# --- both words abbreviated -------------------------------------------------
+
+
+@pytest.mark.parametrize("command", ["sh ver", "sh ve", "s v", "sho vers"])
+def test_abbreviation_filter_both_words_abbreviated(command: str) -> None:
+    """Abbreviations of all words are denied."""
+    f = _make_filter("show version")
+    assert f.is_denied(command)
+
+
+# --- extra arguments (submitted longer than deny entry) ---------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "show version summary",
+        "show version detail",
+        "sh ver sum",
+        "s v detail",
+    ],
+)
+def test_abbreviation_filter_extra_args_not_denied(command: str) -> None:
+    """Extra arguments beyond the deny entry word count are NOT denied.
+    Use a glob entry to cover additional arguments."""
+    f = _make_filter("show version")
+    assert not f.is_denied(command)
+
+
+# --- not a match ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "show vlan",  # second word not a prefix of 'version'
+        "sh vl",  # abbreviated second word still not a prefix
+        "showing version",  # first word longer than deny word
+        "configure terminal",  # completely unrelated
+    ],
+)
+def test_abbreviation_filter_non_match(command: str) -> None:
+    """Commands that are not abbreviations of the deny entry are not denied."""
+    f = _make_filter("show version")
+    assert not f.is_denied(command)
+
+
+def test_abbreviation_filter_incomplete_command_not_denied() -> None:
+    """Submitted command with fewer words than deny entry is not denied."""
+    f = _make_filter("show ip interface")
+    assert not f.is_denied("show ip")
+    assert not f.is_denied("show")
+    assert not f.is_denied("sh")
+
+
+# --- multi-word deny entries ------------------------------------------------
+
+
+def test_abbreviation_filter_three_word_deny_exact() -> None:
+    """Three-word deny entry catches exact match."""
+    f = _make_filter("show ip interface")
+    assert f.is_denied("show ip interface")
+
+
+def test_abbreviation_filter_three_word_deny_abbreviated() -> None:
+    """Three-word deny entry catches fully abbreviated form."""
+    f = _make_filter("show ip interface")
+    assert f.is_denied("sh ip int")
+
+
+def test_abbreviation_filter_three_word_deny_extra_arg_not_denied() -> None:
+    """Three-word deny entry does NOT catch abbreviated form with extra argument.
+    Use a glob entry to cover additional arguments."""
+    f = _make_filter("show ip interface")
+    assert not f.is_denied("sh ip int brief")
+    assert not f.is_denied("show ip interface brief")
+
+
+def test_abbreviation_filter_three_word_wrong_third_word() -> None:
+    """Wrong third word is not denied."""
+    f = _make_filter("show ip interface")
+    assert not f.is_denied("show ip route")
+    assert not f.is_denied("sh ip ro")
+
+
+# --- multiple deny entries --------------------------------------------------
+
+
+def test_abbreviation_filter_multiple_entries_first_matches() -> None:
+    f = _make_filter("show version", "configure terminal")
+    assert f.is_denied("sh ver")
+
+
+def test_abbreviation_filter_multiple_entries_second_matches() -> None:
+    f = _make_filter("show version", "configure terminal")
+    assert f.is_denied("conf ter")
+    assert f.is_denied("conf t")
+
+
+def test_abbreviation_filter_multiple_entries_neither_matches() -> None:
+    f = _make_filter("show version", "configure terminal")
+    assert not f.is_denied("show running-config")
+
+
+def test_abbreviation_filter_shared_first_word() -> None:
+    """Two deny entries sharing a first word are both caught."""
+    f = _make_filter("show version", "show running-config")
+    assert f.is_denied("sh ver")
+    assert f.is_denied("sh run")
+    assert not f.is_denied("sh vl")
+
+
+# --- single-word deny entries -----------------------------------------------
+
+
+def test_abbreviation_filter_single_word_exact() -> None:
+    f = _make_filter("traceroute")
+    assert f.is_denied("traceroute")
+
+
+def test_abbreviation_filter_single_word_abbreviated() -> None:
+    f = _make_filter("traceroute")
+    assert f.is_denied("trace")
+    assert f.is_denied("tracer")
+
+
+def test_abbreviation_filter_single_word_extra_args_not_denied() -> None:
+    """Single-word deny entry does NOT cover the command with extra arguments."""
+    f = _make_filter("traceroute")
+    assert not f.is_denied("traceroute 10.0.0.1")
+    assert not f.is_denied("trace 10.0.0.1")
+
+
+# ---------------------------------------------------------------------------
+# Principle 1 — Default Deny
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p1_empty_lists_deny_all(mock_load: Any, mock_settings: Any) -> None:
+    """Principle 1: Empty allow/deny lists deny every command."""
+    mock_load.return_value = {"allowed_commands": [], "denied_commands": []}
+    mock_settings.allow_pipe = False
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = []
+    for cmd in ["show version", "show ip route", "ping 10.0.0.1", "show clock"]:
+        result = validate_command(cmd)
+        assert not result.allowed
+        assert result.reason == REASON_NO_ALLOW_MATCH
+
+
+@patch("netmiko_mcp.security.load_commands")
+def test_p1_no_yaml_deny_all(mock_load: Any) -> None:
+    """Principle 1: Missing or empty YAML file denies everything."""
+    mock_load.return_value = {}
+    assert not validate_command("show version").allowed
+    assert not validate_command("show clock").allowed
+
+
+# ---------------------------------------------------------------------------
+# Principle 2 — Deny Takes Precedence
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p2_same_entry_in_both(mock_load: Any, mock_settings: Any) -> None:
+    """Principle 2: Same entry in both allow and deny — deny wins."""
+    mock_load.return_value = {
+        "allowed_commands": ["show version"],
+        "denied_commands": ["show version"],
+    }
+    mock_settings.allow_pipe = False
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = []
+    result = validate_command("show version")
+    assert not result.allowed
+    assert result.reason == REASON_DENY_MATCH
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p2_glob_deny_beats_exact_allow(mock_load: Any, mock_settings: Any) -> None:
+    """Principle 2: Glob deny overrides specific exact allow."""
+    mock_load.return_value = {
+        "allowed_commands": ["show version"],
+        "denied_commands": ["show *"],
+    }
+    mock_settings.allow_pipe = False
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = []
+    result = validate_command("show version")
+    assert not result.allowed
+    assert result.reason == REASON_DENY_MATCH
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p2_exact_deny_beats_glob_allow(mock_load: Any, mock_settings: Any) -> None:
+    """Principle 2: Specific exact deny overrides broad glob allow."""
+    mock_load.return_value = {
+        "allowed_commands": ["show *"],
+        "denied_commands": ["show version"],
+    }
+    mock_settings.allow_pipe = False
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = []
+    result = validate_command("show version")
+    assert not result.allowed
+    assert result.reason == REASON_DENY_MATCH
+
+
+# ---------------------------------------------------------------------------
+# Principle 3 — Allow List Does Not Expand Abbreviations
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command", ["sh ver", "sh version", "s version", "sho ver"])
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p3_exact_allow_no_abbreviations(mock_load: Any, mock_settings: Any, command: str) -> None:
+    """Principle 3: allowed: ['show version'] does not permit abbreviated forms."""
+    mock_load.return_value = {
+        "allowed_commands": ["show version"],
+        "denied_commands": [],
+    }
+    mock_settings.allow_pipe = False
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = []
+    result = validate_command(command)
+    assert not result.allowed
+    assert result.reason == REASON_NO_ALLOW_MATCH
+
+
+@pytest.mark.parametrize("command", ["sh version", "sh ip route", "s version", "sho ip"])
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p3_glob_allow_no_abbreviations(mock_load: Any, mock_settings: Any, command: str) -> None:
+    """Principle 3: allowed: ['show *'] does not permit abbreviated first words."""
+    mock_load.return_value = {
+        "allowed_commands": ["show *"],
+        "denied_commands": [],
+    }
+    mock_settings.allow_pipe = False
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = []
+    result = validate_command(command)
+    assert not result.allowed
+    assert result.reason == REASON_NO_ALLOW_MATCH
+
+
+# ---------------------------------------------------------------------------
+# Principle 4 — Deny Covers Same Word Count Only
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "show version",
+        "sh version",
+        "s version",
+        "sho version",
+        "show vers",
+        "sh vers",
+        "s vers",
+        "sh ver",
+        "s v",
+    ],
+)
+def test_p4_covers_all_abbreviations_same_word_count(command: str) -> None:
+    """Principle 4: Plain deny entry covers all abbreviations of same word count."""
+    f = _make_filter("show version")
+    assert f.is_denied(command)
+
+
+@pytest.mark.parametrize("command", ["show", "sh", "s"])
+def test_p4_fewer_words_not_denied(command: str) -> None:
+    """Principle 4: Submitted command with fewer words than deny entry is not denied."""
+    f = _make_filter("show version")
+    assert not f.is_denied(command)
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["show version detail", "sh ver detail", "show version summary", "sh ver sum"],
+)
+def test_p4_more_words_not_denied(command: str) -> None:
+    """Principle 4: Submitted command with more words than deny entry is not denied."""
+    f = _make_filter("show version")
+    assert not f.is_denied(command)
+
+
+def test_p4_three_word_deny_no_extra_args() -> None:
+    """Principle 4: Three-word deny entry does not cover four-word submissions."""
+    f = _make_filter("show ip interface")
+    assert not f.is_denied("sh ip int brief")
+    assert not f.is_denied("show ip interface brief")
+
+
+# ---------------------------------------------------------------------------
+# Principle 5 — Glob Deny for Additional Arguments
+# ---------------------------------------------------------------------------
+
+
+def test_p5_inline_glob_denies_base_and_args() -> None:
+    """Principle 5: 'show ip interface*' denies base, extra chars, and extra words."""
+    f = _make_filter("show ip interface*")
+    assert f.is_denied("show ip interface")  # exact base
+    assert f.is_denied("sh ip int")  # abbreviated base
+    assert f.is_denied("show ip interface brief")  # extra word
+    assert f.is_denied("sh ip int brief")  # abbreviated + extra word
+    assert f.is_denied("show ip interfaces")  # extra chars on last word
+    assert not f.is_denied("show ip")  # too few words
+
+
+def test_p5_space_glob_denies_args_only() -> None:
+    """Principle 5: 'show ip interface *' requires extra word; base alone not denied."""
+    f = _make_filter("show ip interface *")
+    assert not f.is_denied("show ip interface")  # base alone — NOT denied
+    assert not f.is_denied("sh ip int")  # abbreviated base — NOT denied
+    assert f.is_denied("show ip interface brief")  # extra word
+    assert f.is_denied("sh ip int brief")  # abbreviated + extra word
+    assert not f.is_denied("show ip interfaces")  # extra chars, no extra word — NOT denied
+
+
+# ---------------------------------------------------------------------------
+# Principle 6 — Pipe Handling
+# ---------------------------------------------------------------------------
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p6_base_command_only_evaluated(mock_load: Any, mock_settings: Any) -> None:
+    """Principle 6: Only the base command before the pipe is checked against allow/deny."""
+    mock_load.return_value = {
+        "allowed_commands": ["show version"],
+        "denied_commands": [],
+    }
+    mock_settings.allow_pipe = True
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = ["include"]
+    result = validate_command("show version | include IOS")
+    assert result.allowed
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p6_denied_base_blocked_with_valid_pipe(mock_load: Any, mock_settings: Any) -> None:
+    """Principle 6: A denied base command is blocked even with a valid pipe modifier."""
+    mock_load.return_value = {
+        "allowed_commands": ["show *"],
+        "denied_commands": ["show version"],
+    }
+    mock_settings.allow_pipe = True
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = ["include"]
+    result = validate_command("show version | include IOS")
+    assert not result.allowed
+    assert result.reason == REASON_DENY_MATCH
+
+
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p6_allowed_base_invalid_pipe_modifier(mock_load: Any, mock_settings: Any) -> None:
+    """Principle 6: Allowed base with an invalid pipe modifier is rejected."""
+    mock_load.return_value = {
+        "allowed_commands": ["show version"],
+        "denied_commands": [],
+    }
+    mock_settings.allow_pipe = True
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = ["include"]
+    result = validate_command("show version | grep IOS")
+    assert not result.allowed
+    assert result.reason == REASON_INVALID_PIPE_MODIFIER
+
+
+@pytest.mark.parametrize(
+    "command", ["sho vers | include .", "sh ver | include .", "s vers | include ."]
+)
+@patch("netmiko_mcp.security.settings")
+@patch("netmiko_mcp.security.load_commands")
+def test_p6_abbreviated_denied_base_with_pipe(
+    mock_load: Any, mock_settings: Any, command: str
+) -> None:
+    """Principle 6: Abbreviated form of denied base is blocked even with valid pipe."""
+    mock_load.return_value = {
+        "allowed_commands": ["show *"],
+        "denied_commands": ["show version"],
+    }
+    mock_settings.allow_pipe = True
+    mock_settings.allowed_command_chars = _VC_ALLOWED_COMMAND_CHARS
+    mock_settings.pipe_modifiers = ["include"]
+    result = validate_command(command)
+    assert not result.allowed
+    assert result.reason == REASON_DENY_MATCH
+
+
+# ---------------------------------------------------------------------------
+# Glob Deny — Abbreviated First Words (previously a known limitation, now fixed)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command", ["sh version", "s version", "sho version"])
+def test_glob_deny_space_star_covers_abbreviated_first_word(command: str) -> None:
+    """denied: ['show *'] now catches abbreviated first words via the trie."""
+    f = _make_filter("show *")
+    assert f.is_denied(command)
+
+
+@pytest.mark.parametrize("command", ["conf t", "conf terminal", "con ter"])
+def test_glob_deny_configure_star_covers_abbreviations(command: str) -> None:
+    """denied: ['configure *'] now catches abbreviated forms via the trie."""
+    f = _make_filter("configure *")
+    assert f.is_denied(command)
+
+
+def test_glob_deny_space_star_bare_command_not_denied() -> None:
+    """denied: ['show *'] does NOT deny bare 'show' — requires at least one more word."""
+    f = _make_filter("show *")
+    assert not f.is_denied("show")
+    assert not f.is_denied("sh")
+
+
+# ---------------------------------------------------------------------------
+# AbbreviationDenyFilter — Complex Cases
+# ---------------------------------------------------------------------------
+
+
+def test_abbrev_factory_alias_s_for_show() -> None:
+    """'s' is a factory alias for 'show' on some IOS versions — caught as prefix."""
+    f = _make_filter("show version")
+    assert f.is_denied("s version")
+
+
+def test_abbrev_longer_word_not_matched() -> None:
+    """'showing version' is NOT denied — 'showing' is longer than 'show'."""
+    f = _make_filter("show version")
+    assert not f.is_denied("showing version")
+
+
+def test_abbrev_shared_prefix_different_second_word() -> None:
+    """'sh vl' is not denied by 'show version' — 'vl' is not a prefix of 'version'."""
+    f = _make_filter("show version")
+    assert not f.is_denied("show vlan")
+    assert not f.is_denied("sh vl")
+
+
+def test_abbrev_four_word_all_abbreviated() -> None:
+    f = _make_filter("show ip bgp neighbors")
+    assert f.is_denied("show ip bgp neighbors")
+    assert f.is_denied("sh ip bg neigh")
+    assert f.is_denied("s i b n")
+
+
+def test_abbrev_four_word_incomplete_not_denied() -> None:
+    f = _make_filter("show ip bgp neighbors")
+    assert not f.is_denied("show ip bgp")
+    assert not f.is_denied("sh ip bg")
+
+
+def test_abbrev_duplicate_entries_no_error() -> None:
+    """Adding the same deny entry twice has no adverse effect."""
+    f = _make_filter("show version", "show version")
+    assert f.is_denied("sh ver")
+    assert not f.is_denied("show vlan")
+
+
+def test_abbrev_overlapping_entries() -> None:
+    """Two deny entries sharing a prefix are both caught correctly."""
+    f = _make_filter("show ip", "show ip interface")
+    assert f.is_denied("sh ip")
+    assert f.is_denied("sh ip int")
+    assert not f.is_denied("sh")
+
+
+def test_abbrev_uppercase_deny_entry() -> None:
+    """Deny entries in uppercase match lowercase submitted commands."""
+    f = _make_filter("SHOW VERSION")
+    assert f.is_denied("show version")
+    assert f.is_denied("sh ver")

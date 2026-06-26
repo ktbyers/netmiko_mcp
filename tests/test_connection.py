@@ -46,7 +46,9 @@ def test_run_show_command_success(
     """Test that a command is executed successfully and returns output."""
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 1000
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 
     # _managed_connection calls ConnectHandler directly (not as a context manager)
@@ -71,7 +73,9 @@ def test_run_show_command_textfsm(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that textfsm parsed data is correctly serialized to JSON."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
 
     mock_net_connect = MagicMock()
@@ -93,7 +97,9 @@ def test_run_show_command_inventory_error(
     mock_get_params: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an inventory failure is caught and returned as a string."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.side_effect = ValueError("Device not found")
 
     result = run_show_command("bad_router", "show version")
@@ -107,7 +113,9 @@ def test_run_show_command_auth_error(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an authentication failure is caught and returned as a string."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.side_effect = NetmikoAuthenticationException("Auth failed")
 
@@ -122,7 +130,9 @@ def test_run_show_command_timeout_error(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that a timeout failure is caught and returned as a string."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.side_effect = NetmikoTimeoutException("Timeout")
 
@@ -146,7 +156,9 @@ def test_run_show_command_unexpected_exception(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an unexpected exception is caught and returned as an Execution Error string."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.side_effect = RuntimeError("unexpected SSH negotiation failure")
 
@@ -388,7 +400,9 @@ def test_run_show_command_explicit_save(
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 1000
     mock_settings.save_output_dir = str(tmp_path)
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.return_value.send_command.return_value = "GigabitEthernet0/0 up up"
 
@@ -422,7 +436,9 @@ def test_run_show_command_explicit_save_ignores_threshold(
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 1000
     mock_settings.save_output_dir = str(tmp_path)
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     # Output is only 1 line — well below any threshold — but save_output=True forces save.
     mock_connect.return_value.send_command.return_value = "tiny output"
@@ -453,7 +469,9 @@ def test_run_show_command_below_threshold_returns_inline(
     """Output below save_threshold is returned inline without saving."""
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 1000
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.return_value.send_command.return_value = "line1\nline2\nline3"
 
@@ -476,7 +494,9 @@ def test_run_show_command_above_threshold_auto_saves(
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 3
     mock_settings.save_output_dir = str(tmp_path)
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     large_output = "\n".join(f"line {i}" for i in range(10))  # 10 lines > threshold of 3
     mock_connect.return_value.send_command.return_value = large_output
@@ -511,7 +531,9 @@ def test_run_show_command_structured_above_threshold_auto_saves(
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 3
     mock_settings.save_output_dir = str(tmp_path)
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     # A list with enough records that JSON serialization exceeds 3 lines
     large_structured = [{"intf": f"Gi0/{i}", "status": "up"} for i in range(10)]
@@ -539,7 +561,9 @@ def test_run_show_command_auto_save_disabled_returns_inline(
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 3
     mock_settings.save_output_dir = str(tmp_path)
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     large_output = "\n".join(f"line {i}" for i in range(10))
     mock_connect.return_value.send_command.return_value = large_output
@@ -566,7 +590,9 @@ def test_run_show_command_notification_contains_filename_not_path(
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 2
     mock_settings.save_output_dir = str(tmp_path)
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.return_value.send_command.return_value = "line1\nline2\nline3"
 
@@ -704,7 +730,9 @@ def test_run_show_command_on_group_empty_device_list(
     mock_all_params: MagicMock, mock_validate: MagicMock
 ) -> None:
     """An empty device list returns an empty dict without attempting any connections."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.return_value = {}
     result = run_show_command_on_group("empty_group", "show version")
     assert result == {}
@@ -716,7 +744,9 @@ def test_run_show_command_on_group_inventory_error(
     mock_all_params: MagicMock, mock_validate: MagicMock
 ) -> None:
     """Test that an inventory error is returned cleanly."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.side_effect = ValueError("Group 'bad' not found")
     result = run_show_command_on_group("bad", "show version")
     assert "error" in result
@@ -734,7 +764,9 @@ def test_run_show_command_on_group_success(
     mock_settings: MagicMock,
 ) -> None:
     """Test successful concurrent execution across multiple devices."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}, "rtr2": {"host": "2.2.2.2"}}
     mock_settings.max_workers = 10
     mock_run.side_effect = lambda name, cmd, tf, save, **kw: f"output from {name}"
@@ -754,7 +786,9 @@ def test_run_show_command_on_group_all_devices_fail(
     mock_settings: MagicMock,
 ) -> None:
     """When every device raises an exception every result is an Execution Error string."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.return_value = {"rtr1": {}, "rtr2": {}, "rtr3": {}}
     mock_settings.max_workers = 10
     mock_run.side_effect = RuntimeError("connection refused")
@@ -778,7 +812,9 @@ def test_run_show_command_on_group_partial_failure(
     mock_settings: MagicMock,
 ) -> None:
     """Test that one device failing does not prevent results from other devices."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}, "rtr2": {"host": "2.2.2.2"}}
     mock_settings.max_workers = 10
 
@@ -805,7 +841,9 @@ def test_run_show_command_on_group_save_output(
     tmp_path: Path,
 ) -> None:
     """Test that save_output=True writes files and returns file paths."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}}
     mock_settings.max_workers = 10
     mock_settings.save_output_dir = str(tmp_path)
@@ -831,7 +869,9 @@ def test_run_show_command_on_group_textfsm_propagated(
     mock_settings: MagicMock,
 ) -> None:
     """use_textfsm=True must be passed through to every run_show_command call."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.return_value = {"rtr1": {}, "rtr2": {}, "rtr3": {}}
     mock_settings.max_workers = 10
     mock_run.return_value = [{"intf": "Gi0/0", "status": "up"}]
@@ -860,7 +900,9 @@ def test_run_show_command_on_group_max_workers_enforced() -> None:
             patch("netmiko_mcp.connection.settings") as ms,
             patch(
                 "netmiko_mcp.connection.validate_command",
-                return_value=ValidationResult(allowed=True, reason=REASON_ALLOWED),
+                side_effect=lambda cmd: ValidationResult(
+                    allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+                ),
             ),
             patch(
                 "netmiko_mcp.connection.get_all_device_params",
@@ -899,7 +941,9 @@ def test_run_show_command_on_group_auto_save_large_output(
 ) -> None:
     """With save_output=False, large per-device output is auto-saved by run_show_command.
     The group result contains the notification string returned by run_show_command."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}}
     mock_settings.max_workers = 10
     # Simulate run_show_command already having auto-saved and returning a notification.
@@ -927,7 +971,9 @@ def test_run_show_command_on_group_explicit_save_disables_auto_save(
 ) -> None:
     """With save_output=True, _auto_save=False is passed so run_show_command
     returns raw output and the group runner handles the save."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_all_params.return_value = {"rtr1": {"host": "1.1.1.1"}}
     mock_settings.max_workers = 10
     mock_settings.save_output_dir = str(tmp_path)
@@ -1143,7 +1189,9 @@ def test_run_show_command_transcript_captured(
     """When audit_log_read_transcript is True, save_channel_transcript should be called."""
     mock_settings.audit_log_read_transcript = True
     mock_settings.save_threshold = 1000
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 
     mock_net_connect = MagicMock()
@@ -1176,7 +1224,9 @@ def test_run_show_command_no_transcript_when_disabled(
     """When audit_log_read_transcript is False, save_channel_transcript should not be called."""
     mock_settings.audit_log_read_transcript = False
     mock_settings.save_threshold = 1000
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1", "device_type": "cisco_ios"}
 
     mock_net_connect = MagicMock()
@@ -1239,7 +1289,9 @@ def test_run_show_command_ssh_error(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """SSHException during connection should return a Connection Error string."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.side_effect = SSHException("key exchange failed")
 
@@ -1256,7 +1308,9 @@ def test_run_show_command_netmiko_base_error_on_connect(
     mock_get_params: MagicMock, mock_connect: MagicMock, mock_validate: MagicMock
 ) -> None:
     """NetmikoBaseException during connection should return a Connection Error string."""
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.side_effect = NetmikoBaseException("connection refused")
 
@@ -1282,7 +1336,9 @@ def test_run_show_command_read_timeout(
 ) -> None:
     """ReadTimeout during send_command should return a 'stopped responding' error string."""
     mock_settings.audit_log_read_transcript = False
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.return_value.send_command.side_effect = ReadTimeout("read timed out")
 
@@ -1304,7 +1360,9 @@ def test_run_show_command_read_error(
 ) -> None:
     """ReadException during send_command should return a 'Failed to read' error string."""
     mock_settings.audit_log_read_transcript = False
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.return_value.send_command.side_effect = ReadException("channel closed")
 
@@ -1326,7 +1384,9 @@ def test_run_show_command_write_error(
 ) -> None:
     """WriteException during send_command should return a 'Failed to send' error string."""
     mock_settings.audit_log_read_transcript = False
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.return_value.send_command.side_effect = WriteException("write failed")
 
@@ -1348,7 +1408,9 @@ def test_run_show_command_netmiko_base_error_on_command(
 ) -> None:
     """NetmikoBaseException during send_command should return a Connection Error string."""
     mock_settings.audit_log_read_transcript = False
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.return_value.send_command.side_effect = NetmikoBaseException("session error")
 
@@ -1369,7 +1431,9 @@ def test_run_show_command_unexpected_command_phase_exception(
 ) -> None:
     """A bare Exception raised by send_command (a likely bug) should return an Execution Error."""
     mock_settings.audit_log_read_transcript = False
-    mock_validate.return_value = ValidationResult(allowed=True, reason=REASON_ALLOWED)
+    mock_validate.side_effect = lambda cmd: ValidationResult(
+        allowed=True, reason=REASON_ALLOWED, normalized_command=" ".join(cmd.split())
+    )
     mock_get_params.return_value = {"host": "1.1.1.1"}
     mock_connect.return_value.send_command.side_effect = RuntimeError("internal bug")
 

@@ -28,7 +28,7 @@ Both lists are optional. An empty or missing `allowed_commands` means nothing is
 
 An empty or missing `denied_commands` means no extra command blocking. Even with an empty
 `denied_commands` list, the command must still pass allowed_commands check. Additionally,
-it must also pass through checks like [unsafe characters](#unsafe-characters) and
+it must also pass through the [allowed characters](#allowed-characters) check and
 [allow pipe](configuration.md).
 <br />
 <br />
@@ -65,8 +65,12 @@ allowed_commands:
 
 ### Glob matching
 
-A `*` at the end of a pattern matches the bare command **or** the command followed by any
-additional text (excluding [unsafe characters](#unsafe-characters)).
+Two glob forms are supported:
+
+- **Inline glob** (`"show version*"`) — matches the bare prefix and any suffix:
+  `show version`, `show versions`, and `show version detail` all match.
+- **Space glob** (`"show version *"`) — requires at least one additional word after
+  the prefix: `show version detail` matches, but `show version` alone does **not**.
 
 ```yaml
 allowed_commands:
@@ -75,9 +79,22 @@ allowed_commands:
 
 | Command sent | Result |
 |---|---|
-| `show version` | ✅ allowed (bare, no args) |
+| `show version` | ❌ denied — space-glob requires at least one extra word |
 | `show version detail` | ✅ allowed |
 | `show version \| include IOS` | ✅ allowed (if pipes are enabled) |
+
+Use an inline glob to also permit the bare command:
+
+```yaml
+allowed_commands:
+  - "show version*"
+```
+
+| Command sent | Result |
+|---|---|
+| `show version` | ✅ allowed |
+| `show versions` | ✅ allowed |
+| `show version detail` | ✅ allowed |
 
 
 ```yaml
@@ -87,9 +104,10 @@ allowed_commands:
 
 | Command sent | Result |
 |---|---|
-| `show ip route` | ✅ allowed |
+| `show ip route` | ✅ allowed — "route" satisfies the extra word |
 | `show ip interface brief` | ✅ allowed |
 | `show ip bgp neighbors 10.0.0.1` | ✅ allowed |
+| `show ip` | ❌ denied — space-glob requires at least one extra word |
 | `show version` | ❌ denied — prefix doesn't match |
 <br />
 <br />
@@ -109,16 +127,16 @@ allowed_commands:
   - "show interfaces"
   - "show cdp neighbors detail"
 
-  # Glob patterns — allow a family of commands
-  - "show ip route *"
-  - "show ip bgp *"
-  - "show interfaces *"
-  - "show logging *"
+  # Inline glob — matches bare command and any arguments
+  - "show ip route*"
+  - "show ip bgp*"
+  - "show interfaces*"
+  - "show logging*"
 
   # Multi-vendor
   - "display version"
   - "display interface brief"
-  - "display ip routing-table *"
+  - "display ip routing-table*"
 ```
 <br />
 <br />
@@ -135,8 +153,11 @@ broader glob would otherwise allow them.
 
 - `"reload"` — blocks only the bare command `reload`. Does **not** block
   `show reload-cause` because matching is anchored at both ends, not a substring search.
-- `"reload *"` — blocks `reload`, `reload in 5`, `reload cancel`, etc.
+- `"reload *"` — blocks `reload in 5`, `reload cancel`, etc. Does **not** block bare
+  `reload` alone — use `"reload"` or `"reload*"` for that.
+- `"reload*"` — blocks `reload`, `reload in 5`, `reload cancel`, etc.
 - `"configure *"` — blocks `configure terminal`, `configure replace flash:cfg`, etc.
+  Does **not** block bare `configure` alone.
 
 ### Example
 
@@ -156,37 +177,59 @@ denied_commands:
 <br />
 <br />
 
-## Unsafe Characters
+## Allowed Characters
 
-Before any whitelist or glob matching takes place, the server scans every incoming command
-for characters defined in `unsafe_chars` (configured in
-[configuration.md](configuration.md)). Any match causes immediate rejection.
+Before any whitelist or glob matching takes place, every incoming command is checked
+against `allowed_command_chars` (configured in [configuration.md](configuration.md)).
+Any character not in the allowed set causes immediate rejection.
 
-**Default unsafe characters:** `;`  `\n` (newline)  `\r` (carriage return)  `&`
+This allowlist approach is more robust than enumerating forbidden characters — it
+handles Unicode space lookalikes, and novel injection characters without (hopefully)
+requiring updates to the character list.
 
-These block ``some`` potential command injection vectors (i.e. attempts to bypass the
-allowed_commands and denied_commands settings).
+**Default allowed characters:** `a-z A-Z 0-9` and `<space> . / : _ - , "`
 
-| Character | Injection technique blocked |
+Notably absent from the default (rejected unless explicitly added):
+
+| Character(s) | Why excluded |
 |---|---|
-| `;` | `show version; reload` |
-| `\n` | Multi-line command injection |
-| `\r` | Carriage-return injection |
-| `&` | Background execution (`show version && reload`) |
+| `;` `&` | Command chaining / background execution injection |
+| `\|` | Managed separately via `allow_pipe` |
+| `\t` `\n` `\r` and other whitespace | Normalized to space before the check (see below) |
+| Unicode spaces (NBSP, ideographic, etc.) | Handled by normalization or rejected as disallowed |
+| `'` `` ` `` `$` `!` `\\` | Shell metacharacters |
 <br />
 <br />
 
-### Adding unsafe characters
+### Whitespace normalization
 
-If your environment requires additional blocking (e.g. you want to prevent all pipe usage
-at the character level rather than via `allow_pipe`), you can add `|` to the list:
+Before the character check, the server normalizes all whitespace in the command:
+- All runs of ASCII whitespace (spaces, tabs, `\t`, `\n`, `\r`, `\x0b`, etc.) are
+  collapsed to a single ASCII space.
+- Leading and trailing whitespace is stripped.
+
+This normalized form is what is validated against the allowed/denied lists **and what
+is forwarded to the network device**. Capitalization is preserved exactly as submitted.
+
+> **Example:** `"Show   IP   Route"` is normalized to `"Show IP Route"` before
+> matching and before being sent to the device.
+<br />
+<br />
+
+### Extending the allowed character set
+
+If your platform requires characters not in the default set (e.g. `"` for IOS-XR
+inline egrep patterns, or `[` `]` for Junos range syntax), add them in
+`~/.netmiko-mcp.yml`:
 
 ```yaml
 # in ~/.netmiko-mcp.yml
-unsafe_chars: [";", "\n", "\r", "&", "|"]
+allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,\""
 ```
 
-> **Warning:** Typically you do not remove the defaults. You would want to add to this list.
+> **Note:** The pipe character `|` must not be added here when `allow_pipe` is `false`.
+> Enable pipe support via `allow_pipe: true` — the server adds `|` to the effective
+> allowed set automatically.
 <br />
 <br />
 
@@ -229,18 +272,19 @@ show version | awk '{print $1}'     ❌ denied — "awk" not in pipe_modifiers
 
 ## Globbing Reference
 
-The `*` wildcard in patterns is intentionally restricted — it will **never** match
-[unsafe characters](#unsafe-characters). This means a wildcard can never be tricked into
-spanning a command separator even if the unsafe character check were somehow bypassed.
+The `*` wildcard in patterns matches any character. Commands are validated against
+`allowed_command_chars` before glob matching, so the wildcard can only ever expand
+across characters already confirmed to be permitted.
 
 | Pattern | Matches | Does not match |
 |---|---|---|
-| `"show version"` | `show version` | `show version detail`, `sh ver` |
-| `"show version *"` | `show version`, `show version detail` | `show versio` |
-| `"show ip *"` | `show ip route`, `show ip int brief`, `show ip bgp summary` | `show version`, `show ipv6 *` |
-| `"show *"` | `show version`, `show ip route`, `show` | `sh ver`, `configure terminal` |
-| `"debug *"` | `debug`, `debug ip packet`, `debug ip ospf adj` | `show debug` |
-| `"show ip route *"` | `show ip route`, `show ip route 10.0.0.0` | `show ip interface` |
+| `"show version"` | `show version` | `show version detail`, `configure terminal` |
+| `"show version*"` | `show version`, `show versions`, `show version detail` | `show ip route`, `configure terminal` |
+| `"show version *"` | `show version detail` | `show version`, `configure terminal` |
+| `"show ip *"` | `show ip route`, `show ip int brief`, `show ip bgp summary` | `show ip`, `show version`, `show ipv6 route` |
+| `"show *"` | `show version`, `show ip route` | `show`, `configure terminal` |
+| `"debug *"` | `debug ip ospf events`, `debug ip ospf adj` | `debug`, `show debug` |
+| `"show ip route *"` | `show ip route 10.0.0.0` | `show ip route`, `show ip interface` |
 <br />
 <br />
 
@@ -267,16 +311,19 @@ denied_commands:
 
 ## Validation Pipeline
 
-Every command passes through these checks in order. The first failure stops processing.
+Every command passes through these steps in order. The first failure stops processing.
 
 ```
-1. Unsafe character check   — rejects if any unsafe_chars character is present
-2. denied_commands check    — rejects if the full command matches any denied pattern
-3. Pipe check               — rejects if pipe exists and allow_pipe is false,
-                              or if the modifier is not in pipe_modifiers,
-                              or if there are multiple pipes,
-                              or if nothing follows the pipe
-4. allowed_commands check   — rejects if the base command matches no allowed pattern
+1. Whitespace normalization  — collapse all ASCII whitespace runs to single space,
+                               strip leading/trailing whitespace
+2. Allowed character check   — rejects if any character is not in allowed_command_chars
+                               (plus '|' when allow_pipe is true)
+3. denied_commands check     — rejects if the base command (before any pipe) matches
+                               any denied pattern
+4. Pipe check                — rejects if pipe modifier is not in pipe_modifiers,
+                               or if there are multiple pipes,
+                               or if nothing follows the pipe
+5. allowed_commands check    — rejects if the base command matches no allowed pattern
 ```
 <br />
 <br />
@@ -300,22 +347,22 @@ allowed_commands:
   - "show interface status"
 
   # Routing
-  - "show ip route *"
-  - "show ip bgp *"
-  - "show ip ospf *"
-  - "show ip eigrp *"
+  - "show ip route*"
+  - "show ip bgp*"
+  - "show ip ospf*"
+  - "show ip eigrp*"
 
   # Switching
-  - "show vlan *"
-  - "show mac address-table *"
-  - "show spanning-tree *"
+  - "show vlan*"
+  - "show mac address-table*"
+  - "show spanning-tree*"
 
   # Device discovery
-  - "show cdp neighbors *"
-  - "show lldp neighbors *"
+  - "show cdp neighbors*"
+  - "show lldp neighbors*"
 
   # Logs
-  - "show logging *"
+  - "show logging*"
 
 denied_commands:
   # Never allow show run or show start (tricky because of command abbreviations).

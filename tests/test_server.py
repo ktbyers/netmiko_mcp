@@ -169,6 +169,141 @@ def test_validate_startup_no_explicit_config_no_discovery_file_passes(
 
 
 # ---------------------------------------------------------------------------
+# _validate_startup — invalid glob patterns in allow and deny lists
+# ---------------------------------------------------------------------------
+
+
+_INVALID_GLOB_ENTRIES = [
+    "show * interface",  # '*' in non-trailing word position
+    "* interface",  # '*' as first word
+    "*",  # bare '*' with no prefix
+    "sh*w version",  # '*' mid-word in non-trailing position
+    "show ** version",  # multiple globs
+]
+
+
+@pytest.mark.parametrize("invalid_entry", _INVALID_GLOB_ENTRIES)
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_invalid_deny_glob_http_raises(
+    mock_settings: Any, tmp_path: Path, invalid_entry: str
+) -> None:
+    """In HTTP mode, an unsupported glob in denied_commands raises SystemExit."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text(
+        f"allowed_commands: ['show *']\ndenied_commands: ['{invalid_entry}']\n",
+        encoding="utf-8",
+    )
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "streamable-http"
+    mock_settings.http_auth_enabled = False
+
+    with pytest.raises(SystemExit) as exc_info:
+        _validate_startup()
+    assert "Startup Error" in str(exc_info.value)
+    assert invalid_entry in str(exc_info.value)
+
+
+@pytest.mark.parametrize("invalid_entry", _INVALID_GLOB_ENTRIES)
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_invalid_deny_glob_stdio_returns_error(
+    mock_settings: Any, tmp_path: Path, invalid_entry: str
+) -> None:
+    """In stdio mode, an unsupported glob in denied_commands returns an error string."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text(
+        f"allowed_commands: ['show *']\ndenied_commands: ['{invalid_entry}']\n",
+        encoding="utf-8",
+    )
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+
+    result = _validate_startup()
+    assert result is not None
+    assert "Startup Error" in result
+    assert invalid_entry in result
+
+
+@pytest.mark.parametrize("invalid_entry", _INVALID_GLOB_ENTRIES)
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_invalid_allow_glob_http_raises(
+    mock_settings: Any, tmp_path: Path, invalid_entry: str
+) -> None:
+    """In HTTP mode, an unsupported glob in allowed_commands raises SystemExit."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text(
+        f"allowed_commands: ['{invalid_entry}']\ndenied_commands: []\n",
+        encoding="utf-8",
+    )
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "streamable-http"
+    mock_settings.http_auth_enabled = False
+
+    with pytest.raises(SystemExit) as exc_info:
+        _validate_startup()
+    assert "Startup Error" in str(exc_info.value)
+    assert invalid_entry in str(exc_info.value)
+
+
+@pytest.mark.parametrize("invalid_entry", _INVALID_GLOB_ENTRIES)
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_invalid_allow_glob_stdio_returns_error(
+    mock_settings: Any, tmp_path: Path, invalid_entry: str
+) -> None:
+    """In stdio mode, an unsupported glob in allowed_commands returns an error string."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text(
+        f"allowed_commands: ['{invalid_entry}']\ndenied_commands: []\n",
+        encoding="utf-8",
+    )
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+
+    result = _validate_startup()
+    assert result is not None
+    assert "Startup Error" in result
+    assert invalid_entry in result
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_both_lists_invalid_reports_both(
+    mock_settings: Any, tmp_path: Path
+) -> None:
+    """When both allow and deny lists have invalid entries, both are reported."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text(
+        "allowed_commands: ['show * interface']\ndenied_commands: ['* anything']\n",
+        encoding="utf-8",
+    )
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+
+    result = _validate_startup()
+    assert result is not None
+    assert "allowed_commands" in result
+    assert "denied_commands" in result
+
+
+@patch("netmiko_mcp.server.settings")
+def test_validate_startup_valid_globs_pass(mock_settings: Any, tmp_path: Path) -> None:
+    """Valid trailing glob forms in both lists do not cause a startup error."""
+    cmd_file = tmp_path / "commands.yml"
+    cmd_file.write_text(
+        "allowed_commands: ['show *', 'show ip interface*', 'show version']\n"
+        "denied_commands: ['show ip interface *', 'show ip interface*', 'show version']\n",
+        encoding="utf-8",
+    )
+    mock_settings.command_file = str(cmd_file)
+    mock_settings.transport = "stdio"
+    mock_settings.http_auth_enabled = False
+
+    result = _validate_startup()
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
 # MCP tools
 # ---------------------------------------------------------------------------
 
