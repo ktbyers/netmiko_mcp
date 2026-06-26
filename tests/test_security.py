@@ -94,17 +94,17 @@ def test_glob_to_regex_space_glob_matches_extra_word() -> None:
     assert p.match("show version brief")
     assert p.match("show version detail extra")
     assert not p.match("show version")  # no extra word
-    assert not p.match("show versio")   # abbreviated and no extra word
+    assert not p.match("show versio")  # abbreviated and no extra word
 
 
 def test_glob_to_regex_inline_glob_matches_base_and_extensions() -> None:
     """Inline-glob 'show version*' matches the bare command, extended words, and extra args."""
     p = glob_to_regex("show version*")
-    assert p.match("show version")        # bare command
-    assert p.match("show versions")       # extra letter
+    assert p.match("show version")  # bare command
+    assert p.match("show versions")  # extra letter
     assert p.match("show version brief")  # extra word
-    assert not p.match("show ver")        # abbreviated — allow side does not expand
-    assert not p.match("show ip route")   # wrong command
+    assert not p.match("show ver")  # abbreviated — allow side does not expand
+    assert not p.match("show ip route")  # wrong command
 
 
 # ---------------------------------------------------------------------------
