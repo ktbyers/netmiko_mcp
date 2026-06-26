@@ -16,6 +16,7 @@ from netmiko_mcp.security import (
     AbbreviationDenyFilter,
     TrieNode,
     ValidationResult,
+    deny_check,
     glob_to_regex,
     load_commands,
     validate_command,
@@ -871,6 +872,98 @@ def test_trienode_default_state() -> None:
     assert node.word_end is False
     assert node.final_word is False
     assert node.next_word_trie is None
+
+
+# ---------------------------------------------------------------------------
+# deny_check
+# ---------------------------------------------------------------------------
+
+
+def test_deny_check_exact_match_denied() -> None:
+    """A plain entry matches only the exact command."""
+    assert deny_check(command="reload", denied_commands=["reload"])
+
+
+def test_deny_check_exact_match_case_insensitive() -> None:
+    """Matching is case-insensitive."""
+    assert deny_check(command="RELOAD", denied_commands=["reload"])
+    assert deny_check(command="Reload", denied_commands=["reload"])
+
+
+def test_deny_check_no_match_returns_false() -> None:
+    """A command that matches no deny entry returns False."""
+    assert not deny_check(command="show version", denied_commands=["reload"])
+
+
+def test_deny_check_empty_denied_list_returns_false() -> None:
+    """An empty deny list never denies anything."""
+    assert not deny_check(command="reload", denied_commands=[])
+
+
+def test_deny_check_anchored_no_substring_match() -> None:
+    """A plain entry must not match a command where it appears only as a substring."""
+    assert not deny_check(command="show reload-cause", denied_commands=["reload"])
+    assert not deny_check(command="show reload cause", denied_commands=["reload"])
+
+
+def test_deny_check_space_glob_denies_with_extra_word() -> None:
+    """Space-glob requires at least one extra word after the prefix."""
+    assert deny_check(command="reload in 5", denied_commands=["reload *"])
+    assert deny_check(command="reload cancel", denied_commands=["reload *"])
+
+
+def test_deny_check_space_glob_does_not_deny_bare_command() -> None:
+    """Space-glob does NOT deny the bare command alone."""
+    assert not deny_check(command="reload", denied_commands=["reload *"])
+
+
+def test_deny_check_inline_glob_denies_base_command() -> None:
+    """Inline-glob matches the bare command."""
+    assert deny_check(command="reload", denied_commands=["reload*"])
+
+
+def test_deny_check_inline_glob_denies_with_suffix() -> None:
+    """Inline-glob matches the base command with any suffix."""
+    assert deny_check(command="reload in 5", denied_commands=["reload*"])
+    assert deny_check(command="reload cancel", denied_commands=["reload*"])
+
+
+def test_deny_check_multiple_entries_first_matches() -> None:
+    """Returns True when the first entry matches."""
+    assert deny_check(command="reload", denied_commands=["reload", "configure terminal"])
+
+
+def test_deny_check_multiple_entries_second_matches() -> None:
+    """Returns True when only the second entry matches."""
+    assert deny_check(
+        command="configure terminal", denied_commands=["reload", "configure terminal"]
+    )
+
+
+def test_deny_check_multiple_entries_neither_matches() -> None:
+    """Returns False when no entry matches."""
+    assert not deny_check(command="show version", denied_commands=["reload", "configure terminal"])
+
+
+def test_deny_check_multiword_exact_match() -> None:
+    """A multi-word plain entry matches only that exact phrase."""
+    assert deny_check(command="configure terminal", denied_commands=["configure terminal"])
+    assert not deny_check(command="configure", denied_commands=["configure terminal"])
+    assert not deny_check(command="configure terminal now", denied_commands=["configure terminal"])
+
+
+def test_deny_check_multiword_space_glob() -> None:
+    """Multi-word space-glob denies commands with at least one extra word."""
+    assert deny_check(command="configure terminal", denied_commands=["configure *"])
+    assert deny_check(command="configure replace flash:cfg", denied_commands=["configure *"])
+    assert not deny_check(command="configure", denied_commands=["configure *"])
+
+
+def test_deny_check_multiword_inline_glob() -> None:
+    """Multi-word inline-glob denies the base command and any extension."""
+    assert deny_check(command="configure", denied_commands=["configure*"])
+    assert deny_check(command="configure terminal", denied_commands=["configure*"])
+    assert deny_check(command="configure replace flash:cfg", denied_commands=["configure*"])
 
 
 # ---------------------------------------------------------------------------
