@@ -846,6 +846,9 @@ def test_pipe_char_rejected_when_allow_pipe_false(mock_load: Any, mock_settings:
         ("  show version  ", "show version"),  # leading/trailing stripped
         ("SHOW\tVERSION", "SHOW VERSION"),  # tab normalized, caps preserved
         ("show  ip  route", "show ip route"),  # multiple internal spaces
+        ("show\nversion", "show version"),  # newline normalized
+        ("show\rversion", "show version"),  # carriage return normalized
+        ("show\r\nversion", "show version"),  # CRLF normalized
     ],
 )
 @patch("netmiko_mcp.security.settings")
