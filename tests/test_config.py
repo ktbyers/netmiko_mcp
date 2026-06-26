@@ -16,7 +16,7 @@ def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.allow_pipe is False
     assert (
         config.allowed_command_chars
-        == "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+        == 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"'
     )
     assert config.pipe_modifiers == ["include", "exclude", "section", "begin", "count"]
     assert config.max_workers == 10
