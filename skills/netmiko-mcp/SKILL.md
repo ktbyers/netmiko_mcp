@@ -42,19 +42,29 @@ audit_log_transcript_dir: "~/.netmiko_mcp_transcripts"  # default: ~/.netmiko_mc
 
 ## Security Whitelist (`~/commands.yml`)
 
-Default: all commands denied. Path set by `command_file`. Both lists use the same matching rules:
-- A **plain string** (e.g. `"reload"`) matches only that exact command — anchored at both ends.
-- A **glob** (e.g. `"reload *"`) matches the bare command or any command starting with that prefix followed by arguments.
+Default: all commands denied. Path set by `command_file`.
+
+### Matching rules
+
+**Allow list** (`allowed_commands`):
+- A **plain string** (e.g. `"show version"`) matches only that exact command — case-insensitive, anchored at both ends. Abbreviations are NOT supported (`"sh ver"` does not match).
+- An **inline glob** (e.g. `"show version*"`) matches the bare command and any suffix: `show version`, `show versions`, `show version detail` all match.
+- A **space glob** (e.g. `"show version *"`) requires at least one additional word: `show version detail` matches, but `show version` alone does NOT.
+
+**Deny list** (`denied_commands`):
+- A **plain string** (e.g. `"reload"`) denies that exact command AND all abbreviated forms of the same word count — `rel`, `relo`, `reloa`, `reload` are all denied. Commands with more or fewer words are NOT covered.
+- An **inline glob** (e.g. `"reload*"`) denies the bare command and any suffix, including abbreviated first words.
+- A **space glob** (e.g. `"reload *"`) denies commands with at least one additional word, including abbreviated forms. The bare command alone is NOT denied.
 - `denied_commands` always takes precedence over `allowed_commands`.
 
 ```yaml
 ---
 allowed_commands:
-  - "show version *"
+  - "show version*"    # matches bare 'show version' and any arguments
   - "show ip int brief"
 denied_commands:
-  - "configure *"   # blocks "configure terminal", "configure replace", etc.
-  - "reload"        # blocks only the bare "reload" command
+  - "configure*"  # blocks 'configure', 'configure terminal', 'conf t', etc.
+  - "reload*"     # blocks 'reload', 'rel', 'reload in 5', 'reload cancel', etc.
 ```
 
 ## Allowed Characters (`allowed_command_chars`)
