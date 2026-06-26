@@ -59,7 +59,7 @@ denied_commands:
 
 ## Allowed Characters (`allowed_command_chars`)
 
-Allowlist of characters permitted in commands. Any character not in this set is rejected before any deny/allow matching. Default covers `a-z A-Z 0-9` and ` . / : _ - ,`.
+Allowlist of characters permitted in commands. Any character not in this set is rejected before any deny/allow matching. Default covers `a-z A-Z 0-9` and `<space> . / : _ - , "`.
 
 Whitespace normalization runs before this check: all ASCII whitespace runs (tabs, multiple spaces, etc.) are collapsed to a single space and leading/trailing whitespace is stripped. The normalized form is what is validated and forwarded to the device — capitalization is preserved.
 
@@ -72,7 +72,7 @@ allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123
 
 Or via environment variable:
 ```
-NETMIKO_MCP_ALLOWED_COMMAND_CHARS="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+NETMIKO_MCP_ALLOWED_COMMAND_CHARS='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"'
 ```
 
 ## Pipe Support (`allow_pipe` and `pipe_modifiers`)
@@ -96,10 +96,7 @@ pipe_modifiers:
   - "section"
   - "begin"
   - "count"
-  - "grep"
-  - "egrep"
   - "json"
-  - "json-pretty"
   - "xml"
   - "no-more"
 ```

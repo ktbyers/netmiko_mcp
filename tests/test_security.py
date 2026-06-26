@@ -44,10 +44,10 @@ def test_glob_to_regex_trailing_wildcard_matches_arguments() -> None:
     assert p.match("show bgp summary")
 
 
-def test_glob_to_regex_trailing_wildcard_matches_bare_command() -> None:
-    """'show *' must also match 'show' with no arguments (the group is optional)."""
+def test_glob_to_regex_space_glob_does_not_match_bare_command() -> None:
+    """'show *' must NOT match 'show' alone — space-glob requires at least one extra word."""
     p = glob_to_regex("show *")
-    assert p.match("show")
+    assert not p.match("show")
 
 
 def test_glob_to_regex_is_case_insensitive() -> None:
@@ -68,7 +68,7 @@ def test_glob_to_regex_trailing_wildcard_with_multiword_prefix() -> None:
     p = glob_to_regex("show ip *")
     assert p.match("show ip interface brief")
     assert p.match("show ip route")
-    assert p.match("show ip")  # bare — wildcard group is optional
+    assert not p.match("show ip")  # bare — space-glob requires at least one extra word
     assert not p.match("show version")  # wrong prefix
     assert not p.match("show ipv6 route")  # 'ipv6' != 'ip'
 
@@ -86,6 +86,25 @@ def test_glob_to_regex_wildcard_does_not_match_empty_with_mandatory_prefix() -> 
     p = glob_to_regex("show *")
     assert not p.match("configure terminal")
     assert not p.match("debug ip packet")
+
+
+def test_glob_to_regex_space_glob_matches_extra_word() -> None:
+    """Space-glob 'show version *' matches when at least one extra word follows."""
+    p = glob_to_regex("show version *")
+    assert p.match("show version brief")
+    assert p.match("show version detail extra")
+    assert not p.match("show version")  # no extra word
+    assert not p.match("show versio")   # abbreviated and no extra word
+
+
+def test_glob_to_regex_inline_glob_matches_base_and_extensions() -> None:
+    """Inline-glob 'show version*' matches the bare command, extended words, and extra args."""
+    p = glob_to_regex("show version*")
+    assert p.match("show version")        # bare command
+    assert p.match("show versions")       # extra letter
+    assert p.match("show version brief")  # extra word
+    assert not p.match("show ver")        # abbreviated — allow side does not expand
+    assert not p.match("show ip route")   # wrong command
 
 
 # ---------------------------------------------------------------------------
@@ -453,12 +472,13 @@ def test_vc_rule2_glob_with_args(mock_load: Any, mock_settings: Any) -> None:
 
 @patch("netmiko_mcp.security.settings")
 @patch("netmiko_mcp.security.load_commands")
-def test_vc_rule2_glob_bare_command(mock_load: Any, mock_settings: Any) -> None:
-    """Rule 2: Glob patterns also match the bare command with no arguments."""
+def test_vc_rule2_space_glob_requires_extra_word(mock_load: Any, mock_settings: Any) -> None:
+    """Rule 2: Space-glob ('show ip route *') requires at least one extra word —
+    the bare command alone is NOT allowed."""
     _vc_setup(mock_load, mock_settings)
-    assert validate_command("show ip route").allowed
-    assert validate_command("show bgp").allowed
-    assert validate_command("display").allowed
+    assert not validate_command("show ip route").allowed
+    assert not validate_command("show bgp").allowed
+    assert not validate_command("display").allowed
 
 
 @patch("netmiko_mcp.security.settings")
