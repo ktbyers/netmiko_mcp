@@ -52,9 +52,9 @@ Default: all commands denied. Path set by `command_file`.
 - A **space glob** (e.g. `"show version *"`) requires at least one additional word: `show version detail` matches, but `show version` alone does NOT.
 
 **Deny list** (`denied_commands`):
-- A **plain string** (e.g. `"reload"`) denies that exact command AND all abbreviated forms of the same word count — `rel`, `relo`, `reloa`, `reload` are all denied. Commands with more or fewer words are NOT covered.
-- An **inline glob** (e.g. `"reload*"`) denies the bare command and any suffix, including abbreviated first words.
-- A **space glob** (e.g. `"reload *"`) denies commands with at least one additional word, including abbreviated forms. The bare command alone is NOT denied.
+- A **plain string** (e.g. `"clear counters"`) denies that exact command AND all abbreviated forms of the same word count — `cl count`, `cle counters`, etc. are all denied. Commands with more or fewer words are NOT covered.
+- An **inline glob** (e.g. `"clear*"`) denies the bare command and any suffix, including abbreviated first words.
+- A **space glob** (e.g. `"clear *"`) denies commands with at least one additional word, including abbreviated forms. The bare command alone is NOT denied.
 - `denied_commands` always takes precedence over `allowed_commands`.
 
 ```yaml
@@ -64,7 +64,7 @@ allowed_commands:
   - "show ip int brief"
 denied_commands:
   - "configure*"  # blocks 'configure', 'configure terminal', 'conf t', etc.
-  - "reload*"     # blocks 'reload', 'rel', 'reload in 5', 'reload cancel', etc.
+  - "clear*"      # blocks 'clear', 'clear counters', 'cle count', etc.
 ```
 
 ## Allowed Characters (`allowed_command_chars`)
