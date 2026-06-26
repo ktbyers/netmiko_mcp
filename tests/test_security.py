@@ -85,7 +85,7 @@ def test_glob_to_regex_wildcard_does_not_match_empty_with_mandatory_prefix() -> 
     """A pattern like 'show *' must not match an unrelated command."""
     p = glob_to_regex("show *")
     assert not p.match("configure terminal")
-    assert not p.match("debug ip packet")
+    assert not p.match("debug ip ospf events")
 
 
 def test_glob_to_regex_space_glob_matches_extra_word() -> None:
@@ -177,7 +177,7 @@ def test_validate_command_default_denied(mock_load: Any, mock_settings: Any) -> 
     assert not validate_command("show run | include password").allowed
     # Nothing is allowed without a whitelist
     assert not validate_command("clear ip ospf process").allowed
-    assert not validate_command("debug ip packet").allowed
+    assert not validate_command("debug ip ospf events").allowed
 
 
 @patch("netmiko_mcp.security.load_commands")
@@ -415,7 +415,7 @@ def test_vc_rule1_glob_deny(mock_load: Any, mock_settings: Any) -> None:
     assert not validate_command("configure terminal").allowed
     assert not validate_command("configure replace flash:cfg").allowed
     assert not validate_command("configure").allowed
-    assert not validate_command("debug ip packet").allowed
+    assert not validate_command("debug ip ospf events").allowed
     assert not validate_command("debug ip ospf adj").allowed
     assert not validate_command("clear ip ospf process").allowed
     assert not validate_command("clear counters").allowed
@@ -570,7 +570,7 @@ def test_vc_rule3_denied_base_command_with_pipe_blocked(mock_load: Any, mock_set
     """Rule 3: A denied base command is still blocked even with a valid pipe."""
     _vc_setup(mock_load, mock_settings, allow_pipe=True)
     assert not validate_command("configure terminal | include ip").allowed
-    assert not validate_command("debug ip packet | include error").allowed
+    assert not validate_command("debug ip ospf events | include error").allowed
 
 
 # ---------------------------------------------------------------------------
