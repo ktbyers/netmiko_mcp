@@ -453,8 +453,8 @@ def deny_check(command: str, denied_commands: list[str]) -> bool:
     """Return True if the command matches any entry in denied_commands.
 
     Every entry is evaluated via glob_to_regex — the same logic as the allow
-    check. A plain string (e.g. 'reload') matches only that exact command.
-    A glob (e.g. 'reload *') matches any command starting with 'reload'.
+    check.
+
     Denied always takes precedence over allowed.
     """
     for denied in denied_commands:

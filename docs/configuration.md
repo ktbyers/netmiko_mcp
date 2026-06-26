@@ -138,7 +138,7 @@ on NX-OS and Arista), `"` (double-quote, for commands requiring quoted strings).
 
 Environment variable override:
 ```
-NETMIKO_MCP_ALLOWED_COMMAND_CHARS="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+NETMIKO_MCP_ALLOWED_COMMAND_CHARS='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"'
 ```
 <br />
 
