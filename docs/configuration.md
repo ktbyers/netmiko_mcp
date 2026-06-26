@@ -32,7 +32,7 @@ defaults.
 | `inventory_file` | `string \| null` | `null` | `NETMIKO_MCP_INVENTORY_FILE` | Explicit path to your Netmiko inventory YAML. If omitted, Netmiko's native search order applies (see below). |
 | `command_file` | `string` | `"~/commands.yml"` | `NETMIKO_MCP_COMMAND_FILE` | Path to your [commands.yml](commands.md) security whitelist. |
 | `allow_pipe` | `bool` | `false` | `NETMIKO_MCP_ALLOW_PIPE` | Enable pipe operators (`\|`) in commands. See [commands.md — Pipe Support](commands.md#pipe-support). |
-| `allowed_command_chars` | `string` | `"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"` | `NETMIKO_MCP_ALLOWED_COMMAND_CHARS` | Characters permitted in commands. Any character not in this set is rejected before validation. `\|` is managed via `allow_pipe`. See [commands.md — Allowed Characters](commands.md#allowed-characters). |
+| `allowed_command_chars` | `string` | `"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,\""` | `NETMIKO_MCP_ALLOWED_COMMAND_CHARS` | Characters permitted in commands. Any character not in this set is rejected before validation. `\|` is managed via `allow_pipe`. See [commands.md — Allowed Characters](commands.md#allowed-characters). |
 | `pipe_modifiers` | `list[str]` | `["include", "exclude", "section", "begin", "count"]` | `NETMIKO_MCP_PIPE_MODIFIERS` | Permitted keywords after a pipe operator. See [commands.md — Pipe Support](commands.md#pipe-support). |
 | `max_workers` | `int` | `10` | `NETMIKO_MCP_MAX_WORKERS` | Maximum concurrent threads used by `send_show_command_to_group`. |
 | `save_output_dir` | `string` | `"~/.netmiko_mcp_tmp"` | `NETMIKO_MCP_SAVE_OUTPUT_DIR` | Base directory for per-device output files written when `save_output=True` is passed to either `send_show_command` or `send_show_command_to_group`, or when output is automatically saved due to `save_threshold`. Created with mode `0o700`. |
@@ -129,12 +129,12 @@ automatically when `allow_pipe` is `true`. Adding `|` here while `allow_pipe` is
 is a configuration error raised at startup.
 
 ```yaml
-allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,\""
 ```
 
 The default covers: letters, digits, ASCII space, `.` (IP addresses), `/` (prefix lengths,
 interface names), `:` (IPv6), `-` and `_` (interface names, VRF names), `,` (VLAN ranges
-on NX-OS and Arista). Extend for platform-specific needs.
+on NX-OS and Arista), `"` (double-quote, for commands requiring quoted strings). Extend for platform-specific needs.
 
 Environment variable override:
 ```
@@ -387,7 +387,7 @@ pipe_modifiers:
   - "count"
 
 # Allowed command characters (defaults shown)
-allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"
+allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,\""
 
 # Concurrency and output storage
 max_workers: 10

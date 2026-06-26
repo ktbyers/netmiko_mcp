@@ -163,12 +163,12 @@ against `allowed_command_chars` (configured in [configuration.md](configuration.
 Any character not in the allowed set causes immediate rejection.
 
 This allowlist approach is more robust than enumerating forbidden characters — it
-handles Unicode space lookalikes, novel injection characters, and any future bypass
-variants without requiring updates to the character list.
+handles Unicode space lookalikes, and novel injection characters without (hopefully)
+requiring updates to the character list.
 
-**Default allowed characters:** `a-z A-Z 0-9` and ` . / : _ - ,`
+**Default allowed characters:** `a-z A-Z 0-9` and `<space> . / : _ - , "`
 
-Notably absent from the default (rejected unless added):
+Notably absent from the default (rejected unless explicitly added):
 
 | Character(s) | Why excluded |
 |---|---|
@@ -176,7 +176,7 @@ Notably absent from the default (rejected unless added):
 | `\|` | Managed separately via `allow_pipe` |
 | `\t` `\n` `\r` and other whitespace | Normalized to space before the check (see below) |
 | Unicode spaces (NBSP, ideographic, etc.) | Handled by normalization or rejected as disallowed |
-| `"` `'` `` ` `` `$` `!` `\\` | Shell metacharacters |
+| `'` `` ` `` `$` `!` `\\` | Shell metacharacters |
 <br />
 <br />
 

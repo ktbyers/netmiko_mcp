@@ -21,7 +21,7 @@ inventory_type: "netmiko_tools"          # default: netmiko_tools (only supporte
 # inventory_file: "~/.netmiko.yml"       # default: null — uses native Netmiko search paths
 command_file: "~/commands.yml"           # default: ~/commands.yml
 allow_pipe: false                        # default: false
-allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"  # default
+allowed_command_chars: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,\""  # default
 pipe_modifiers: ["include", "exclude", "section", "begin", "count"]  # default: these five
 max_workers: 10                          # default: 10 (thread cap for send_show_command_to_group)
 save_output_dir: "~/.netmiko_mcp_tmp"   # default: ~/.netmiko_mcp_tmp (all saved output lands here)

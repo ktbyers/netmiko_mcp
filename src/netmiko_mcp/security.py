@@ -62,6 +62,10 @@ NOT to allow any configuration commands via your allowed command list.
 
 # 10. Glob Patterns
 Glob patterns ("show *") are supported in both the allow and deny lists.
+Only a single '*' is permitted per entry, it must appear at the end of the
+string (either as a trailing word 'cmd *' or as a trailing character 'cmd*'),
+and a bare '*' alone is not allowed. Globs in the middle of a string (e.g.
+'show * interface') are rejected at startup.
 
 Allow list: glob patterns are converted to regular expressions internally.
 Abbreviations are NOT expanded on the allow side — "show *" does not permit
@@ -267,7 +271,11 @@ class AbbreviationDenyFilter:
 
     def match_word(self, trie_root: TrieNode, words: list[str], word_idx: int) -> bool:
         """Traverse trie_root with words[word_idx]'s characters, then DFS for
-        reachable terminal nodes and evaluate deny logic."""
+        reachable terminal nodes and evaluate deny logic.
+
+        match_word and find_word_end call each other mutually to chain through
+        successive patterns of a multi-word deny entry.
+        """
         node = trie_root
         for char in words[word_idx]:
             if node.glob_suffix:
@@ -301,6 +309,12 @@ class AbbreviationDenyFilter:
 
         The submitted word may be a prefix of a longer deny word, so we DFS to
         find all complete deny pattern words reachable from the current position.
+
+        match_word and find_word_end call each other mutually to chain through
+        successive patterns of a multi-word deny entry.
+
+        find_word_end also recurses into itself directly to DFS through character
+        children when the submitted word ends mid-way through a deny pattern.
         """
         if node.word_end:
             if node.final_word and last_word:
