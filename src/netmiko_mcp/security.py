@@ -67,18 +67,20 @@ string (either as a trailing word 'cmd *' or as a trailing character 'cmd*'),
 and a bare '*' alone is not allowed. Globs in the middle of a string (e.g.
 'show * interface') are rejected at startup.
 
+Both the allow list and deny list support the same two trailing glob forms:
+  - "show ip interface*"  — inline glob. Matches/denies "show ip interface"
+    (including abbreviated forms on the deny side), "show ip interfaces"
+    (extra letter), and "show ip interface brief" (extra word).
+  - "show ip interface *" — space glob. At least one additional submitted word
+    is required; the base command alone is NOT matched/denied. Matches/denies
+    "show ip interface brief" but NOT "show ip interface" alone.
+
 Allow list: glob patterns are converted to regular expressions internally.
 Abbreviations are NOT expanded on the allow side — "show *" does not permit
 "sh version".
 
-Deny list: two trailing glob forms are supported, both cover abbreviated words:
-  - "show ip interface*"  — the last word has an inline glob. Denies "show ip
-    interface" (including abbreviated forms), denies "show ip interfaces" (extra
-    letter), denies "show ip interface brief" (extra word).
-  - "show ip interface *" — the glob is a separate trailing word.
-    At least one additional submitted word is required; the base command alone
-    is NOT denied. denies "show ip interface brief" (including abbreviated forms),
-    does NOT deny "show ip interface".
+Deny list: the same two glob forms apply and additionally cover abbreviated
+words via the abbreviation trie.
 
 """
 
@@ -434,11 +436,14 @@ def glob_to_regex(glob_pattern: str) -> re.Pattern[str]:
     allowed_command_chars before reaching this function, so no additional
     wildcard restriction is needed here.
 
-    A trailing ' *' (space then asterisk) is handled specially so that a pattern
-    like 'show version *' matches both 'show version' and 'show version detail'.
+    A trailing ' *' (space then asterisk) requires at least one additional word
+    after the prefix. Commands are always normalized to a single space before
+    validation, so a literal space followed by .* is sufficient.
+    'show version *' matches 'show version brief' but NOT 'show version' alone.
+    Use 'show version*' (inline glob) to also match the bare command.
     """
     escaped = re.escape(glob_pattern.strip())
-    escaped = escaped.replace(r"\ \*", r"(?:\s+.*)?")
+    escaped = escaped.replace(r"\ \*", r"\ .*")
     escaped = escaped.replace(r"\*", r".*")
 
     return re.compile("^" + escaped + "$", re.IGNORECASE)

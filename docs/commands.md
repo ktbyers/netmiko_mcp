@@ -65,8 +65,12 @@ allowed_commands:
 
 ### Glob matching
 
-A `*` at the end of a pattern matches the bare command **or** the command followed by any
-additional text.
+Two glob forms are supported:
+
+- **Inline glob** (`"show version*"`) — matches the bare prefix and any suffix:
+  `show version`, `show versions`, and `show version detail` all match.
+- **Space glob** (`"show version *"`) — requires at least one additional word after
+  the prefix: `show version detail` matches, but `show version` alone does **not**.
 
 ```yaml
 allowed_commands:
@@ -75,9 +79,22 @@ allowed_commands:
 
 | Command sent | Result |
 |---|---|
-| `show version` | ✅ allowed (bare, no args) |
+| `show version` | ❌ denied — space-glob requires at least one extra word |
 | `show version detail` | ✅ allowed |
 | `show version \| include IOS` | ✅ allowed (if pipes are enabled) |
+
+Use an inline glob to also permit the bare command:
+
+```yaml
+allowed_commands:
+  - "show version*"
+```
+
+| Command sent | Result |
+|---|---|
+| `show version` | ✅ allowed |
+| `show versions` | ✅ allowed |
+| `show version detail` | ✅ allowed |
 
 
 ```yaml
@@ -87,9 +104,10 @@ allowed_commands:
 
 | Command sent | Result |
 |---|---|
-| `show ip route` | ✅ allowed |
+| `show ip route` | ✅ allowed — "route" satisfies the extra word |
 | `show ip interface brief` | ✅ allowed |
 | `show ip bgp neighbors 10.0.0.1` | ✅ allowed |
+| `show ip` | ❌ denied — space-glob requires at least one extra word |
 | `show version` | ❌ denied — prefix doesn't match |
 <br />
 <br />
@@ -109,16 +127,16 @@ allowed_commands:
   - "show interfaces"
   - "show cdp neighbors detail"
 
-  # Glob patterns — allow a family of commands
-  - "show ip route *"
-  - "show ip bgp *"
-  - "show interfaces *"
-  - "show logging *"
+  # Inline glob — matches bare command and any arguments
+  - "show ip route*"
+  - "show ip bgp*"
+  - "show interfaces*"
+  - "show logging*"
 
   # Multi-vendor
   - "display version"
   - "display interface brief"
-  - "display ip routing-table *"
+  - "display ip routing-table*"
 ```
 <br />
 <br />
@@ -135,8 +153,11 @@ broader glob would otherwise allow them.
 
 - `"reload"` — blocks only the bare command `reload`. Does **not** block
   `show reload-cause` because matching is anchored at both ends, not a substring search.
-- `"reload *"` — blocks `reload`, `reload in 5`, `reload cancel`, etc.
+- `"reload *"` — blocks `reload in 5`, `reload cancel`, etc. Does **not** block bare
+  `reload` alone — use `"reload"` or `"reload*"` for that.
+- `"reload*"` — blocks `reload`, `reload in 5`, `reload cancel`, etc.
 - `"configure *"` — blocks `configure terminal`, `configure replace flash:cfg`, etc.
+  Does **not** block bare `configure` alone.
 
 ### Example
 
@@ -258,11 +279,12 @@ across characters already confirmed to be permitted.
 | Pattern | Matches | Does not match |
 |---|---|---|
 | `"show version"` | `show version` | `show version detail`, `sh ver` |
-| `"show version *"` | `show version`, `show version detail` | `show versio` |
-| `"show ip *"` | `show ip route`, `show ip int brief`, `show ip bgp summary` | `show version`, `show ipv6 *` |
-| `"show *"` | `show version`, `show ip route`, `show` | `sh ver`, `configure terminal` |
-| `"debug *"` | `debug`, `debug ip packet`, `debug ip ospf adj` | `show debug` |
-| `"show ip route *"` | `show ip route`, `show ip route 10.0.0.0` | `show ip interface` |
+| `"show version*"` | `show version`, `show versions`, `show version detail` | `sh ver`, `show ip route` |
+| `"show version *"` | `show version detail` | `show version`, `show versio`, `sh ver detail` |
+| `"show ip *"` | `show ip route`, `show ip int brief`, `show ip bgp summary` | `show ip`, `show version`, `show ipv6 route` |
+| `"show *"` | `show version`, `show ip route` | `show`, `sh ver`, `configure terminal` |
+| `"debug *"` | `debug ip packet`, `debug ip ospf adj` | `debug`, `show debug` |
+| `"show ip route *"` | `show ip route 10.0.0.0` | `show ip route`, `show ip interface` |
 <br />
 <br />
 
@@ -325,22 +347,22 @@ allowed_commands:
   - "show interface status"
 
   # Routing
-  - "show ip route *"
-  - "show ip bgp *"
-  - "show ip ospf *"
-  - "show ip eigrp *"
+  - "show ip route*"
+  - "show ip bgp*"
+  - "show ip ospf*"
+  - "show ip eigrp*"
 
   # Switching
-  - "show vlan *"
-  - "show mac address-table *"
-  - "show spanning-tree *"
+  - "show vlan*"
+  - "show mac address-table*"
+  - "show spanning-tree*"
 
   # Device discovery
-  - "show cdp neighbors *"
-  - "show lldp neighbors *"
+  - "show cdp neighbors*"
+  - "show lldp neighbors*"
 
   # Logs
-  - "show logging *"
+  - "show logging*"
 
 denied_commands:
   # Never allow show run or show start (tricky because of command abbreviations).
