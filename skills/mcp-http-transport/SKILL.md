@@ -3,7 +3,7 @@ name: mcp-http-transport
 description: HTTP transport for netmiko-mcp — when to use it, SSE vs Streamable HTTP, which web clients work, how to bridge a stdio server over HTTP (supergateway, ngrok), and web client setup for ChatGPT and Perplexity.
 ---
 
-> **For humans:** This file is reference documentation for deploying netmiko-mcp over HTTP rather than stdio. You can read it directly, but its real purpose is to be installed as a skill in your AI client — once loaded into Claude's context, you can ask it to help you configure the HTTP transport and it already has the environment variables, bearer token setup, and web client compatibility details. See the [Claude Code Skills](../../README.md#claude-code-skills) section in the README for installation instructions.
+> **For humans:** This file is reference documentation for deploying netmiko-mcp over HTTP rather than stdio. You can read it directly, but its real purpose is to be installed as a skill in your AI client — once loaded into your AI client's context, you can ask it to help you configure the HTTP transport and it already has the environment variables, bearer token setup, and web client compatibility details.
 
 # netmiko-mcp HTTP Transport
 
