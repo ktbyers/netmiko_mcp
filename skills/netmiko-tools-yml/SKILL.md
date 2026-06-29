@@ -7,7 +7,7 @@ description: Workflows and references for using the Netmiko CLI tools .netmiko.y
 
 # Netmiko Tools YAML (.netmiko.yml)
 
-The `.netmiko.yml` file is the standard inventory and credential storage mechanism for Netmiko's built-in CLI tools (`netmiko-show`, `netmiko-cfg`, `netmiko-grep`).  For the Netmiko MCP server, this format is used to securely load device details without forcing the LLM to handle plaintext passwords.
+The `.netmiko.yml` file is the standard inventory and credential storage mechanism for Netmiko's built-in CLI tools (`netmiko-show`, `netmiko-cfg`, `netmiko-grep`). For the Netmiko MCP server, this format is used to securely load device details without forcing the LLM to handle plaintext passwords.
 
 ## File Format
 
