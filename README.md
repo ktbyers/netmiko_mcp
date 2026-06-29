@@ -5,7 +5,7 @@
 > I have tried to make reasonable defaults and to limit what the Netmiko-MCP server allows (by default). It is highly advisable to start with ONLY show commands executed against ONLY test or lab devices. You should also strongly consider additional security mechanisms completely outside of the LLM and Netmiko- MCP (for example, a tightly-controlled AAA solution). LLMs and LLM-agents inherently have a lot of variance and are difficult to predict and control.
 <br />
 
-## Welcome to an LLM-assisteed Method of Interacting with your Network
+## Welcome to an LLM-assisted Method of Interacting with your Network
 
 netmiko-mcp is a Model Context Protocol server that gives your AI client (Claude, Claude Code, Cursor, VS Code Copilot, and others) direct, controlled access to your network devices via SSH (and Telnet if absolutely necessary). Ask a question in plain English; the agent figures out which devices to query, runs the permitted commands, and returns results as a conversation, a formatted table, or structured JSON.  Whatever fits your workflow.
 
@@ -24,7 +24,7 @@ The controls in Netmiko-MCP are a best-effort layer and should not be your only 
 
 MCP (Model Context Protocol) is a standardized protocol for interfacing AI clients to additional services (in this case network devices). With netmiko-mcp registered as an MCP server, your AI client can connect to your network devices directly providing your AI client the means to discover your inventory, run commands, and return results. All triggered by text-based prompting in the AI client.
 
-With Netmiko MCP, you define allowed and denied commands (by default, all commands are denied). The Netmiko MCP server enforces these restrictions on every request. In other words, the you prompt the LLM; the LLM performs a tool call to the Netmiko MCP via your AI client, the Netmiko MCP determines if the command is allowed or denied and then sends the request to the network devices (assuming allowed).
+With Netmiko MCP, you define allowed and denied commands (by default, all commands are denied). The Netmiko MCP server enforces these restrictions on every request. In other words, you prompt the LLM; the LLM performs a tool call to the Netmiko MCP via your AI client, the Netmiko MCP determines if the command is allowed or denied and then sends the request to the network devices (assuming allowed).
 
 ## How This Works
 
@@ -38,7 +38,7 @@ netmiko-mcp sits between your AI client and your network devices. It supports tw
 ## Prerequisites
 
 - **uv**  Python package manager used to install and run the server. See details online regarding installation instructions.
-- **An AI client that supports MCP (for example, Claude Code, Claude Desktop, Codex, Cursor)**  
+- **An AI client that supports MCP (for example, Claude Code, Claude Desktop, Cursor, VS Code + Copilot)**  
 
 ## Installation
 
@@ -139,7 +139,7 @@ With the server installed and the three config files in place, register `netmiko
 |---|---|---|---|---|
 | Claude Code | ✓ | ✓ | ✓ | Recommended for development and testing |
 | Claude Desktop | ✓ | ✓ | ✓ | Agent mode; deferred tool loading |
-| Cursor | ✓ | ✓ | ✓ | Agent mode required; HTTP SSE fallback has known bug |
+| Cursor | ✓ | ✓ | ✓ | Agent mode required; use Streamable HTTP transport (SSE is deprecated and has a known bug in Cursor) |
 | Devin Desktop (formerly Windsurf) | ✓ | ✓ | ✓ | Agent mode (Cascade) required |
 | VS Code + GitHub Copilot | ✓ | ✓ | ✓ | Agent mode only; free tier sufficient |
 | Kiro (AWS IDE) | ✓ | ✓ | - | Not tested; based on documentation |

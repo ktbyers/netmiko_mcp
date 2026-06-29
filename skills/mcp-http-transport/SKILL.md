@@ -103,7 +103,7 @@ claude mcp add --transport http netmiko-mcp http://your-server:8000/mcp \
 | CDN / proxy / load balancer | ✗ | ✓ |
 | Status | **Deprecated** — vendors dropping through mid-2026 | **Use for all new deployments** |
 
-`netmiko-mcp` implements Streamable HTTP natively. SSE exists in FastMCP but is deprecated. When configuring a bridge, target `streamableHttp` over `sse` where the client supports it.
+`netmiko-mcp` implements Streamable HTTP natively. SSE exists in FastMCP but is deprecated. Use Streamable HTTP for all new deployments.
 
 ---
 
