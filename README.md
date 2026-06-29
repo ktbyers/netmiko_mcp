@@ -38,7 +38,7 @@ netmiko-mcp sits between your AI client and your network devices. It supports tw
 ## Prerequisites
 
 - **uv**  Python package manager used to install and run the server. See details online regarding installation instructions.
-- **An AI client that supports MCP (for example, Claude Code, Claude Desktop, Cursor, VS Code + Copilot)**  
+- **An AI client that supports MCP (for example, Claude Code, Claude Desktop, Cursor, VS Code + Copilot, Codex)**  
 
 ## Installation
 
