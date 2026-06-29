@@ -112,6 +112,8 @@ def run_show_command(
     )
 
     # Validate the command and emit the audit record for the decision.
+    # result.normalized_command is the whitespace-normalized form forwarded to
+    # the device — capitalization is preserved, whitespace runs are collapsed.
     result: ValidationResult = validate_command(command)
     audit_context.log_attempt(ALLOWED if result.allowed else DENIED, result.reason)
     if not result.allowed:
@@ -152,7 +154,9 @@ def run_show_command(
             # reading. Each case is caught, logged, and returned individually so
             # the LLM receives a precise error rather than a generic message.
             try:
-                output = net_connect.send_command(command, use_textfsm=use_textfsm)
+                output = net_connect.send_command(
+                    result.normalized_command, use_textfsm=use_textfsm
+                )
 
                 # use_textfsm falls back to raw text when no template exists. A string
                 # return when use_textfsm=True was requested indicates the fallback.

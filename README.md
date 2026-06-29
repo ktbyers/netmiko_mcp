@@ -176,7 +176,7 @@ Or override it with an environment variable:
 export NETMIKO_MCP_COMMAND_FILE="~/network/commands.yml"
 ```
 
-Full details on allowed/denied matching, globbing, pipes, and unsafe characters: [docs/commands.md](docs/commands.md)
+Full details on allowed/denied matching, globbing, pipes, and allowed characters: [docs/commands.md](docs/commands.md)
 <br />
 <br />
 

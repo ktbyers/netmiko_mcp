@@ -105,7 +105,7 @@ async def test_live_device_connection(
         "send_show_command",
         arguments={
             "device_name": device,
-            "command": "show version ; reload",
+            "command": "show version ; show ip interface brief",
             "use_textfsm": False,
         },
     )
@@ -113,7 +113,10 @@ async def test_live_device_connection(
     assert len(cmd_result_inject.content) == 1
     assert cmd_result_inject.content[0].type == "text"
     inject_output = getattr(cmd_result_inject.content[0], "text", "")
-    assert "Security Error: Command 'show version ; reload' is not permitted" in inject_output
+    assert (
+        "Security Error: Command 'show version ; show ip interface brief' is not permitted"
+        in inject_output
+    )
 
 
 @pytest.mark.anyio

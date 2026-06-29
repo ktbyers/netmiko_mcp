@@ -19,6 +19,7 @@ from netmiko_mcp.connection import (
 )
 from netmiko_mcp.http_auth import BearerTokenMiddleware
 from netmiko_mcp.inventory import get_group_names, get_sanitized_inventory
+from netmiko_mcp.security import validate_command_lists
 
 # Set once by _validate_startup() for stdio startup failures. All tools return
 # it immediately via @check_startup_error so errors surface in-session.
@@ -247,6 +248,23 @@ def _validate_startup() -> str | None:
                 f"Startup Error: command_file '{settings.command_file}' does not exist. "
                 f"Create this file with your allowed_commands before starting the server."
             )
+
+    from netmiko.utilities import load_yaml_file
+
+    commands = load_yaml_file(str(command_file))
+    allowed_commands = commands.get("allowed_commands", [])
+    denied_commands = commands.get("denied_commands", [])
+    errors = validate_command_lists(
+        allowed_commands=allowed_commands,
+        denied_commands=denied_commands,
+    )
+    if errors:
+        error_msg = "Startup Error: " + " ".join(errors)
+        if settings.transport == "streamable-http":
+            raise SystemExit(error_msg)
+        else:
+            return error_msg
+
     if settings.transport == "streamable-http" and settings.http_auth_enabled:
         _get_bearer_token()
     return None

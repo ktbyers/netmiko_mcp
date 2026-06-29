@@ -22,7 +22,6 @@ from netmiko_mcp.audit import (
     REASON_INVALID_PIPE_MODIFIER,
     REASON_MULTIPLE_PIPES,
     REASON_NO_ALLOW_MATCH,
-    REASON_PIPE_NOT_ALLOWED,
     REASON_UNSAFE_CHAR,
     _AuditJsonFormatter,
     _FailClosedFileHandler,
@@ -52,7 +51,6 @@ def test_reason_constants_are_distinct_strings() -> None:
     reasons = [
         REASON_UNSAFE_CHAR,
         REASON_DENY_MATCH,
-        REASON_PIPE_NOT_ALLOWED,
         REASON_MULTIPLE_PIPES,
         REASON_INVALID_PIPE_MODIFIER,
         REASON_NO_ALLOW_MATCH,

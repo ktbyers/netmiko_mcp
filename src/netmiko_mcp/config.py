@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Literal, Optional, Tuple, Type
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -25,7 +25,12 @@ class McpConfig(BaseSettings):
     inventory_file: Optional[str] = Field(default=None)
     command_file: str = Field(default="~/commands.yml")
     allow_pipe: bool = Field(default=False)
-    unsafe_chars: list[str] = Field(default=[";", "\n", "\r", "&"])
+    # Characters permitted in commands. The pipe character '|' is intentionally
+    # absent — it is added to the effective allowed set automatically when
+    # allow_pipe is True. Adding '|' here while allow_pipe is False is an error.
+    allowed_command_chars: str = Field(
+        default='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ./:_-,"'
+    )
     pipe_modifiers: list[str] = Field(default=["include", "exclude", "section", "begin", "count"])
     max_workers: int = Field(default=10)
     save_output_dir: str = Field(default="~/.netmiko_mcp_tmp")
@@ -48,6 +53,19 @@ class McpConfig(BaseSettings):
     audit_log_syslog_facility: str = Field(default="local0")
     audit_log_read_transcript: bool = Field(default=False)
     audit_log_transcript_dir: str = Field(default="~/.netmiko_mcp_transcripts")
+
+    @model_validator(mode="after")
+    def _check_pipe_char_consistency(self) -> "McpConfig":
+        """Raise if '|' appears in allowed_command_chars while allow_pipe is False.
+        The pipe character is managed automatically via allow_pipe and must not be
+        added to allowed_command_chars directly when pipe support is disabled.
+        """
+        if "|" in self.allowed_command_chars and not self.allow_pipe:
+            raise ValueError(
+                "'|' must not appear in allowed_command_chars when allow_pipe is False. "
+                "Set allow_pipe: true to enable pipe support."
+            )
+        return self
 
     @classmethod
     def settings_customise_sources(
