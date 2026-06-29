@@ -700,25 +700,28 @@ _CARVEOUT_DENIED = ["show version"]
 @pytest.mark.parametrize(
     "command,expected_allowed",
     [
-        ("show version", False),  # exact match — denied correctly today
-        ("SHOW VERSION", False),  # all caps
+        ("show version", False),  # exact match
+        ("SHOW VERSION", False),  # case-insensitive
         ("Show Version", False),  # mixed case
-        (" show version", False),  # leading space — BYPASS
-        ("show version ", False),  # trailing space — BYPASS
-        ("\tshow version", False),  # leading tab — BYPASS
-        ("show  version", False),  # double space — BYPASS
-        ("show\tversion", False),  # internal tab — BYPASS
-        ("show\xa0version", False),  # NBSP (U+00A0) — BYPASS
-        ("show\u3000version", False),  # ideographic space (U+3000) — BYPASS
-        ("show\x0bversion", False),  # vertical tab (U+000B) — BYPASS
+        (" show version", False),  # leading space — normalized away
+        ("show version ", False),  # trailing space — normalized away
+        ("\tshow version", False),  # leading tab — normalized away
+        ("show  version", False),  # double space — normalized away
+        ("show\tversion", False),  # internal tab — normalized to space
+        ("show\nversion", False),  # newline — normalized to space
+        ("show\rversion", False),  # carriage return — normalized to space
+        ("show\r\nversion", False),  # CRLF — normalized to space
+        ("show\xa0version", False),  # NBSP (U+00A0) — normalized to space
+        ("show\u3000version", False),  # ideographic space (U+3000) — normalized to space
+        ("show\x0bversion", False),  # vertical tab (U+000B) — normalized to space
         (
             "show version\tshow ip interface brief",
             True,
-        ),  # tab-chained: normalizes to 'show version show ip interface brief' — not denied (extra words)
-        ("show ve", False),  # abbreviation — BYPASS
-        ("show vers", False),  # abbreviation — BYPASS
-        ("sh version", False),  # abbreviation — may be blocked by allow check
-        ("sh vers", False),  # abbreviation — may be blocked by allow check
+        ),  # tab-chained: normalizes to 'show version show ip interface brief' — not denied (extra words beyond 2-word deny entry)
+        ("show ve", False),  # abbreviation — caught by abbreviation filter
+        ("show vers", False),  # abbreviation — caught by abbreviation filter
+        ("sh version", False),  # abbreviated first word — caught by abbreviation filter
+        ("sh vers", False),  # both words abbreviated — caught by abbreviation filter
     ],
 )
 @patch("netmiko_mcp.security.settings")
@@ -726,9 +729,9 @@ _CARVEOUT_DENIED = ["show version"]
 def test_deny_carveout_bypass(
     mock_load: Any, mock_settings: Any, command: str, expected_allowed: bool
 ) -> None:
-    """A broad allow-list with a specific deny carve-out should block cosmetic
-    variants of the denied command. Cases that currently bypass the deny check
-    are included to document the known failure modes."""
+    """A broad allow-list with a specific deny carve-out must block all cosmetic
+    variants of the denied command. Whitespace variants are caught by normalization;
+    abbreviations are caught by the AbbreviationDenyFilter trie."""
     mock_load.return_value = {
         "allowed_commands": _CARVEOUT_ALLOWED,
         "denied_commands": _CARVEOUT_DENIED,
@@ -749,9 +752,9 @@ def test_deny_carveout_bypass(
 @pytest.mark.parametrize(
     "command,expected_allowed",
     [
-        ("show version | include Cisco", False),  # BYPASS: pipe with spaces
-        ("show version|include Cisco", False),  # BYPASS: pipe with no spaces
-        ("show version | count", False),  # BYPASS: count modifier
+        ("show version | include Cisco", False),  # denied base + valid pipe modifier
+        ("show version|include Cisco", False),  # denied base + pipe, no spaces
+        ("show version | count", False),  # denied base + count modifier
     ],
 )
 @patch("netmiko_mcp.security.settings")
@@ -759,9 +762,9 @@ def test_deny_carveout_bypass(
 def test_deny_carveout_pipe_bypass(
     mock_load: Any, mock_settings: Any, command: str, expected_allowed: bool
 ) -> None:
-    """With allow_pipe=True, the deny check runs against the full command string
-    including the pipe segment. A denied base command with a valid pipe modifier
-    currently slips through because the full string does not match the deny pattern."""
+    """With allow_pipe=True, the deny check runs on the base command (before the
+    pipe), so a denied base command is correctly blocked even with a valid pipe
+    modifier appended."""
     mock_load.return_value = {
         "allowed_commands": _CARVEOUT_ALLOWED,
         "denied_commands": _CARVEOUT_DENIED,
@@ -790,6 +793,9 @@ def test_deny_carveout_pipe_bypass(
     [
         "show version; show clock",  # semicolon — not whitespace, not in allowlist
         "show version & show clock",  # ampersand — not whitespace, not in allowlist
+        "shоw version",  # Cyrillic о lookalike for 'o' — not in allowlist
+        "show\u200bversion",  # zero-width space (U+200B) — not in allowlist
+        "show\u00adversion",  # soft hyphen (U+00AD) — not in allowlist
     ],
 )
 @patch("netmiko_mcp.security.settings")
@@ -967,6 +973,18 @@ def test_deny_check_multiword_inline_glob() -> None:
     assert deny_check(command="configure", denied_commands=["configure*"])
     assert deny_check(command="configure terminal", denied_commands=["configure*"])
     assert deny_check(command="configure replace flash:cfg", denied_commands=["configure*"])
+
+
+def test_deny_check_does_not_catch_abbreviations() -> None:
+    """deny_check (regex path) does NOT catch abbreviated commands — the
+    AbbreviationDenyFilter trie is responsible for that. Both paths are run
+    together in validate_command to provide complete coverage."""
+    # Plain deny entry: abbreviation slips past deny_check
+    assert not deny_check(command="sh ver", denied_commands=["show version"])
+    assert not deny_check(command="sh version", denied_commands=["show version"])
+    # Glob deny entry: abbreviated first word also slips past deny_check
+    assert not deny_check(command="conf terminal", denied_commands=["configure*"])
+    assert not deny_check(command="conf ter", denied_commands=["configure *"])
 
 
 # ---------------------------------------------------------------------------
@@ -1365,6 +1383,18 @@ def test_p5_space_glob_denies_args_only() -> None:
     assert f.is_denied("show ip interface brief")  # extra word
     assert f.is_denied("sh ip int brief")  # abbreviated + extra word
     assert not f.is_denied("show ip interfaces")  # extra chars, no extra word — NOT denied
+
+
+def test_p5_single_word_inline_glob_abbreviated_with_extra_words() -> None:
+    """Principle 5: A single-word inline-glob ('configure*') denies abbreviated
+    first words even when extra submitted words follow."""
+    f = _make_filter("configure*")
+    assert f.is_denied("configure")  # exact bare command
+    assert f.is_denied("configure terminal")  # exact with extra word
+    assert f.is_denied("conf terminal")  # abbreviated + extra word
+    assert f.is_denied("conf ter")  # both words abbreviated
+    assert f.is_denied("con")  # abbreviated bare
+    assert not f.is_denied("show version")  # entirely different command
 
 
 # ---------------------------------------------------------------------------
