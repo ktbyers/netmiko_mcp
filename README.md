@@ -252,3 +252,4 @@ The structured output is useful when you want to pipe results into another tool,
 
 The LLM will collect results for all devices and write one file per device. Being explicit about the filename convention (`<device-name>.json`) and the target location (`current directory`) prevents it from guessing.
 
+> **Tip:** If you omit the directory, the LLM will save files relative to whatever working directory your AI client is running from - which may not be where you expect. Specify an absolute path (e.g., `~/network/output/`) if you want the files in a particular location.
