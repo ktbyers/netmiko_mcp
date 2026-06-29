@@ -146,7 +146,6 @@ With the server installed and the three config files in place, register `netmiko
 | Cline | ✓ | ✓ | - | Not tested |
 | Gemini CLI | ✓ | ✓ | - | Not tested |
 | ChatGPT | ✗ | ✗ | ✗ | SSE-only; complex workaround required; not recommended |
-| Perplexity web | ✗ | ✗ | ✗ | Not working; Perplexity moving away from MCP |
 <br />
 
 
