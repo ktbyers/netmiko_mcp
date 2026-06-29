@@ -55,6 +55,9 @@ git clone https://github.com/ktbyers/netmiko_mcp
 cd netmiko_mcp
 uv sync
 ```
+
+> **Note:** `uv sync` installs into the project's local virtual environment, which works for Claude Code but not for clients like Claude Desktop, Cursor, Devin (formerly Windsurf) that launch the server from a different working directory.
+
 <br />
 
 ## Getting Started
@@ -142,9 +145,8 @@ With the server installed and the three config files in place, register `netmiko
 | Kiro (AWS IDE) | ✓ | ✓ | - | Not tested; based on documentation |
 | Cline | ✓ | ✓ | - | Not tested |
 | Gemini CLI | ✓ | ✓ | - | Not tested |
-| Perplexity Mac app | ✓ | - | - | stdio via PerplexityXPC helper |
-| ChatGPT | ✗ | ✓ | ✗ | Business plan required; HTTP bridge needed; not working |
-| Perplexity web | ✗ | ✓ | ✗ | OAuth 2.1 discovery required; not working |
+| ChatGPT | ✗ | ✗ | ✗ | SSE-only; complex workaround required; not recommended |
+| Perplexity web | ✗ | ✗ | ✗ | Not working; Perplexity moving away from MCP |
 <br />
 
 
@@ -167,10 +169,10 @@ The `skills/` directory contains references to various skills.
 
 | Slash command | What it loads |
 |---|---|
-| `/netmiko-mcp` | Full config reference: all `~/.netmiko-mcp.yml` fields, commands whitelist format, pipe rules, all 7 MCP tool signatures |
-| `/mcp-client-config` | Copy-paste JSON config blocks for Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + Copilot, and Kiro — with per-client gotchas |
-| `/netmiko-tools-yml` | Inventory format, step-by-step Fernet encryption walkthrough, secrets manager integration (1Password, AWS) |
-| `/mcp-http-transport` | When to use HTTP vs stdio, `supergateway` bridge setup, web client compatibility table, ngrok tunneling |
+| `/netmiko-mcp` | Reference `~/.netmiko-mcp.yml` fields, commands whitelist format, pipe rules, all 7 MCP tool signatures |
+| `/mcp-client-config` | Copy-paste JSON config blocks for Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + Copilot, and Kiro — with per-client instructions |
+| `/netmiko-tools-yml` | Inventory format, step-by-step encryption process |
+| `/mcp-http-transport` | When to use HTTP vs stdio, SSE vs Streamable HTTP, Claude.ai web client setup |
 | `/caddy-tls` | Caddy install, Caddyfile examples for internal CA and Let's Encrypt, `NODE_EXTRA_CA_CERTS` fix, WSL2/Windows split-host setup |
 <br />
 
