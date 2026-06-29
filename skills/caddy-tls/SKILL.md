@@ -3,7 +3,7 @@ name: caddy-tls
 description: TLS termination for netmiko-mcp using Caddy as a reverse proxy. Covers installation on Debian/Ubuntu and Fedora/RHEL, Caddyfile configuration for internal CA (lab use) and public Let's Encrypt, startup options, NODE_EXTRA_CA_CERTS for Node-based MCP clients, and WSL2/Windows split-host setup.
 ---
 
-> **For humans:** This file is reference documentation for setting up TLS with Caddy in front of netmiko-mcp. You can read it directly, but its real purpose is to be installed as a skill in your AI client — once loaded into your AI client's context, you can ask it to walk you through the setup and it already has all the details.
+> **For humans:** This file is reference documentation for setting up TLS with Caddy in front of netmiko-mcp. It is intended to be read and used by LLMs.
 
 # TLS Termination with Caddy
 

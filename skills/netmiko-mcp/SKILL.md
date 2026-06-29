@@ -3,7 +3,7 @@ name: netmiko-mcp
 description: Workflows and configuration references for the Netmiko MCP server, including environment variables, global config (netmiko-mcp.yml), security commands (commands.yml), and running the server over Streamable HTTP transport with bearer token authentication.
 ---
 
-> **For humans:** This file is the primary configuration reference for the netmiko-mcp server. You can read it directly, but its real purpose is to be installed as a skill in your AI client — once loaded into your AI client's context, you can ask it to help you configure the server, write your commands whitelist, or understand any setting and it already has the full reference.
+> **For humans:** This file is the primary configuration reference for the netmiko-mcp server. It is intended to be read and used by LLMs.
 
 # Netmiko MCP Server — Configuration Reference
 
