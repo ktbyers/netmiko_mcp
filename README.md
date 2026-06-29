@@ -5,30 +5,50 @@
 > I have tried to make reasonable defaults and to limit what the Netmiko-MCP server allows (by default). It is highly advisable to start with ONLY show commands executed against ONLY test or lab devices. You should also strongly consider additional security mechanisms completely outside of the LLM and Netmiko- MCP (for example, a tightly-controlled AAA solution). LLMs and LLM-agents inherently have a lot of variance and are difficult to predict and control.
 <br />
 
+## Welcome to an LLM-assisted Method of Interacting with your Network
+
+netmiko-mcp is a Model Context Protocol server that gives your AI client (Claude, Claude Code, Cursor, VS Code Copilot, and others) direct, controlled access to your network devices via SSH (and Telnet if absolutely necessary). Ask a question in plain English; the agent figures out which devices to query, runs the permitted commands, and returns results as a conversation, a formatted table, or structured JSON.  Whatever fits your workflow.
+
+This repository is a starting point for network engineers curious about what AI agents can do when given access to real devices. 
+
+The setup process itself is AI-assisted: the `skills/` directory contains reference files that load directly into your AI client's context, so you can ask your AI-client to help you configure the server, set up inventory, or troubleshoot a connection. The skills should have the relevant details.
+<br />
+
 ## Security Recommendations
 
 The controls in Netmiko-MCP are a best-effort layer and should not be your only line of defense. You should strongly consider using AAA (e.g. TACACS+) with a dedicated read-only service account. AAA should independently authorize and audit what commands the account can execute on your devices. The MCP command authorization can potentially be bypassed, so this tool should only be used by authorized personnel. Untrusted input should not be used with this MCP.
 <br />
 <br />
 
+## What Is MCP?
+
+MCP (Model Context Protocol) is a standardized protocol for interfacing AI clients to additional services (in this case network devices). With netmiko-mcp registered as an MCP server, your AI client can connect to your network devices directly providing your AI client the means to discover your inventory, run commands, and return results. All triggered by text-based prompting in the AI client.
+
+With Netmiko MCP, you define allowed and denied commands (by default, all commands are denied). The Netmiko MCP server enforces these restrictions on every request. In other words, you prompt the LLM; the LLM performs a tool call to the Netmiko MCP via your AI client, the Netmiko MCP determines if the command is allowed or denied and then sends the request to the network devices (assuming allowed).
+
 ## How This Works
 
-`netmiko-mcp` supports two transport modes:
+netmiko-mcp sits between your AI client and your network devices. It supports two transport modes:
 
 **stdio** - Your AI client launches the server as a local subprocess and communicates over standard input/output. No ports are opened and nothing listens on the network. The process starts when you open a session and stops when you close it. This is the simplest setup and the right choice for a single user running the server on their own machine.
 
 **Streamable HTTP** - The server runs as a standalone service that listens on a network port. Your AI client connects to it over HTTP rather than launching it as a subprocess. This allows the server to run on a remote host and be shared across multiple machines or clients. It also enables centralized control and auditing/logging of all device interactions in one place. The tradeoff is a slightly more involved deployment (you are responsible for starting the process and keeping it running).
+<br />
 
+## Prerequisites
+
+- **uv**  Python package manager used to install and run the server. See details online regarding installation instructions.
+- **An AI client that supports MCP (for example, Claude Code, Claude Desktop, Cursor, VS Code + Copilot, Codex)**  
 
 ## Installation
 
-Install using `uv`:
+**Option 1 — uv tool (recommended for most users):**
 
 ```bash
 uv tool install netmiko-mcp
 ```
 
-Or install from source:
+**Option 2 — Clone from source:**
 
 ```bash
 git clone https://github.com/ktbyers/netmiko_mcp
@@ -38,6 +58,7 @@ uv sync
 
 > **Note:** `uv sync` installs into the project's local virtual environment, which works for Claude Code but not for clients like Claude Desktop, Cursor, Devin (formerly Windsurf) that launch the server from a different working directory.
 
+<br />
 
 ## Getting Started
 
@@ -69,6 +90,7 @@ Additional details on the Netmiko-MCP configuration file and corresponding envir
 ### Step 2 - Create the device inventory
 
 Currently, device inventory is limited to Netmiko Tools' [device inventory](https://pynet.twb-tech.com/blog/netmiko-grep-command-line-utility.html#creating-the-inventory). It is likely this will be expanded in the future to support additional inventory sources.
+
 
 Create the `~/.netmiko.yml` device inventory. This file contains device dictionaries and groups of devices.
 
@@ -111,22 +133,19 @@ Full details on allowed/denied matching, globbing, pipes, and allowed characters
 
 With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. Each client has its own config file or CLI command for registering the server - see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions covering Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, and Kiro.
 
-
 ## Supported MCP Clients (June 2026)
 
 | Client | stdio | HTTP | Verified | Notes |
 |---|---|---|---|---|
 | Claude Code | ✓ | ✓ | ✓ | Recommended for development and testing |
 | Claude Desktop | ✓ | ✓ | ✓ | Agent mode; deferred tool loading |
-| Cursor | ✓ | ✓ | ✓ | Agent mode required; HTTP SSE fallback has known bug |
+| Cursor | ✓ | ✓ | ✓ | Agent mode required; use Streamable HTTP transport (SSE is deprecated and has a known bug in Cursor) |
 | Devin Desktop (formerly Windsurf) | ✓ | ✓ | ✓ | Agent mode (Cascade) required |
 | VS Code + GitHub Copilot | ✓ | ✓ | ✓ | Agent mode only; free tier sufficient |
 | Kiro (AWS IDE) | ✓ | ✓ | - | Not tested; based on documentation |
 | Cline | ✓ | ✓ | - | Not tested |
 | Gemini CLI | ✓ | ✓ | - | Not tested |
-| Perplexity Mac app | ✓ | - | - | stdio via PerplexityXPC helper |
-| ChatGPT | ✗ | ✓ | ✗ | Business plan required; HTTP bridge needed; not working |
-| Perplexity web | ✗ | ✓ | ✗ | OAuth 2.1 discovery required; not working |
+| ChatGPT | ✗ | ✗ | ✗ | SSE-only; complex workaround required; not recommended |
 <br />
 
 
@@ -138,6 +157,22 @@ With the server installed and the three config files in place, register `netmiko
 | [docs/commands.md](docs/commands.md) | Netmiko-MCP allowed commands, denied commands |
 | [skills/mcp-client-config/SKILL.md](skills/mcp-client-config/SKILL.md) | Per-client MCP configuration (Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code, Kiro) |
 | [skills/netmiko-tools-yml/SKILL.md](skills/netmiko-tools-yml/SKILL.md) | Device inventory format, credential encryption, secrets manager integration |
+<br />
+
+
+## Skills
+
+The `skills/` directory contains references to various skills.
+
+**Available skills:**
+
+| Slash command | What it loads |
+|---|---|
+| `/netmiko-mcp` | Reference `~/.netmiko-mcp.yml` fields, commands whitelist format, pipe rules, all 7 MCP tool signatures |
+| `/mcp-client-config` | Copy-paste JSON config blocks for Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + Copilot, and Kiro — with per-client instructions |
+| `/netmiko-tools-yml` | Inventory format, step-by-step encryption process |
+| `/mcp-http-transport` | When to use HTTP vs stdio, SSE vs Streamable HTTP, Claude.ai web client setup |
+| `/caddy-tls` | Caddy install, Caddyfile examples for internal CA and Let's Encrypt, `NODE_EXTRA_CA_CERTS` fix, WSL2/Windows split-host setup |
 <br />
 
 
@@ -160,7 +195,7 @@ The server exposes seven tools to MCP clients:
 
 ### Human-readable table output
 
-> **Prompt:** Execute show version on all the switches configured for my NetMiko MCP server
+> **Prompt:** Execute show version on all the switches configured for my Netmiko MCP server
 
 The LLM discovers devices via `list_devices`, runs `show version` on each in parallel, and formats the results as a table:
 
@@ -179,7 +214,7 @@ The LLM discovers devices via `list_devices`, runs `show version` on each in par
 
 ### Structured JSON output
 
-> **Prompt:** Execute show version on all the switches configured for my NetMiko MCP server and return the data in JSON format.
+> **Prompt:** Execute show version on all the switches configured for my Netmiko MCP server and return the data in JSON format.
 
 Adding "in JSON format" to your prompt causes the LLM to invoke `send_show_command` with `use_textfsm=True`, which parses the raw output into structured data via ntc-templates:
 
@@ -213,7 +248,7 @@ The structured output is useful when you want to pipe results into another tool,
 
 ### Saving output to local files
 
-> **Prompt:** Run `show version` on every device in my NetMiko MCP inventory, return structured JSON, and save each device's output to a file named `<device-name>.json` in my current directory.
+> **Prompt:** Run `show version` on every device in my Netmiko MCP inventory, return structured JSON, and save each device's output to a file named `<device-name>.json` in my current directory.
 
 The LLM will collect results for all devices and write one file per device. Being explicit about the filename convention (`<device-name>.json`) and the target location (`current directory`) prevents it from guessing.
 

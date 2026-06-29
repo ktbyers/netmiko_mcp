@@ -3,6 +3,8 @@ name: mcp-client-config
 description: Configuration reference for connecting MCP clients (Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, Kiro) to the netmiko-mcp server. Covers installation, JSON config blocks, per-client gotchas, and credential handling.
 ---
 
+> **For humans:** This file is reference documentation for connecting MCP clients to the netmiko-mcp server.  It is intended to be read and used by LLMs.
+
 # netmiko-mcp Client Configuration
 
 ## Default File Locations

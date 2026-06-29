@@ -3,6 +3,8 @@ name: netmiko-mcp
 description: Workflows and configuration references for the Netmiko MCP server, including environment variables, global config (netmiko-mcp.yml), security commands (commands.yml), and running the server over Streamable HTTP transport with bearer token authentication.
 ---
 
+> **For humans:** This file is the primary configuration reference for the netmiko-mcp server. It is intended to be read and used by LLMs.
+
 # Netmiko MCP Server — Configuration Reference
 
 The Netmiko MCP server exposes network devices to Model Context Protocol clients (like Claude Code) via a highly secure, restricted gateway.
