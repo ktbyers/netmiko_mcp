@@ -118,4 +118,4 @@ Web clients cannot spawn a local subprocess — they need an HTTP endpoint.
 | **Perplexity** (web) | ✗ Not working | OAuth 2.1 discovery required; broken as of June 2026; Perplexity is moving away from MCP |
 | **Gemini** (gemini.google.com) | ✗ | No MCP support in web UI |
 
-For web access, **Claude.ai** is the only recommended option. Use the native Streamable HTTP transport with TLS via Caddy — see the `caddy-tls` skill.
+Web-based AI clients are generally not recommended for network device access. Use a desktop or CLI client (Claude Code, Claude Desktop, Cursor, etc.) instead.
