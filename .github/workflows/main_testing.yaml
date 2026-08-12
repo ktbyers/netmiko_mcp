@@ -40,9 +40,12 @@ jobs:
         run: >
           uv run --frozen pip-audit
           --ignore-vuln CVE-2026-44405
-        # CVE-2026-44405: paramiko 4.0.0 allows SHA-1. This is intentional —
-        # paramiko 5.x removed SHA-1 support which breaks connectivity to legacy
-        # network devices. netmiko constrains paramiko<5.0 for the same reason.
+          --ignore-vuln PYSEC-2026-2858
+        # CVE-2026-44405 / PYSEC-2026-2858: paramiko 4.0.0 allows SHA-1 (rsakey.py).
+        # This is intentional — paramiko removing SHA-1 support breaks connectivity to
+        # legacy network devices, and there is no released fix. netmiko constrains
+        # paramiko<5.0 for the same reason. Both IDs refer to the same advisory; listing
+        # both keeps the ignore robust to pip-audit alias resolution.
 
   unit-tests:
     name: "Unit Tests (Python ${{ matrix.python-version }})"
