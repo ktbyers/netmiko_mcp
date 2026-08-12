@@ -2,11 +2,12 @@ import functools
 import json
 import os
 from collections.abc import Callable
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, TypeVar
 
 import uvicorn
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from starlette.types import ASGIApp
 
 from netmiko_mcp.audit import configure_audit_logger, log_tool_invocation
@@ -34,7 +35,7 @@ def check_startup_error(func: _F) -> _F:
     Apply below @mcp.tool() on every tool so that a misconfigured server
     surfaces a clear error through any tool call rather than silently
     misbehaving. functools.wraps preserves the original function metadata
-    so FastMCP generates the correct tool schema.
+    so MCPServer generates the correct tool schema.
     """
 
     @functools.wraps(func)
@@ -46,15 +47,20 @@ def check_startup_error(func: _F) -> _F:
     return wrapper  # type: ignore[return-value]
 
 
-# Initialize the FastMCP server. The HTTP settings (host, port, path) are passed
-# here so that streamable_http_app() uses the operator-configured values when the
-# HTTP transport is selected. They have no effect in stdio mode.
-mcp = FastMCP(
-    "netmiko-mcp",
+# Resolve the installed package version to advertise in the MCP server metadata.
+try:
+    _pkg_version = version("netmiko-mcp")
+except PackageNotFoundError:  # pragma: no cover
+    _pkg_version = "0.0.0"
+
+# Initialize the MCPServer. Under mcp 2.0.0 the HTTP settings (host, port, path,
+# statelessness, json_response) are no longer constructor arguments; they are passed to
+# streamable_http_app() in _run_http() when the HTTP transport is selected, so they have
+# no effect in stdio mode.
+mcp = MCPServer(
+    name="netmiko-mcp",
     instructions="MCP Server for Netmiko Network Automation",
-    host=settings.http_host,
-    port=settings.http_port,
-    streamable_http_path=settings.http_path,
+    version=_pkg_version,
 )
 
 
@@ -273,14 +279,22 @@ def _validate_startup() -> str | None:
 def _run_http() -> None:
     """Start the MCP server using the Streamable HTTP transport.
 
-    Retrieves the ASGI application from FastMCP, optionally wraps it with RFC 6750
-    bearer token authentication middleware, and hands it to uvicorn.
+    Retrieves the ASGI application from MCPServer, optionally wraps it with RFC 6750
+    bearer token authentication middleware, and hands it to uvicorn. The transport
+    settings (path, stateless mode, JSON vs SSE responses, bind host) are passed to
+    streamable_http_app() here rather than at server construction. Passing host lets the
+    SDK auto-enable DNS-rebinding protection for loopback binds.
 
     TLS termination is intentionally left to a reverse proxy. Running uvicorn
     with raw TLS in application code is possible but adds certificate lifecycle
     management complexity that a proxy (nginx, Caddy, etc.) handles better.
     """
-    app: ASGIApp = mcp.streamable_http_app()
+    app: ASGIApp = mcp.streamable_http_app(
+        streamable_http_path=settings.http_path,
+        json_response=settings.http_json_response,
+        stateless_http=settings.http_stateless,
+        host=settings.http_host,
+    )
 
     if settings.http_auth_enabled:
         token = _get_bearer_token()

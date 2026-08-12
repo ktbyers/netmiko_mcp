@@ -177,18 +177,27 @@ possible future enhancements only.
 - **Note:** full-suite `mypy src tests` / `pytest` still fail until Task 2, because
       `server.py` imports the removed `mcp.server.fastmcp`.
 
-### Task 2 — Migrate `server.py` FastMCP → MCPServer  *(MAJOR — needs approval)*
-- [ ] Swap import and construction to `MCPServer`.
-- [ ] Preserve all tools + `@check_startup_error`; confirm return types register cleanly.
-- [ ] Rework `_run_http()` to use `streamable_http_app(... stateless_http=,
-      json_response=, host=, streamable_http_path=)` + `BearerTokenMiddleware` + uvicorn.
-- [ ] Keep stdio dispatch.
-- **Verify:** `uv run --frozen python -c "import netmiko_mcp.server"` imports; ruff/mypy clean.
+### Task 2 — Migrate `server.py` FastMCP → MCPServer  *(DONE — approved)*
+- [x] Swapped import (`from mcp.server import MCPServer`) and construction
+      (`MCPServer(name=, instructions=, version=)`; version resolved via
+      `importlib.metadata`). Dropped host/port/path from construction.
+- [x] Preserved all 7 tools + `@check_startup_error`; `list_tools()` generates schemas
+      cleanly for the `str | list | dict` return types (no `structured_output` overrides
+      needed).
+- [x] Reworked `_run_http()` to call `streamable_http_app(streamable_http_path=,
+      json_response=settings.http_json_response, stateless_http=settings.http_stateless,
+      host=settings.http_host)` then wrap with `BearerTokenMiddleware` + uvicorn. Passing
+      `host` preserves the SDK's localhost DNS-rebinding auto-protection.
+- [x] Kept stdio dispatch (`mcp.run(transport="stdio")`).
+- **Verified:** import OK; `ruff format --check` + `ruff check` clean; `mypy src tests`
+      clean (18 files); full unit suite `428 passed, 13 skipped`; coverage 99.03%
+      (server.py 100%).
 
-### Task 3 — `_run_http()` / startup validation review
-- [ ] Confirm `_validate_startup`, `_get_bearer_token`, and audit config still hold.
-- [ ] Confirm `BearerTokenMiddleware` wraps the new ASGI app identically.
-- **Verify:** unit tests in Task 5.
+### Task 3 — `_run_http()` / startup validation review  *(DONE)*
+- [x] `_validate_startup`, `_get_bearer_token`, and audit config unchanged and verified
+      by the existing `test_server.py` / `test_http_server.py` (73 passed).
+- [x] `BearerTokenMiddleware` wraps the new ASGI app identically (verified by
+      `test_run_http_wraps_app_with_auth_middleware_when_enabled`).
 
 ### Task 4 — Config unit tests (`tests/test_config.py`)
 - [ ] Defaults `http_stateless is True`, `http_json_response is True`.
