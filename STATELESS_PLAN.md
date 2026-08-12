@@ -240,19 +240,19 @@ possible future enhancements only.
 - **Verified:** `pytest tests/test_http_behavior.py` 3 passed; full suite 433 passed / 13
       skipped; coverage 99.03%.
 
-### Task 7 — Live integration verification (`RUN_LIVE_TESTS=1`)
-- [ ] Add a NEW subprocess-based HTTP live fixture in `conftest.py` (loopback host/port,
-      generated `NETMIKO_MCP_HTTP_BEARER_TOKEN`, reusing the existing test config wiring
-      and `_require_inventory()` guard). Drive via the 2.0.0 HTTP client.
-- [ ] Test body: (1) 401 on wrong/missing token; (2) initialize with valid token;
-      (3) assert statelessness on the wire (no required session id);
-      (4) `ping` → `"pong"`; (5) `send_show_command` `show version` on `cisco1` contains
-      `show_version_contains`; (6) optional `application/json` content-type assertion.
-- [ ] Optional contrast: `http_stateless=false` variant.
-- [ ] `show version` already whitelisted in `tests/etc/commands.yml`; add commands only
-      if a new case requires it.
-- **Verify:** `RUN_LIVE_TESTS=1 uv run --frozen pytest -v tests/test_integration.py`
-      (full suite, stdio + new HTTP cases).
+### Task 7 — Live integration verification (`RUN_LIVE_TESTS=1`)  *(DONE)*
+- [x] Added `mcp_http_server` subprocess fixture in `conftest.py` (loopback host, free
+      port, per-run generated `NETMIKO_MCP_HTTP_BEARER_TOKEN` never logged, reusing test
+      config/inventory/command wiring and `_require_inventory()`; HTTP-readiness wait +
+      teardown).
+- [x] `test_live_http_stateless_transport`: 401 on missing token; 401 on wrong token;
+      valid-token `initialize` → 200 with **no `Mcp-Session-Id`** and `application/json`;
+      official client (`streamable_http_client` + `httpx2` auth header) `ping` → `"pong"`
+      and `send_show_command` `show version` on `cisco1` contains `show_version_contains`.
+- [x] `show version` already whitelisted in `tests/etc/commands.yml`; no additions needed.
+- **Verified:** single test 1 passed; **full live suite 15 passed** (58.85s); non-live
+      suite 433 passed / 14 skipped; coverage 99.03%. Baseline stdio live suite (14)
+      re-run green after the mcp 2.0.0 migration.
 
 ### Task 8 — Documentation updates
 - [ ] `docs/configuration.md`: add `http_stateless` / `http_json_response` (table +
