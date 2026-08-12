@@ -199,17 +199,28 @@ possible future enhancements only.
 - [x] `BearerTokenMiddleware` wraps the new ASGI app identically (verified by
       `test_run_http_wraps_app_with_auth_middleware_when_enabled`).
 
-### Task 4 — Config unit tests (`tests/test_config.py`)
-- [ ] Defaults `http_stateless is True`, `http_json_response is True`.
-- [ ] YAML override to `False` each; env override precedence over YAML.
-- **Verify:** `uv run --frozen pytest -v tests/test_config.py`.
+### Task 4 — Config unit tests (`tests/test_config.py`)  *(DONE — in Task 1 commit)*
+- [x] Defaults `http_stateless is True`, `http_json_response is True`
+      (`test_mcp_config_defaults`).
+- [x] YAML sets the NON-default (`False`) and env overrides it (`True`) proving both
+      YAML read and env>YAML precedence (`test_mcp_config_http_stateless_yaml_and_env_
+      precedence`). Validity proven via mutation testing (yaml-ignored / env-ignored /
+      wrong-default all fail the tests).
+- **Verified:** `pytest tests/test_config.py` 16 passed.
 
-### Task 5 — Server/HTTP unit tests (`tests/test_http_server.py`, `tests/test_server.py`)
-- [ ] Update any tests referencing FastMCP internals to the MCPServer API.
-- [ ] Assert `_run_http()` still wraps `BearerTokenMiddleware` when auth enabled.
-- [ ] Assert stateless/json_response settings flow into `streamable_http_app(...)`
-      (e.g. via spy/patch on the call arguments).
-- **Verify:** `uv run --frozen pytest -v tests/test_http_server.py tests/test_server.py`.
+### Task 5 — Server/HTTP unit tests  *(DONE)*
+- [x] Updated FastMCP→MCPServer references in `test_server.py` docstrings
+      (`test_mcp_initialization`, decorator-metadata test).
+- [x] `_run_http()` still wraps `BearerTokenMiddleware` when auth enabled — existing
+      `test_run_http_wraps_app_with_auth_middleware_when_enabled` retained and passing.
+- [x] Added `test_run_http_forwards_transport_settings_to_streamable_http_app` and a
+      complementary `test_run_http_forwards_stateless_true_json_true` proving
+      `http_path` / `http_json_response` / `http_stateless` / `http_host` flow into
+      `mcp.streamable_http_app(...)`. Non-default values used so the assertions are
+      non-tautological; proven by mutation (hard-coding `stateless_http=True` fails the
+      test).
+- **Verified:** `pytest tests/test_server.py tests/test_http_server.py` 91 passed; full
+      suite 430 passed / 13 skipped; coverage 99.03% (server.py 100%).
 
 ### Task 6 — Behavioral HTTP test (in-process ASGI, no device)
 - [ ] Drive `mcp.streamable_http_app(stateless_http=True, json_response=True, ...)` in
