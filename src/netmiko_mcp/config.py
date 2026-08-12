@@ -44,6 +44,17 @@ class McpConfig(BaseSettings):
     http_port: int = Field(default=8000)
     http_path: str = Field(default="/mcp")
     http_auth_enabled: bool = Field(default=True)
+    # Statelessness applies only to the streamable-http transport (no effect under
+    # stdio). On mcp 2.0.0 this flag only changes behavior for legacy handshake-era
+    # clients: modern (2026-07-28) clients are always stateless. When False, legacy
+    # clients get session-based (Mcp-Session-Id) behavior that requires load-balancer
+    # session affinity. Stateless is the default so the server can run behind
+    # round-robin load balancers and on serverless infrastructure.
+    http_stateless: bool = Field(default=True)
+    # When True, responses are returned as a single application/json body instead of an
+    # SSE (text/event-stream) stream. Defaults to True for maximum proxy/load-balancer
+    # compatibility; netmiko-mcp tools are single-response so nothing is lost.
+    http_json_response: bool = Field(default=True)
 
     # Audit logging
     audit_log_enabled: bool = Field(default=True)

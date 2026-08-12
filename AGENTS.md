@@ -10,6 +10,21 @@
 
 - **Refactoring:** Major code refactoring must always be reviewed and approved prior to proceeding.
 
+## Known Issues / Future Refactors
+
+- **MCP server built at import time (no factory).** In `src/netmiko_mcp/server.py` the
+  `mcp = FastMCP(...)` object is constructed at module import time from the global
+  `settings` singleton, and every tool is registered via `@mcp.tool()` decorators against
+  that module-level object. This means the server's construction-time settings (e.g.
+  `stateless_http`, `json_response`, host/port/path) are frozen at import and cannot be
+  varied by unit tests without `importlib.reload` hacks. Longer term this could be
+  refactored into a `build_mcp_server(cfg)` factory that constructs and returns a
+  configured `FastMCP` (registering tools inside it), which would allow tests to build
+  servers with different configs and assert on them directly, and would make
+  construction-time config explicit rather than import-side-effect driven. Deferred for
+  now because it touches every tool definition and the decorator wiring (a structural
+  refactor requiring review).
+
 ## Package Management
 
 - ONLY use uv, NEVER pip
@@ -46,6 +61,21 @@
    before committing.
 - `uv run --frozen mypy src tests` must 100% pass before committing.
 - `uv run --frozen pytest -v` must 100% pass before committing. Note: Live integration tests are protected via `@pytest.mark.skipif(not os.environ.get("RUN_LIVE_TESTS"), ...)`.
+- **Tests must be able to fail.** Avoid tautological "a-is-a" assertions that pass
+  regardless of whether the underlying code is correct. A test that asserts a value equals
+  the field's own default, while also relying on that default to produce the value, proves
+  nothing. Design each assertion so that a real bug in the code under test would make it
+  fail:
+  - When verifying that a value is read from a config file (or any lower-precedence
+    source), set that source to a value **different from the default**, so a passing
+    assertion proves the source was actually consulted rather than the default leaking
+    through.
+  - When verifying precedence/override, make the higher-precedence source's value differ
+    from both the default and the lower-precedence source's value, so the observed result
+    is only explainable by the correct precedence.
+  - Prefer asserting on the specific behavior/output, not on inputs echoed straight back.
+  - When practical, sanity-check a new test by mentally (or temporarily) mutating the code
+    under test and confirming the test would fail; then revert the mutation.
 - **Comment Style:** Avoid using numbered or bulleted lists in inline code comments (e.g., `# 1. This part` or `# 2. Some other part`). Write comments as descriptive paragraphs or clear, individual sentences without numeric or alphabetic step indicators.
 
 ## Skills Documentation
