@@ -1,8 +1,7 @@
 import json
-from typing import Any, Dict
-
 import os
 from pathlib import Path
+from typing import Any
 
 from netmiko.cli_tools.helpers import obtain_devices
 from netmiko.utilities import find_cfg_file, load_yaml_file
@@ -39,7 +38,7 @@ def get_group_names() -> list[str]:
     return [k for k, v in raw.items() if isinstance(v, list) and k != "__meta__"]
 
 
-def get_device_params(device_name: str) -> Dict[str, Any]:
+def get_device_params(device_name: str) -> dict[str, Any]:
     """
     Retrieve full device parameters including credentials.
     INTERNAL USE ONLY. Never expose this directly to the LLM.
@@ -66,7 +65,7 @@ def get_device_names(device_or_group: str) -> list[str]:
     return list(devices.keys())
 
 
-def get_all_device_params(device_or_group: str) -> Dict[str, Any]:
+def get_all_device_params(device_or_group: str) -> dict[str, Any]:
     """
     Retrieve full device parameters for all devices in a group with a single
     obtain_devices call. Avoids repeated inventory decryption when connecting

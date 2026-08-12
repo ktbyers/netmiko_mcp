@@ -14,7 +14,6 @@ import pytest
 
 from netmiko_mcp.server import _get_bearer_token, _run_http, _validate_startup, main
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

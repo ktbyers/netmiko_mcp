@@ -150,12 +150,12 @@ class TrieNode:
     """
 
     def __init__(self) -> None:
-        self.children: dict[str, "TrieNode"] = {}
+        self.children: dict[str, TrieNode] = {}
         self.word_end: bool = False
         self.final_word: bool = False
         self.glob_suffix: bool = False
         self.glob_next_word: bool = False
-        self.next_word_trie: "TrieNode | None" = None
+        self.next_word_trie: TrieNode | None = None
 
 
 class AbbreviationDenyFilter:
@@ -332,11 +332,14 @@ class AbbreviationDenyFilter:
                 return True
             # Deny entry continues to the next word. Recurse if submitted has
             # another word.
-            if not last_word and node.next_word_trie is not None:
-                if self.match_word(
+            if (
+                not last_word
+                and node.next_word_trie is not None
+                and self.match_word(
                     trie_root=node.next_word_trie, words=words, word_idx=word_idx + 1
-                ):
-                    return True
+                )
+            ):
+                return True
         # DFS into character children — the submitted word may be a shorter
         # prefix of a longer deny word.
         for child in node.children.values():

@@ -6,8 +6,8 @@ import pytest
 
 import netmiko_mcp.server as server_module
 from netmiko_mcp.server import (
-    check_startup_error,
     _validate_startup,
+    check_startup_error,
     list_device_outputs,
     list_devices,
     list_groups,
@@ -17,7 +17,6 @@ from netmiko_mcp.server import (
     send_show_command,
     send_show_command_to_group,
 )
-
 
 # ---------------------------------------------------------------------------
 # _validate_startup
@@ -460,9 +459,10 @@ def test_read_device_output_tool_logs_invocation(mock_read: Any, mock_log: Any) 
 @patch("netmiko_mcp.server.settings")
 def test_main_calls_configure_audit_logger(mock_settings: Any, mock_configure: Any) -> None:
     """main() should call configure_audit_logger before starting the server."""
-    from netmiko_mcp.server import main
-    import tempfile
     import os
+    import tempfile
+
+    from netmiko_mcp.server import main
 
     with tempfile.NamedTemporaryFile(suffix=".yml", delete=False) as f:
         f.write(b"allowed_commands: []\n")

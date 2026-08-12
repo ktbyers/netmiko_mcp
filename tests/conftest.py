@@ -4,8 +4,9 @@ import socket
 import subprocess
 import sys
 import time
+from collections.abc import AsyncGenerator, Iterator
 from pathlib import Path
-from typing import Any, AsyncGenerator, Iterator
+from typing import Any
 
 import httpx
 import pytest
@@ -59,10 +60,12 @@ def _make_mcp_client(
             env=test_env,
         )
 
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                yield session
+        async with (
+            stdio_client(server_params) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            yield session
 
     return _client()
 

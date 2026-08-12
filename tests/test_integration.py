@@ -540,51 +540,52 @@ async def test_live_http_stateless_transport(
     base_url, token = mcp_http_server
     url = f"{base_url}/mcp"
 
-    # Missing bearer token is rejected.
-    resp = httpx.post(url, json=_INIT_BODY, headers=_INIT_HEADERS, timeout=10)
-    assert resp.status_code == 401
+    async with httpx.AsyncClient(timeout=10) as probe:
+        # Missing bearer token is rejected.
+        resp = await probe.post(url, json=_INIT_BODY, headers=_INIT_HEADERS)
+        assert resp.status_code == 401
 
-    # Wrong bearer token is rejected.
-    resp = httpx.post(
-        url,
-        json=_INIT_BODY,
-        headers={**_INIT_HEADERS, "Authorization": "Bearer wrong-token"},
-        timeout=10,
-    )
-    assert resp.status_code == 401
+        # Wrong bearer token is rejected.
+        resp = await probe.post(
+            url,
+            json=_INIT_BODY,
+            headers={**_INIT_HEADERS, "Authorization": "Bearer wrong-token"},
+        )
+        assert resp.status_code == 401
 
-    # Valid token: initialize succeeds, statelessly (no session id) with a JSON response.
-    resp = httpx.post(
-        url,
-        json=_INIT_BODY,
-        headers={**_INIT_HEADERS, "Authorization": f"Bearer {token}"},
-        timeout=10,
-    )
-    assert resp.status_code == 200, resp.text
-    assert "mcp-session-id" not in {k.lower() for k in resp.headers}
-    assert resp.headers["content-type"].lower().startswith("application/json")
+        # Valid token: initialize succeeds, statelessly (no session id) with a JSON response.
+        resp = await probe.post(
+            url,
+            json=_INIT_BODY,
+            headers={**_INIT_HEADERS, "Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert "mcp-session-id" not in {k.lower() for k in resp.headers}
+        assert resp.headers["content-type"].lower().startswith("application/json")
 
     # Functional round-trip via the official MCP client with the auth header.
     device = test_config["test_device"]
     auth_client = httpx2.AsyncClient(headers={"Authorization": f"Bearer {token}"}, timeout=60)
-    async with auth_client:
-        async with streamable_http_client(url, http_client=auth_client) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+    async with (
+        auth_client,
+        streamable_http_client(url, http_client=auth_client) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
 
-                ping_result = await session.call_tool("ping", arguments={})
-                assert getattr(ping_result.content[0], "text", "") == "pong"
+        ping_result = await session.call_tool("ping", arguments={})
+        assert getattr(ping_result.content[0], "text", "") == "pong"
 
-                cmd_result = await session.call_tool(
-                    "send_show_command",
-                    arguments={
-                        "device_name": device,
-                        "command": "show version",
-                        "use_textfsm": False,
-                    },
-                )
-                output = getattr(cmd_result.content[0], "text", "")
-                assert test_config["show_version_contains"] in output
+        cmd_result = await session.call_tool(
+            "send_show_command",
+            arguments={
+                "device_name": device,
+                "command": "show version",
+                "use_textfsm": False,
+            },
+        )
+        output = getattr(cmd_result.content[0], "text", "")
+        assert test_config["show_version_contains"] in output
 
 
 @pytest.mark.anyio

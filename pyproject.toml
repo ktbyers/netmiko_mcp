@@ -34,17 +34,21 @@ Repository = "https://github.com/ktbyers/netmiko_mcp"
 netmiko-mcp = "netmiko_mcp.server:main"
 
 [dependency-groups]
+# Dev tooling is pinned to EXACT versions on purpose. These packages gate CI
+# (linting, type-checking, tests, audits); a floating `>=` lets a full `uv lock`
+# regeneration silently bump them and change lint/type rules, breaking CI without a
+# code change. Bump these deliberately (edit the pin, then `uv lock`), never by accident.
 dev = [
-    "bandit>=1.9.4",
-    "httpx>=0.28.0",
-    "mypy>=2.1.0",
-    "pip-audit>=2.10.0",
-    "pytest>=9.0.3",
-    "pytest-cov>=7.1.0",
-    "pytest-mypy>=1.0.1",
-    "ruff>=0.15.15",
-    "types-paramiko>=4.0.0.20260518",
-    "types-pyyaml>=6.0.12.20260518",
+    "bandit==1.9.4",
+    "httpx==0.28.1",
+    "mypy==2.3.0",
+    "pip-audit==2.10.1",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-mypy==1.0.1",
+    "ruff==0.16.2",
+    "types-paramiko==5.0.0.20260724",
+    "types-pyyaml==6.0.12.20260724",
 ]
 
 [tool.uv]
@@ -73,6 +77,14 @@ exclude = [
 
 # If you want to be extra strict about line length in the linter:
 # extend-select = ["E501"]
+
+# Rules intentionally disabled (deliberate design decisions, not defects):
+#   BLE001: connection.py catches broad `Exception` on purpose so a device or command
+#           failure returns a structured error to the client and is recorded in the audit
+#           trail rather than crashing the server.
+#   TRY004: inventory.py raises `ValueError` (not `TypeError`) when Netmiko returns its
+#           string "not found" sentinel; callers in server.py catch that ValueError.
+ignore = ["BLE001", "TRY004"]
 
 [tool.coverage.run]
 source = ["netmiko_mcp"]

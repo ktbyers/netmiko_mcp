@@ -18,19 +18,19 @@ from netmiko_mcp.audit import (
     REASON_ALLOWED,
     REASON_DENY_MATCH,
 )
-from netmiko_mcp.security import ValidationResult
 from netmiko_mcp.connection import (
+    _UNSAFE_PATH_CHARS,
+    _UNSAFE_PATH_VALUES,
     _managed_connection,
     _sanitize_command_for_filename,
     _save_device_output,
-    _UNSAFE_PATH_CHARS,
-    _UNSAFE_PATH_VALUES,
     _validate_path_component,
     list_device_outputs,
     read_device_output,
     run_show_command,
     run_show_command_on_group,
 )
+from netmiko_mcp.security import ValidationResult
 
 
 @patch("netmiko_mcp.connection.validate_command")
@@ -1260,9 +1260,8 @@ def test_managed_connection_disconnects_on_exception(mock_connect: MagicMock) ->
     mock_conn = MagicMock()
     mock_connect.return_value = mock_conn
 
-    with pytest.raises(RuntimeError, match="boom"):
-        with _managed_connection({"host": "1.1.1.1"}):
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError, match="boom"), _managed_connection({"host": "1.1.1.1"}):
+        raise RuntimeError("boom")
 
     mock_conn.disconnect.assert_called_once()
 
@@ -1272,9 +1271,8 @@ def test_managed_connection_propagates_connection_exception(mock_connect: MagicM
     """An exception raised by ConnectHandler before yield should propagate to the caller."""
     mock_connect.side_effect = NetmikoTimeoutException("TCP timeout")
 
-    with pytest.raises(NetmikoTimeoutException):
-        with _managed_connection({"host": "1.1.1.1"}):
-            pass  # pragma: no cover
+    with pytest.raises(NetmikoTimeoutException), _managed_connection({"host": "1.1.1.1"}):
+        pass  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------

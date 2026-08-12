@@ -23,19 +23,18 @@ from netmiko_mcp.audit import (
     REASON_MULTIPLE_PIPES,
     REASON_NO_ALLOW_MATCH,
     REASON_UNSAFE_CHAR,
-    _AuditJsonFormatter,
-    _FailClosedFileHandler,
-    _FailClosedSysLogHandler,
     _audit_logger,
+    _AuditJsonFormatter,
     _build_file_handler,
     _emit,
+    _FailClosedFileHandler,
+    _FailClosedSysLogHandler,
     configure_audit_logger,
     log_command_attempt,
     log_connection_outcome,
     log_tool_invocation,
     save_channel_transcript,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -294,9 +293,11 @@ def test_fail_closed_propagates_handler_error(mock_settings: MagicMock, tmp_path
     logger.propagate = False
     logger.setLevel(logging.INFO)
 
-    with patch.object(handler, "emit", side_effect=OSError("disk full")):
-        with pytest.raises((RuntimeError, OSError)):
-            logger.info("test", extra={"event": "test"})
+    with (
+        patch.object(handler, "emit", side_effect=OSError("disk full")),
+        pytest.raises((RuntimeError, OSError)),
+    ):
+        logger.info("test", extra={"event": "test"})
 
 
 # ---------------------------------------------------------------------------
