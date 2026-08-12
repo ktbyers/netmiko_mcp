@@ -18,7 +18,9 @@ classifiers = [
     "Topic :: System :: Networking",
 ]
 dependencies = [
-    "mcp>=1.27.1",
+    # Pinned <2.0.0 on this branch: 1.28.1 fixes PYSEC-2026-3483; the 2.0.0 upgrade
+    # (breaking FastMCP->MCPServer migration) is handled on the mcp_stateless branch.
+    "mcp>=1.28.1,<2.0.0",
     "netmiko>=4.7.0",
     "ntc-templates>=4.1.0",
     "pydantic-settings>=2.14.1",
