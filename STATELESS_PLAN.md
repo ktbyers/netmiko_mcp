@@ -222,12 +222,23 @@ possible future enhancements only.
 - **Verified:** `pytest tests/test_server.py tests/test_http_server.py` 91 passed; full
       suite 430 passed / 13 skipped; coverage 99.03% (server.py 100%).
 
-### Task 6 — Behavioral HTTP test (in-process ASGI, no device)
-- [ ] Drive `mcp.streamable_http_app(stateless_http=True, json_response=True, ...)` in
-      process via an HTTP client; verify `initialize`/`tools/list`/`ping` succeed without
-      requiring `Mcp-Session-Id`, and response content-type is `application/json`.
-- [ ] Contrast case with `stateless_http=False` (session behavior), if supported by 2.0.0.
-- **Verify:** `uv run --frozen pytest -v` on the new module.
+### Task 6 — Behavioral HTTP test (in-process ASGI, no device)  *(DONE)*
+- [x] New `tests/test_http_behavior.py`: runs the real `mcp.streamable_http_app(...)` on a
+      loopback uvicorn server in a background thread (uvicorn skips signal handlers off the
+      main thread), no device, only `ping` invoked.
+- [x] `test_stateless_initialize_issues_no_session_id`: with `stateless=True,
+      json_response=True`, a handshake-era `initialize` (no `MCP-Protocol-Version` header,
+      so flag-based dispatch) returns 200, **no `Mcp-Session-Id`** header, and
+      `application/json` content type.
+- [x] `test_stateful_initialize_issues_session_id`: contrast with `stateless=False` — same
+      request yields an `Mcp-Session-Id` header, proving the flag drives wire behavior
+      (non-tautological pair).
+- [x] `test_stateless_http_client_ping_and_tools`: full `initialize` + `ping` (→ `"pong"`)
+      + `list_tools` via the official `streamable_http_client` + `ClientSession`, proving
+      tools work over HTTP not just stdio. (`streamable_http_client` yields a 2-tuple in
+      2.0.0; session-id is asserted in the raw test instead.)
+- **Verified:** `pytest tests/test_http_behavior.py` 3 passed; full suite 433 passed / 13
+      skipped; coverage 99.03%.
 
 ### Task 7 — Live integration verification (`RUN_LIVE_TESTS=1`)
 - [ ] Add a NEW subprocess-based HTTP live fixture in `conftest.py` (loopback host/port,
