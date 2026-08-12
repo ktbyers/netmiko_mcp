@@ -47,6 +47,8 @@ defaults.
 | `http_port` | `int` | `8000` | `NETMIKO_MCP_HTTP_PORT` | Listen port for the HTTP transport. |
 | `http_path` | `string` | `"/mcp"` | `NETMIKO_MCP_HTTP_PATH` | MCP endpoint path for the HTTP transport. |
 | `http_auth_enabled` | `bool` | `true` | `NETMIKO_MCP_HTTP_AUTH_ENABLED` | Enable RFC 6750 bearer token authentication. Should not be disabled on externally reachable deployments. |
+| `http_stateless` | `bool` | `true` | `NETMIKO_MCP_HTTP_STATELESS` | Run the Streamable HTTP transport without server-side session state. `true` by default so the server can sit behind round-robin load balancers and on serverless infrastructure. Has no effect under `stdio`. |
+| `http_json_response` | `bool` | `true` | `NETMIKO_MCP_HTTP_JSON_RESPONSE` | Return responses as a single `application/json` body instead of an SSE (`text/event-stream`) stream. `true` by default for proxy/load-balancer friendliness. Has no effect under `stdio`. |
 
 The bearer token itself (`NETMIKO_MCP_HTTP_BEARER_TOKEN`) is an environment variable only — it is intentionally not a YAML setting so it cannot be stored in the config file. See [`NETMIKO_MCP_HTTP_BEARER_TOKEN`](#netmiko_mcp_http_bearer_token) below.
 
@@ -255,6 +257,42 @@ http_auth_enabled: true
 ```
 <br />
 
+### `http_stateless`
+
+Controls whether the Streamable HTTP transport keeps per-session state. `true` (the
+default) is intended for stateless deployment: the server should not hold session state
+between requests, so it can run behind a plain round-robin load balancer or on serverless
+infrastructure without sticky sessions. This setting applies only to `streamable-http` and
+has no effect under `stdio`.
+
+The underlying SDK (`mcp` 2.0.0) implements the `2026-07-28` protocol revision, whose
+Streamable HTTP transport is stateless per request. On that SDK, `http_stateless` primarily
+affects older handshake-era clients: clients negotiating the modern `2026-07-28` envelope
+are handled statelessly regardless of this flag. Setting `http_stateless: false` restores
+session-based behavior (an `Mcp-Session-Id` is issued) for handshake-era clients, which
+then require load-balancer session affinity. netmiko-mcp itself keeps no cross-request
+state, so the default is recommended for most deployments.
+
+```yaml
+http_stateless: true
+```
+<br />
+
+### `http_json_response`
+
+When `true` (the default), tool responses are returned as a single `application/json`
+HTTP body rather than a Server-Sent Events (`text/event-stream`) stream. Plain JSON is
+generally friendlier to reverse proxies, WAFs, and load balancers that do not handle
+streaming responses well. netmiko-mcp tools return a single result per call, so nothing is
+lost by using JSON responses. Applies only to `streamable-http`; no effect under `stdio`.
+Some MCP clients expect SSE responses — set this to `false` if a client cannot consume
+`application/json` responses.
+
+```yaml
+http_json_response: true
+```
+<br />
+
 ### `NETMIKO_MCP_HTTP_BEARER_TOKEN`
 
 The HTTP bearer token is **not** a YAML setting. It is intentionally environment-only so
@@ -400,6 +438,8 @@ save_threshold: 1000
 # http_port: 8000
 # http_path: "/mcp"
 # http_auth_enabled: true
+# http_stateless: true        # stateless per request (LB/serverless friendly); no effect under stdio
+# http_json_response: true    # application/json responses instead of SSE; no effect under stdio
 # Note: set NETMIKO_MCP_HTTP_BEARER_TOKEN in the environment, not here
 
 # Audit logging (defaults shown)

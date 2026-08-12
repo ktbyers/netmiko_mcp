@@ -68,11 +68,25 @@ echo 'export NETMIKO_TOOLS_KEY="<your-passphrase>"' >> ~/.bashrc
 ### Optional YAML config overrides
 
 ```yaml
-http_host: "127.0.0.1"   # Use 0.0.0.0 to accept external connections
+http_host: "127.0.0.1"     # Use 0.0.0.0 to accept external connections
 http_port: 8000
 http_path: "/mcp"
-http_auth_enabled: true   # Do not disable in any externally reachable deployment
+http_auth_enabled: true     # Do not disable in any externally reachable deployment
+http_stateless: true        # default: stateless per request (LB/serverless friendly)
+http_json_response: true    # default: application/json responses instead of SSE
 ```
+
+**Stateless (default):** `http_stateless: true` runs the transport without server-side
+session state, so the server can sit behind a round-robin load balancer or on serverless
+infrastructure without sticky sessions. The underlying `mcp` 2.0.0 SDK implements the
+`2026-07-28` protocol revision, whose Streamable HTTP transport is stateless per request.
+Set `http_stateless: false` only to restore session-based behavior for older handshake-era
+clients (which then require load-balancer session affinity). netmiko-mcp keeps no
+cross-request state, so the default suits most deployments.
+
+**Response format:** `http_json_response: true` (default) returns `application/json`
+instead of an SSE stream, which is friendlier to proxies/WAFs/load balancers. Set it to
+`false` only if a client cannot consume `application/json` responses.
 
 **TLS:** The server runs plain HTTP. Terminate TLS at a reverse proxy.
 
@@ -96,14 +110,14 @@ claude mcp add --transport http netmiko-mcp http://your-server:8000/mcp \
 
 | | **SSE** (legacy) | **Streamable HTTP** (current) |
 |---|---|---|
-| MCP spec | Pre-2025-03-26 | 2025-03-26+ |
+| MCP spec | Pre-2025-03-26 | 2025-03-26 onward (`2026-07-28` on `mcp` 2.0.0) |
 | Endpoints | Two (`/sse` + `/messages`) | One (`/mcp`) |
-| Server model | Stateful — holds open connections | Stateless — per-request |
-| Resumable streams | ✗ | ✓ |
-| CDN / proxy / load balancer | ✗ | ✓ |
+| Server model | Stateful — holds open connections | Stateless per request by default (`http_stateless: true`); session-based mode available for handshake-era clients (`http_stateless: false`) |
+| CDN / proxy / load balancer | ✗ | ✓ (stateless mode needs no session affinity) |
 | Status | **Deprecated** — vendors dropping through mid-2026 | **Use for all new deployments** |
 
-`netmiko-mcp` implements Streamable HTTP natively and does not expose an SSE endpoint. SSE exists in the underlying FastMCP library but is deprecated and not used.
+`netmiko-mcp` implements Streamable HTTP natively and does not expose an SSE endpoint. By
+default it runs stateless (see `http_stateless` / `http_json_response` above).
 
 ---
 

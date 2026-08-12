@@ -32,7 +32,7 @@ netmiko-mcp sits between your AI client and your network devices. It supports tw
 
 **stdio** - Your AI client launches the server as a local subprocess and communicates over standard input/output. No ports are opened and nothing listens on the network. The process starts when you open a session and stops when you close it. This is the simplest setup and the right choice for a single user running the server on their own machine.
 
-**Streamable HTTP** - The server runs as a standalone service that listens on a network port. Your AI client connects to it over HTTP rather than launching it as a subprocess. This allows the server to run on a remote host and be shared across multiple machines or clients. It also enables centralized control and auditing/logging of all device interactions in one place. The tradeoff is a slightly more involved deployment (you are responsible for starting the process and keeping it running).
+**Streamable HTTP** - The server runs as a standalone service that listens on a network port. Your AI client connects to it over HTTP rather than launching it as a subprocess. This allows the server to run on a remote host and be shared across multiple machines or clients. It also enables centralized control and auditing/logging of all device interactions in one place. The tradeoff is a slightly more involved deployment (you are responsible for starting the process and keeping it running). By default the HTTP transport runs statelessly (no server-side session state), so it can sit behind a round-robin load balancer or serverless infrastructure without sticky sessions; see [docs/configuration.md](docs/configuration.md) (`http_stateless`, `http_json_response`).
 <br />
 
 ## Prerequisites
@@ -146,6 +146,11 @@ With the server installed and the three config files in place, register `netmiko
 | Cline | ✓ | ✓ | - | Not tested |
 | Gemini CLI | ✓ | ✓ | - | Not tested |
 | ChatGPT | ✗ | ✗ | ✗ | SSE-only; complex workaround required; not recommended |
+
+> **Note (mcp 2.0.0):** The HTTP transport now runs on the `mcp` 2.0.0 SDK (protocol
+> `2026-07-28`, stateless by default). The per-client verification above predates that
+> upgrade and is pending re-verification against a stateless 2.0.0 server. `stdio` behavior
+> is unchanged.
 <br />
 
 

@@ -255,31 +255,36 @@ possible future enhancements only.
       re-run green after the mcp 2.0.0 migration.
 
 ### Task 8 — Documentation updates
-- [ ] `docs/configuration.md`: add `http_stateless` / `http_json_response` (table +
-      details), measured language, no absolutes.
-- [ ] `skills/netmiko-mcp/SKILL.md`: add fields; note `mcp>=2.0.0` / MCPServer.
-- [ ] `skills/mcp-http-transport/SKILL.md`: correct the SSE-vs-Streamable table;
-      describe stateless-by-default (`2026-07-28`) vs legacy handshake, trade-offs, and
-      the opt-out.
-- [ ] `README.md`: update HTTP "How This Works"; bump any stated client/version support
-      only where tested.
-- [ ] `tests/etc/netmiko-mcp.yml`: commented example of the new fields.
-- **Verify:** manual review; cross-links resolve; no secrets; only document what's tested.
+- [x] `docs/configuration.md`: added `http_stateless` / `http_json_response` to the HTTP
+      Transport table and Setting Details, plus commented lines in the Complete Example;
+      measured language, cites `2026-07-28` factually (Q-E).
+- [x] `skills/netmiko-mcp/SKILL.md`: added both fields to the Supported Fields block.
+- [x] `skills/mcp-http-transport/SKILL.md`: corrected the SSE-vs-Streamable table
+      (stateless-by-default vs opt-out), added config block + stateless/response notes,
+      removed the stale "FastMCP library" reference.
+- [x] `README.md`: updated HTTP "How This Works" (stateless default); added a client-matrix
+      note that per-client verification is pending re-verification on mcp 2.0.0 (Q-B).
+- [x] `tests/etc/netmiko-mcp.yml`: commented example of the new fields.
+- **Verified:** no `FastMCP` references remain in README/docs/skills; ruff format clean.
 
-### Task 9 — Version + changelog
-- [ ] Bump `pyproject.toml` project version `0.2.0` → `0.3.0`.
-- [ ] Update `TODO.md`/changelog notes as applicable.
-- **Verify:** `git diff` review.
+### Task 9 — Version + changelog  *(DONE)*
+- [x] Bumped `pyproject.toml` version `0.2.0` → `0.3.0`; re-locked + synced. Removed a
+      stale root `netmiko_mcp.egg-info` (0.1.0, gitignored) that shadowed the advertised
+      version; server now advertises `0.3.0`.
+- [x] `TODO.md`: no changelog section requiring an entry for this change.
+- **Verified:** `importlib.metadata.version("netmiko-mcp") == "0.3.0"`.
 
-### Task 10 — Full quality gate before commit
-- [ ] `cd netmiko_mcp && ./tests.sh` (ruff format, ruff check, mypy, pytest).
-- [ ] `uv run --frozen ruff format --check .` / `ruff check .` / `mypy src tests`.
-- [ ] `uv run --frozen pytest -v`; then `RUN_LIVE_TESTS=1 uv run --frozen pytest -v
-      tests/test_integration.py` (significant change).
-- [ ] Coverage still ≥ `fail_under = 98`.
-- [ ] `uv run --frozen pip-audit --ignore-vuln ...` clean.
-- [ ] `git diff` / `git status` review; no secrets staged.
-- **Verify:** all gates green.
+### Task 10 — Full quality gate  *(DONE, with a pre-existing pip-audit caveat)*
+- [x] `ruff format --check .` / `ruff check .` clean; `mypy src tests` clean (19 files).
+- [x] `pytest` 433 passed / 14 skipped; coverage 99.03% (≥ 98).
+- [x] `RUN_LIVE_TESTS=1 pytest tests/test_integration.py` full live suite 15 passed.
+- [ ] `pip-audit`: **not clean — pre-existing, unrelated to this branch.** Flags
+      `cryptography` 49.0.0 (PYSEC-2026-3552, fix 50.0.0) and `paramiko` 4.0.0
+      (PYSEC-2026-2858, no fix version). Both are netmiko transitive deps; their versions
+      were **not** changed by this branch. Deferred to a decision (see Q-G) rather than
+      bundling an unrelated security bump into the stateless feature.
+- [x] `git diff` / `git status` reviewed each commit; no secrets staged.
+- **Verified:** all gates green except the pre-existing pip-audit items above.
 
 ---
 
@@ -310,6 +315,14 @@ possible future enhancements only.
   is unavoidably larger than "in-place flag add" and needs approval — see Q-C.)
 - **D6 Version:** `pyproject.toml` `0.2.0` → `0.3.0`.
 - **D7 SDK:** upgrade to `mcp>=2.0.0` (done in pyproject + lock).
+- **Q-B (client matrix):** DECIDED — mark README per-client verification "pending
+  re-verification" on mcp 2.0.0 rather than claiming tested support.
+- **Q-E (spec citation):** DECIDED — cite `2026-07-28` factually (verifiable in
+  `mcp_types.version`) with measured language; no conformance guarantee.
+- **Q-G (pip-audit, NEW):** pre-existing `cryptography`/`paramiko` advisories surfaced.
+  Decision needed: bump `cryptography` to 50.0.0 (clears one) and/or add a documented
+  `pip-audit --ignore-vuln` for the no-fix `paramiko` item, or handle separately from
+  this branch. Not addressed here to avoid scope creep.
 - **D8 Live HTTP test:** new subprocess-based streamable-http live harness against
   `cisco1`, body as in Task 7.
 - **D9 Opt-out (Q-A):** keep the `http_stateless` config field (default `true`) for
