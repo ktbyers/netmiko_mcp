@@ -18,6 +18,7 @@ No network egress and no real devices are involved; only the ``ping`` tool is ca
 """
 
 import contextlib
+import json
 import socket
 import threading
 import time
@@ -291,6 +292,61 @@ def test_modern_envelope_rejects_malformed_requests(case: str, expected_code: in
     assert resp.json()["error"]["code"] == expected_code
     # A rejected modern request must not issue a session id.
     assert "mcp-session-id" not in {k.lower() for k in resp.headers}
+
+
+def test_legacy_sse_response_when_json_response_disabled() -> None:
+    """With http_json_response False, a handshake-era request is answered as a
+    text/event-stream and the JSON-RPC result is delivered inside an SSE data frame.
+
+    This is the behavioral counterpart to test_stateless_initialize_issues_no_session_id
+    (which uses json_response True and asserts application/json). Together they form a
+    contrasting pair: the same initialize request under the two flag values yields two
+    different content types, so the result is only explainable by the flag actually driving
+    the response encoding rather than a constant. Previously only the wiring (that the flag
+    reaches streamable_http_app) was tested via mocks; nothing confirmed the SSE body on
+    the wire.
+    """
+    app = _build_app(stateless=True, json_response=False)
+    with _serve(app) as base_url:
+        resp = httpx.post(f"{base_url}/mcp", json=_INIT_BODY, headers=_INIT_HEADERS, timeout=10)
+
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].lower().startswith("text/event-stream")
+    # The JSON-RPC result must round-trip through the SSE data frame(s), proving the stream
+    # carries a usable response and not merely a different content-type header.
+    data_lines = [
+        line[len("data:") :].strip() for line in resp.text.splitlines() if line.startswith("data:")
+    ]
+    assert data_lines, f"no SSE data frame in response: {resp.text!r}"
+    payload = json.loads("".join(data_lines))
+    assert payload["jsonrpc"] == "2.0"
+    assert payload["id"] == _INIT_BODY["id"]
+    assert "result" in payload
+
+
+def test_modern_envelope_stays_json_when_json_response_disabled() -> None:
+    """The http_json_response flag governs only the legacy handshake path. A modern
+    2026-07-28 request is a single request/response envelope and is answered as
+    application/json even when json_response is False.
+
+    Contrast with test_legacy_sse_response_when_json_response_disabled, which sends the
+    same-configured server an initialize handshake and gets text/event-stream: the differing
+    content types for the two request styles against one json_response=False app prove the
+    flag's effect is scoped to legacy clients, matching the documented behavior that modern
+    clients are always stateless single-response.
+    """
+    app = _build_app(stateless=True, json_response=False)
+    with _serve(app) as base_url:
+        resp = httpx.post(
+            f"{base_url}/mcp",
+            json=_modern_body(1, "tools/list"),
+            headers=_modern_headers("tools/list"),
+            timeout=10,
+        )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].lower().startswith("application/json")
+    assert resp.json()["result"]["resultType"] == "complete"
 
 
 @pytest.mark.anyio
