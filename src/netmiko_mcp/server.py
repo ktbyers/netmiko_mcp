@@ -53,10 +53,7 @@ try:
 except PackageNotFoundError:  # pragma: no cover
     _pkg_version = "0.0.0"
 
-# Initialize the MCPServer. Under mcp 2.0.0 the HTTP settings (host, port, path,
-# statelessness, json_response) are no longer constructor arguments; they are passed to
-# streamable_http_app() in _run_http() when the HTTP transport is selected, so they have
-# no effect in stdio mode.
+# HTTP settings are applied in _run_http() via streamable_http_app().
 mcp = MCPServer(
     name="netmiko-mcp",
     instructions="MCP Server for Netmiko Network Automation",
@@ -282,8 +279,7 @@ def _run_http() -> None:
     Retrieves the ASGI application from MCPServer, optionally wraps it with RFC 6750
     bearer token authentication middleware, and hands it to uvicorn. The transport
     settings (path, stateless mode, JSON vs SSE responses, bind host) are passed to
-    streamable_http_app() here rather than at server construction. Passing host lets the
-    SDK auto-enable DNS-rebinding protection for loopback binds.
+    streamable_http_app() here rather than at server construction.
 
     TLS termination is intentionally left to a reverse proxy. Running uvicorn
     with raw TLS in application code is possible but adds certificate lifecycle
