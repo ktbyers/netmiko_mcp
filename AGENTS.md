@@ -9,6 +9,18 @@
 ## Architecture & Design
 
 - **Refactoring:** Major code refactoring must always be reviewed and approved prior to proceeding.
+- **Avoid parallel development (do not recreate existing code).** Before writing a new
+  module, class, or function, check whether the capability already exists and reuse or
+  extend it rather than building a duplicate implementation. Duplicated logic drifts out
+  of sync and creates conflicting sources of truth.
+- **Use `docs/code_structure.md` as the map of the codebase.** It summarizes the purpose
+  of every module under `src/netmiko_mcp/`, the classes each defines, and how those
+  modules and classes interact. Consult it first to locate where functionality belongs
+  and to avoid re-implementing something that already exists.
+- **Keep `docs/code_structure.md` up to date.** Whenever you add, remove, rename, or
+  materially change a module or class under `src/netmiko_mcp/` — or change how the pieces
+  relate — update `docs/code_structure.md` in the same change so it stays an accurate
+  reference. Treat it as part of the definition of done, not an afterthought.
 
 ## Known Issues / Future Refactors
 
