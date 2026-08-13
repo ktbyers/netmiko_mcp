@@ -10,6 +10,9 @@ loopback uvicorn server in a background thread, then exercise it two ways:
   ``http_json_response``).
 - The official MCP client drives a full ``initialize`` + tool call to prove tools work
   end-to-end over HTTP, not just stdio.
+- A modern ``2026-07-28`` per-request envelope (routing headers + ``params._meta``) drives
+  ``tools/list`` and ``tools/call`` to prove the stateless envelope introduced by that
+  revision works — a path the handshake-era (``2025-11-25``) tests never trigger.
 
 No network egress and no real devices are involved; only the ``ping`` tool is called.
 """
@@ -19,12 +22,25 @@ import socket
 import threading
 import time
 from collections.abc import Iterator
+from typing import Any
 
 import httpx
 import pytest
 import uvicorn
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from mcp.shared.inbound import (
+    CLIENT_CAPABILITIES_META_KEY,
+    CLIENT_INFO_META_KEY,
+    HEADER_MISMATCH,
+    INVALID_PARAMS,
+    MCP_METHOD_HEADER,
+    MCP_NAME_HEADER,
+    MCP_PROTOCOL_VERSION_HEADER,
+    PROTOCOL_VERSION_META_KEY,
+    UNSUPPORTED_PROTOCOL_VERSION,
+)
+from mcp_types.version import LATEST_MODERN_VERSION
 from starlette.types import ASGIApp
 
 from netmiko_mcp.server import mcp
@@ -115,6 +131,166 @@ def test_stateful_initialize_issues_session_id() -> None:
 
     assert resp.status_code == 200, resp.text
     assert "mcp-session-id" in {k.lower() for k in resp.headers}
+
+
+def _modern_meta() -> dict[str, Any]:
+    """Return the required modern-envelope ``params._meta`` block for the 2026-07-28 revision.
+
+    The modern per-request envelope carries the negotiated protocol version, client
+    capabilities, and client info in reserved ``_meta`` keys instead of relying on a prior
+    ``initialize`` handshake. These keys are mandatory; the server rejects the request
+    without them.
+    """
+    return {
+        PROTOCOL_VERSION_META_KEY: LATEST_MODERN_VERSION,
+        CLIENT_CAPABILITIES_META_KEY: {},
+        CLIENT_INFO_META_KEY: {"name": "netmiko-mcp-tests", "version": "0.0.0"},
+    }
+
+
+def _modern_headers(method: str, name: str | None = None) -> dict[str, str]:
+    """Return headers that route a request to the modern stateless envelope handler.
+
+    An ``mcp-protocol-version`` header outside the handshake set selects
+    ``handle_modern_request``; the routable ``mcp-method`` (and ``mcp-name`` for tool
+    calls) headers must agree with the JSON-RPC body or the server rejects the request,
+    which is what lets gateways route/rate-limit without parsing the body.
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        MCP_PROTOCOL_VERSION_HEADER: LATEST_MODERN_VERSION,
+        MCP_METHOD_HEADER: method,
+    }
+    if name is not None:
+        headers[MCP_NAME_HEADER] = name
+    return headers
+
+
+def _modern_body(
+    request_id: int, method: str, params: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Build a JSON-RPC request body carrying the modern-envelope ``_meta`` block."""
+    body_params: dict[str, Any] = dict(params or {})
+    body_params["_meta"] = _modern_meta()
+    return {"jsonrpc": "2.0", "id": request_id, "method": method, "params": body_params}
+
+
+def test_modern_envelope_tools_work_statelessly() -> None:
+    """A modern 2026-07-28 request (routing headers + params._meta envelope, no prior
+    initialize handshake) reaches handle_modern_request: tools/list returns the netmiko-mcp
+    catalog and tools/call ping returns 'pong', both with no Mcp-Session-Id header and an
+    application/json body.
+
+    This exercises the actual stateless envelope introduced by the 2026-07-28 revision,
+    which the handshake-era tests (protocolVersion 2025-11-25, no mcp-protocol-version
+    header) never trigger — those only exercise the legacy stateless path gated by the
+    http_stateless flag. A regression that broke modern-envelope handling, tool
+    registration, or the ping tool would fail this test.
+
+    The assertions on the modern result-envelope fields (``resultType`` and the cacheable-
+    discovery ``cacheScope`` hint) are what make this test discriminating: the legacy path
+    returns a bare ``{"tools": [...]}`` without them, so dropping the modern routing header
+    (and falling back to legacy) fails the test rather than silently passing.
+    """
+    app = _build_app(stateless=True, json_response=True)
+    with _serve(app) as base_url:
+        list_resp = httpx.post(
+            f"{base_url}/mcp",
+            json=_modern_body(1, "tools/list"),
+            headers=_modern_headers("tools/list"),
+            timeout=10,
+        )
+        ping_resp = httpx.post(
+            f"{base_url}/mcp",
+            json=_modern_body(2, "tools/call", {"name": "ping", "arguments": {}}),
+            headers=_modern_headers("tools/call", "ping"),
+            timeout=10,
+        )
+
+    assert list_resp.status_code == 200, list_resp.text
+    assert "mcp-session-id" not in {k.lower() for k in list_resp.headers}
+    assert list_resp.headers["content-type"].lower().startswith("application/json")
+    list_result = list_resp.json()["result"]
+    # Modern-only result-envelope fields: absent on the legacy path, so their presence
+    # proves handle_modern_request served this response rather than the legacy handler.
+    assert list_result["resultType"] == "complete"
+    assert "cacheScope" in list_result
+    tool_names = {t["name"] for t in list_result["tools"]}
+    assert {"ping", "send_show_command", "list_devices"}.issubset(tool_names)
+
+    assert ping_resp.status_code == 200, ping_resp.text
+    # Each modern request stands on its own: no session id is issued or required.
+    assert "mcp-session-id" not in {k.lower() for k in ping_resp.headers}
+    ping_result = ping_resp.json()["result"]
+    assert ping_result["resultType"] == "complete"
+    assert any(part.get("text") == "pong" for part in ping_result["content"])
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_code"),
+    [
+        # The modern envelope's params._meta must carry the reserved protocol-version and
+        # client-capabilities keys; each of these is a distinct INVALID_PARAMS rejection.
+        ("missing_meta", INVALID_PARAMS),
+        ("missing_protocol_version_key", INVALID_PARAMS),
+        ("missing_client_capabilities_key", INVALID_PARAMS),
+        # The routable mcp-method / mcp-name headers must agree with the JSON-RPC body so a
+        # gateway can trust them without parsing the body; a disagreement is HEADER_MISMATCH.
+        ("method_header_mismatch", HEADER_MISMATCH),
+        ("name_header_mismatch", HEADER_MISMATCH),
+        # A protocol version the server does not implement is a structured rejection, not a
+        # silent downgrade.
+        ("unsupported_protocol_version", UNSUPPORTED_PROTOCOL_VERSION),
+    ],
+)
+def test_modern_envelope_rejects_malformed_requests(case: str, expected_code: int) -> None:
+    """Each malformed modern request is rejected with HTTP 400 and the documented JSON-RPC
+    error code, and no session id is issued.
+
+    Every case starts from an otherwise-valid modern request and perturbs exactly one thing
+    (a missing envelope key, a routing header that disagrees with the body, or an
+    unsupported protocol version) so the observed error code is attributable to that single
+    defect. Asserting on the specific SDK error-code constants (rather than merely 'some
+    error') means a validator that silently accepted a malformed envelope — or returned the
+    wrong code — would fail this test.
+    """
+    body: dict[str, Any]
+    headers: dict[str, str]
+    if case == "missing_meta":
+        body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+        headers = _modern_headers("tools/list")
+    elif case == "missing_protocol_version_key":
+        meta = {k: v for k, v in _modern_meta().items() if k != PROTOCOL_VERSION_META_KEY}
+        body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"_meta": meta}}
+        headers = _modern_headers("tools/list")
+    elif case == "missing_client_capabilities_key":
+        meta = {k: v for k, v in _modern_meta().items() if k != CLIENT_CAPABILITIES_META_KEY}
+        body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"_meta": meta}}
+        headers = _modern_headers("tools/list")
+    elif case == "method_header_mismatch":
+        # Body says tools/list but the routing header claims tools/call.
+        body = _modern_body(1, "tools/list")
+        headers = _modern_headers("tools/call")
+    elif case == "name_header_mismatch":
+        # Body calls ping but the routing header names a different tool.
+        body = _modern_body(1, "tools/call", {"name": "ping", "arguments": {}})
+        headers = _modern_headers("tools/call", "not_ping")
+    elif case == "unsupported_protocol_version":
+        meta = {**_modern_meta(), PROTOCOL_VERSION_META_KEY: "2099-01-01"}
+        body = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"_meta": meta}}
+        headers = {**_modern_headers("tools/list"), MCP_PROTOCOL_VERSION_HEADER: "2099-01-01"}
+    else:  # pragma: no cover - guards against an unhandled parametrize id
+        raise AssertionError(f"unhandled case {case}")
+
+    app = _build_app(stateless=True, json_response=True)
+    with _serve(app) as base_url:
+        resp = httpx.post(f"{base_url}/mcp", json=body, headers=headers, timeout=10)
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"]["code"] == expected_code
+    # A rejected modern request must not issue a session id.
+    assert "mcp-session-id" not in {k.lower() for k in resp.headers}
 
 
 @pytest.mark.anyio
