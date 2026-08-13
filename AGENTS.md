@@ -13,17 +13,16 @@
 ## Known Issues / Future Refactors
 
 - **MCP server built at import time (no factory).** In `src/netmiko_mcp/server.py` the
-  `mcp = FastMCP(...)` object is constructed at module import time from the global
-  `settings` singleton, and every tool is registered via `@mcp.tool()` decorators against
-  that module-level object. This means the server's construction-time settings (e.g.
-  `stateless_http`, `json_response`, host/port/path) are frozen at import and cannot be
-  varied by unit tests without `importlib.reload` hacks. Longer term this could be
-  refactored into a `build_mcp_server(cfg)` factory that constructs and returns a
-  configured `FastMCP` (registering tools inside it), which would allow tests to build
-  servers with different configs and assert on them directly, and would make
-  construction-time config explicit rather than import-side-effect driven. Deferred for
-  now because it touches every tool definition and the decorator wiring (a structural
-  refactor requiring review).
+  `mcp = MCPServer(...)` object is constructed at module import time and every tool is
+  registered via `@mcp.tool()` decorators against that module-level object, so the server
+  name/instructions/version and the tool set are fixed at import. Note the HTTP transport
+  settings (`stateless_http`, `json_response`, host/port/path) are **not** construction-time
+  arguments under `mcp` 2.0.0: they are read from `settings` and passed to
+  `streamable_http_app()` inside `_run_http()` at call time, and are unit-tested there
+  (see the `_run_http` wiring tests). A `build_mcp_server(cfg)` factory could still make
+  construction explicit and ease testing of the import-time wiring, but it would touch
+  every tool definition (a structural refactor requiring review) and is lower priority now
+  that the config-driven settings are applied at runtime rather than frozen at import.
 
 ## Package Management
 
@@ -37,10 +36,10 @@
 
 ## MCP Tool Implementation Rules
 
-- **Every tool must be decorated with `@check_startup_error` (below `@mcp.tool()`).** This decorator short-circuits the tool and returns `_startup_error` if it is set, ensuring that a missing `command_file` (or any other startup failure) surfaces in-session through any tool call rather than being swallowed by the MCP client on stdio transport. `@mcp.tool()` must be the outermost decorator so FastMCP registers the correctly-wrapped function with the right schema. New tools that omit `@check_startup_error` will silently misbehave when the server is misconfigured.
+- **Every tool must be decorated with `@check_startup_error` (below `@mcp.tool()`).** This decorator short-circuits the tool and returns `_startup_error` if it is set, ensuring that a missing `command_file` (or any other startup failure) surfaces in-session through any tool call rather than being swallowed by the MCP client on stdio transport. `@mcp.tool()` must be the outermost decorator so MCPServer registers the correctly-wrapped function with the right schema. New tools that omit `@check_startup_error` will silently misbehave when the server is misconfigured.
 
   ```python
-  @mcp.tool()           # outermost — registers the tool with FastMCP
+  @mcp.tool()           # outermost — registers the tool with MCPServer
   @check_startup_error  # innermost — short-circuits on startup error
   def my_new_tool(...) -> str:
       ...
