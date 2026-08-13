@@ -86,7 +86,9 @@ exclude = [
 #           string "not found" sentinel; callers in server.py catch that ValueError.
 #   RUF010: `{str(e)}` in f-strings is kept over the `{e!s}` conversion flag for
 #           readability; the two are behaviorally identical.
-ignore = ["BLE001", "TRY004", "RUF010"]
+#   SIM102: collapsing nested `if`s into a single `and` condition can hurt readability
+#           when the conditions are non-trivial; keep nesting where it reads better.
+ignore = ["BLE001", "TRY004", "RUF010", "SIM102"]
 
 [tool.coverage.run]
 source = ["netmiko_mcp"]
