@@ -90,6 +90,12 @@ exclude = [
 #           when the conditions are non-trivial; keep nesting where it reads better.
 ignore = ["BLE001", "TRY004", "RUF010", "SIM102"]
 
+[tool.ruff.lint.isort]
+# Keep `import x as y` aliases in the same parenthesized block as their module's
+# other imports instead of isort's default of splitting each alias into its own
+# `from module import (...)` statement (more readable, fewer stray import blocks).
+combine-as-imports = true
+
 [tool.coverage.run]
 source = ["netmiko_mcp"]
 omit = ["tests/*"]

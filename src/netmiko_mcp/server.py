@@ -14,11 +14,7 @@ from netmiko_mcp.audit import configure_audit_logger, log_tool_invocation
 from netmiko_mcp.config import settings
 from netmiko_mcp.connection import (
     list_device_outputs as _list_device_outputs,
-)
-from netmiko_mcp.connection import (
     read_device_output as _read_device_output,
-)
-from netmiko_mcp.connection import (
     run_show_command,
     run_show_command_on_group,
 )
