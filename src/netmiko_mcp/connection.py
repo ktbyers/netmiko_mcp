@@ -186,7 +186,7 @@ def run_show_command(
             except NetmikoBaseException as e:
                 audit_context.log_outcome(OUTCOME_NETMIKO_ERROR, detail=str(e))
                 return f"Connection Error: {str(e)}"
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Unexpected exception during command execution — almost certainly
                 # a bug. The full traceback is written to the audit log detail
                 # field so developers can locate the source without a separate
@@ -239,7 +239,7 @@ def run_show_command(
     except NetmikoBaseException as e:
         audit_context.log_outcome(OUTCOME_NETMIKO_ERROR, detail=str(e))
         return f"Connection Error: {str(e)}"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         # Unexpected exception during connection establishment — almost certainly
         # a bug or an unknown OS/network error. The full traceback is written to
         # the audit log detail field so developers can locate the source.
@@ -390,7 +390,7 @@ def read_device_output(
     try:
         if not file_path.resolve().is_relative_to(base_dir.resolve()):
             return f"Security Error: Path resolves outside restricted directory (device: {device_name}, file: {filename})"
-    except Exception:  # pragma: no cover
+    except Exception:  # noqa: BLE001  # pragma: no cover
         return f"Security Error: Path resolves outside restricted directory (device: {device_name}, file: {filename})"
 
     if not device_dir.is_dir():
@@ -498,7 +498,7 @@ def run_show_command_on_group(
                     results[device_name] = f"Output saved as '{saved_filename}'."
                 else:
                     results[device_name] = output
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 results[device_name] = f"Execution Error: {str(e)}"
 
     return results

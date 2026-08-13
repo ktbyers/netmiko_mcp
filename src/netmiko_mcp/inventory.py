@@ -47,7 +47,7 @@ def get_device_params(device_name: str) -> dict[str, Any]:
     devices = obtain_devices(device_name)
     if isinstance(devices, str):
         # Netmiko returns a string error message if the device/group is not found
-        raise ValueError(devices)
+        raise ValueError(devices)  # noqa: TRY004
     if device_name not in devices:
         raise ValueError(f"Device '{device_name}' not found in inventory.")
     return devices[device_name]
@@ -61,7 +61,7 @@ def get_device_names(device_or_group: str) -> list[str]:
     _set_inventory_env_var()
     devices = obtain_devices(device_or_group)
     if isinstance(devices, str):
-        raise ValueError(devices)
+        raise ValueError(devices)  # noqa: TRY004
     return list(devices.keys())
 
 
@@ -75,7 +75,7 @@ def get_all_device_params(device_or_group: str) -> dict[str, Any]:
     _set_inventory_env_var()
     devices = obtain_devices(device_or_group)
     if isinstance(devices, str):
-        raise ValueError(devices)
+        raise ValueError(devices)  # noqa: TRY004
     return devices
 
 

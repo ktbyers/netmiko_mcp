@@ -78,17 +78,15 @@ exclude = [
 # If you want to be extra strict about line length in the linter:
 # extend-select = ["E501"]
 
-# Rules intentionally disabled (deliberate design decisions, not defects):
-#   BLE001: connection.py catches broad `Exception` on purpose so a device or command
-#           failure returns a structured error to the client and is recorded in the audit
-#           trail rather than crashing the server.
-#   TRY004: inventory.py raises `ValueError` (not `TypeError`) when Netmiko returns its
-#           string "not found" sentinel; callers in server.py catch that ValueError.
+# Rules intentionally disabled project-wide (pure style preferences, many possible sites):
 #   RUF010: `{str(e)}` in f-strings is kept over the `{e!s}` conversion flag for
 #           readability; the two are behaviorally identical.
 #   SIM102: collapsing nested `if`s into a single `and` condition can hurt readability
 #           when the conditions are non-trivial; keep nesting where it reads better.
-ignore = ["BLE001", "TRY004", "RUF010", "SIM102"]
+# BLE001 and TRY004 are kept ENABLED and suppressed with a per-line `# noqa` only at the
+# specific intentional sites (connection.py never-crash catch-alls; inventory.py ValueError
+# domain errors that server.py catches), so new accidental violations elsewhere are caught.
+ignore = ["RUF010", "SIM102"]
 
 [tool.ruff.lint.isort]
 # Keep `import x as y` aliases in the same parenthesized block as their module's
