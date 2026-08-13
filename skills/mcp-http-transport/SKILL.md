@@ -108,16 +108,9 @@ claude mcp add --transport http netmiko-mcp http://your-server:8000/mcp \
 
 ## SSE vs Streamable HTTP
 
-| | **SSE** (legacy) | **Streamable HTTP** (current) |
-|---|---|---|
-| MCP spec | Pre-2025-03-26 | 2025-03-26 onward (`2026-07-28` on `mcp` 2.0.0) |
-| Endpoints | Two (`/sse` + `/messages`) | One (`/mcp`) |
-| Server model | Stateful — holds open connections | Stateless per request by default (`http_stateless: true`); session-based mode available for handshake-era clients (`http_stateless: false`) |
-| CDN / proxy / load balancer | ✗ | ✓ (stateless mode needs no session affinity) |
-| Status | **Deprecated** — vendors dropping through mid-2026 | **Use for all new deployments** |
-
-`netmiko-mcp` implements Streamable HTTP natively and does not expose an SSE endpoint. By
-default it runs stateless (see `http_stateless` / `http_json_response` above).
+netmiko-mcp uses the current **Streamable HTTP** transport (single `/mcp` endpoint,
+stateless by default). It does **not** implement the legacy **SSE** transport (`/sse` +
+`/messages`, pre-`2025-03-26`), which is deprecated and stateful.
 
 ---
 
