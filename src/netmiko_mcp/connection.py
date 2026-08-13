@@ -128,7 +128,7 @@ def run_show_command(
         )
     except ValueError as e:
         audit_context.log_outcome(OUTCOME_INVENTORY_ERROR, detail=str(e))
-        return f"Inventory Error: {e!s}"
+        return f"Inventory Error: {str(e)}"
 
     # Optionally set up a BytesIO buffer as the session_log to capture the
     # channel read transcript. Network devices echo sent commands in the read
@@ -179,20 +179,20 @@ def run_show_command(
                 )
             except ReadException as e:
                 audit_context.log_outcome(OUTCOME_READ_ERROR, detail=str(e))
-                return f"Connection Error: Failed to read output from '{device_name}': {e!s}"
+                return f"Connection Error: Failed to read output from '{device_name}': {str(e)}"
             except WriteException as e:
                 audit_context.log_outcome(OUTCOME_WRITE_ERROR, detail=str(e))
-                return f"Connection Error: Failed to send command to '{device_name}': {e!s}"
+                return f"Connection Error: Failed to send command to '{device_name}': {str(e)}"
             except NetmikoBaseException as e:
                 audit_context.log_outcome(OUTCOME_NETMIKO_ERROR, detail=str(e))
-                return f"Connection Error: {e!s}"
+                return f"Connection Error: {str(e)}"
             except Exception as e:
                 # Unexpected exception during command execution — almost certainly
                 # a bug. The full traceback is written to the audit log detail
                 # field so developers can locate the source without a separate
                 # logging pipeline.
                 audit_context.log_outcome(OUTCOME_ERROR, detail=traceback.format_exc())
-                return f"Execution Error: An unexpected error occurred: {e!s}"
+                return f"Execution Error: An unexpected error occurred: {str(e)}"
 
             # Explicit save requested — persist output to disk regardless of size.
             # Takes priority over the threshold-based auto-save below.
@@ -235,16 +235,16 @@ def run_show_command(
         return f"Connection Error: Connection to device '{device_name}' timed out."
     except SSHException as e:
         audit_context.log_outcome(OUTCOME_SSH_ERROR, detail=str(e))
-        return f"Connection Error: SSH protocol error for '{device_name}': {e!s}"
+        return f"Connection Error: SSH protocol error for '{device_name}': {str(e)}"
     except NetmikoBaseException as e:
         audit_context.log_outcome(OUTCOME_NETMIKO_ERROR, detail=str(e))
-        return f"Connection Error: {e!s}"
+        return f"Connection Error: {str(e)}"
     except Exception as e:
         # Unexpected exception during connection establishment — almost certainly
         # a bug or an unknown OS/network error. The full traceback is written to
         # the audit log detail field so developers can locate the source.
         audit_context.log_outcome(OUTCOME_ERROR, detail=traceback.format_exc())
-        return f"Execution Error: An unexpected error occurred: {e!s}"
+        return f"Execution Error: An unexpected error occurred: {str(e)}"
 
 
 # Sequences rejected as substrings within any path component.
@@ -334,7 +334,7 @@ def list_device_outputs(device_or_group: str) -> dict[str, Any]:
     try:
         device_names = get_device_names(device_or_group)
     except ValueError as e:
-        return {"error": f"Inventory Error: {e!s}"}
+        return {"error": f"Inventory Error: {str(e)}"}
 
     base_dir = Path(settings.save_output_dir).expanduser()
     result: dict[str, Any] = {}
@@ -470,7 +470,7 @@ def run_show_command_on_group(
     try:
         all_device_params = get_all_device_params(device_or_group)
     except ValueError as e:
-        return {"error": f"Inventory Error: {e!s}"}
+        return {"error": f"Inventory Error: {str(e)}"}
 
     results: dict[str, Any] = {}
 
@@ -499,6 +499,6 @@ def run_show_command_on_group(
                 else:
                     results[device_name] = output
             except Exception as e:
-                results[device_name] = f"Execution Error: {e!s}"
+                results[device_name] = f"Execution Error: {str(e)}"
 
     return results

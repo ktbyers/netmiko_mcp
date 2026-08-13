@@ -84,7 +84,9 @@ exclude = [
 #           trail rather than crashing the server.
 #   TRY004: inventory.py raises `ValueError` (not `TypeError`) when Netmiko returns its
 #           string "not found" sentinel; callers in server.py catch that ValueError.
-ignore = ["BLE001", "TRY004"]
+#   RUF010: `{str(e)}` in f-strings is kept over the `{e!s}` conversion flag for
+#           readability; the two are behaviorally identical.
+ignore = ["BLE001", "TRY004", "RUF010"]
 
 [tool.coverage.run]
 source = ["netmiko_mcp"]
