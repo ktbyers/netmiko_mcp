@@ -35,6 +35,7 @@ from mcp.shared.inbound import (
     CLIENT_INFO_META_KEY,
     HEADER_MISMATCH,
     INVALID_PARAMS,
+    INVALID_REQUEST,
     MCP_METHOD_HEADER,
     MCP_NAME_HEADER,
     MCP_PROTOCOL_VERSION_HEADER,
@@ -347,6 +348,69 @@ def test_modern_envelope_stays_json_when_json_response_disabled() -> None:
     assert resp.status_code == 200, resp.text
     assert resp.headers["content-type"].lower().startswith("application/json")
     assert resp.json()["result"]["resultType"] == "complete"
+
+
+def test_stateless_serves_independent_requests_without_session() -> None:
+    """The stateless transport answers each request on its own — no prior initialize
+    handshake, no shared session — even across separate client connections.
+
+    Two standalone tools/call requests are sent from two independent httpx clients, each
+    with its own connection pool, so there is no connection or session affinity carried
+    between them. Both succeed and neither is issued a session id. This is the property a
+    round-robin load balancer or a serverless deployment relies on: request N+1 must not
+    depend on state established by request N. The paired
+    test_stateful_rejects_standalone_request_without_session shows the same standalone
+    request is refused when statelessness is off, so this test fails if that property
+    silently regresses to stateful.
+    """
+    app = _build_app(stateless=True, json_response=True)
+    responses: list[httpx.Response] = []
+    with _serve(app) as base_url:
+        for request_id in (1, 2):
+            body = {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {"name": "ping", "arguments": {}},
+            }
+            # A fresh client per request => a distinct connection, so a success cannot rely
+            # on session/connection affinity established by the other request.
+            with httpx.Client() as client:
+                responses.append(
+                    client.post(f"{base_url}/mcp", json=body, headers=_INIT_HEADERS, timeout=10)
+                )
+
+    for resp in responses:
+        assert resp.status_code == 200, resp.text
+        assert "mcp-session-id" not in {k.lower() for k in resp.headers}
+        content = resp.json()["result"]["content"]
+        assert any(part.get("text") == "pong" for part in content)
+
+
+def test_stateful_rejects_standalone_request_without_session() -> None:
+    """Contrast for test_stateless_serves_independent_requests_without_session: with
+    statelessness off, a standalone tools/call that carries no session id (and performed no
+    initialize handshake) is refused with a 'Missing session ID' error.
+
+    This is what makes the stateless test meaningful — the success there is attributable to
+    statelessness removing the per-session requirement, not to the server never needing a
+    session. The two tests send an identical request and differ only in the http_stateless
+    flag, so the opposite outcomes are only explainable by that flag.
+    """
+    app = _build_app(stateless=False, json_response=True)
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "ping", "arguments": {}},
+    }
+    with _serve(app) as base_url, httpx.Client() as client:
+        resp = client.post(f"{base_url}/mcp", json=body, headers=_INIT_HEADERS, timeout=10)
+
+    assert resp.status_code == 400, resp.text
+    error = resp.json()["error"]
+    assert error["code"] == INVALID_REQUEST
+    assert "session" in error["message"].lower()
 
 
 @pytest.mark.anyio
