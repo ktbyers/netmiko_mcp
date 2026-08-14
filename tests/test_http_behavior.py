@@ -73,8 +73,12 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _build_app(*, stateless: bool, json_response: bool) -> ASGIApp:
+def _build_app(*, stateless: bool, json_response: bool, host: str = "127.0.0.1") -> ASGIApp:
     """Build the Streamable HTTP ASGI app with the given transport settings.
+
+    ``host`` is the value server.py passes to streamable_http_app(); it selects the SDK's
+    transport-security posture (a loopback value auto-enables DNS-rebinding Host/Origin
+    checks) and is independent of the address uvicorn actually binds to in _serve().
 
     Auth middleware is intentionally omitted: these tests target transport behavior, not
     bearer-token enforcement (which is covered in test_http_auth / test_http_server).
@@ -83,7 +87,7 @@ def _build_app(*, stateless: bool, json_response: bool) -> ASGIApp:
         streamable_http_path="/mcp",
         json_response=json_response,
         stateless_http=stateless,
-        host="127.0.0.1",
+        host=host,
     )
 
 
@@ -411,6 +415,62 @@ def test_stateful_rejects_standalone_request_without_session() -> None:
     error = resp.json()["error"]
     assert error["code"] == INVALID_REQUEST
     assert "session" in error["message"].lower()
+
+
+def test_localhost_bind_rejects_foreign_host_and_origin() -> None:
+    """On a loopback bind the SDK auto-enables DNS-rebinding protection: a request whose
+    Host or Origin is not localhost is refused (421 / 403), while a legitimate localhost
+    Host is served (200).
+
+    Passing host=127.0.0.1 to streamable_http_app() is what activates this in server.py.
+    The positive control (default Host -> 200) makes the rejections meaningful rather than a
+    blanket refusal, and the paired non-localhost test shows the behavior is driven by the
+    host bind. This is a browser-only attack surface (Host/Origin are forbidden headers a
+    page cannot forge), so it is defense-in-depth behind the bearer token rather than a
+    control a headless server-to-server deployment relies on.
+    """
+    app = _build_app(stateless=True, json_response=True, host="127.0.0.1")
+    with _serve(app) as base_url:
+        # httpx derives Host from base_url (127.0.0.1:<port>), an allowed value.
+        allowed = httpx.post(f"{base_url}/mcp", json=_INIT_BODY, headers=_INIT_HEADERS, timeout=10)
+        foreign_host = httpx.post(
+            f"{base_url}/mcp",
+            json=_INIT_BODY,
+            headers={**_INIT_HEADERS, "Host": "evil.example.com"},
+            timeout=10,
+        )
+        foreign_origin = httpx.post(
+            f"{base_url}/mcp",
+            json=_INIT_BODY,
+            headers={**_INIT_HEADERS, "Origin": "http://evil.example.com"},
+            timeout=10,
+        )
+
+    assert allowed.status_code == 200, allowed.text
+    assert foreign_host.status_code == 421
+    assert foreign_origin.status_code == 403
+
+
+def test_non_localhost_bind_does_not_auto_enable_rebinding_protection() -> None:
+    """The auto-protection is keyed on a loopback bind. With host=0.0.0.0 the SDK does not
+    enable it, so a foreign Host is accepted (200).
+
+    This documents the operational reality that an operator binding a routable interface (or
+    fronting the server with a reverse proxy that forwards a non-localhost Host) is relying
+    on the bearer token / TLS rather than Host validation. It is also the contrast that
+    proves the localhost test's 421/403 rejections come from the host bind: a failure here
+    would mean the SDK tightened its defaults, which is worth re-evaluating deliberately.
+    """
+    app = _build_app(stateless=True, json_response=True, host="0.0.0.0")
+    with _serve(app) as base_url:
+        resp = httpx.post(
+            f"{base_url}/mcp",
+            json=_INIT_BODY,
+            headers={**_INIT_HEADERS, "Host": "evil.example.com"},
+            timeout=10,
+        )
+
+    assert resp.status_code == 200, resp.text
 
 
 @pytest.mark.anyio
