@@ -475,10 +475,14 @@ def test_non_localhost_bind_does_not_auto_enable_rebinding_protection() -> None:
 
 @pytest.mark.anyio
 async def test_stateless_http_client_ping_and_tools() -> None:
-    """End-to-end over HTTP with the official MCP client and the default stateless/JSON
-    settings: initialize succeeds, ping returns 'pong', and the tool catalog contains the
-    netmiko-mcp tools. Proves tools work over HTTP, not just stdio. (Statelessness on the
-    wire is asserted separately in test_stateless_initialize_issues_no_session_id.)"""
+    """End-to-end over HTTP with the official MCP client against a stateless-configured app:
+    initialize succeeds, ping returns 'pong', and the tool catalog contains the netmiko-mcp
+    tools. Proves tools work over HTTP, not just stdio.
+
+    Scope: ClientSession.initialize() uses the 2025-11-25 handshake, so this covers the
+    legacy path against a stateless-configured app, not the modern 2026-07-28 envelope
+    (tested in test_modern_envelope_tools_work_statelessly).
+    """
     app = _build_app(stateless=True, json_response=True)
     with _serve(app) as base_url:
         async with streamable_http_client(f"{base_url}/mcp") as (read, write):

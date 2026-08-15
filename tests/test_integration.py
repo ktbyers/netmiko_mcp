@@ -533,9 +533,13 @@ async def test_live_http_stateless_transport(
 ) -> None:
     """End-to-end over the streamable-http transport against a real device.
 
-    Verifies bearer-token enforcement, stateless wire behavior (no Mcp-Session-Id, JSON
-    responses) and that a real show command executes through the HTTP path — the HTTP
-    transport is otherwise only exercised by mocked/in-process unit tests.
+    Verifies bearer-token enforcement, legacy-handshake stateless wire behavior
+    (initialize), and that a real show command executes through the HTTP path.
+
+    Both the raw probe and the official client negotiate the 2025-11-25 handshake, so with
+    stateless_http=True no Mcp-Session-Id is issued and responses are application/json. This
+    test does not exercise the modern 2026-07-28 per-request envelope, which is covered
+    in-process by tests/test_http_behavior.py.
     """
     base_url, token = mcp_http_server
     url = f"{base_url}/mcp"
