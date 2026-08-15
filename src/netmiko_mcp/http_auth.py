@@ -32,10 +32,9 @@ class BearerTokenMiddleware:
         self._token_bytes = token.encode("utf-8")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http":
-            if not self._is_authorized(scope):
-                await self._send_401(send)
-                return
+        if scope["type"] == "http" and not self._is_authorized(scope):
+            await self._send_401(send)
+            return
         await self._app(scope, receive, send)
 
     def _is_authorized(self, scope: Scope) -> bool:

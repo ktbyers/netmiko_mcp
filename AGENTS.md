@@ -9,6 +9,32 @@
 ## Architecture & Design
 
 - **Refactoring:** Major code refactoring must always be reviewed and approved prior to proceeding.
+- **Avoid parallel development (do not recreate existing code).** Before writing a new
+  module, class, or function, check whether the capability already exists and reuse or
+  extend it rather than building a duplicate implementation. Duplicated logic drifts out
+  of sync and creates conflicting sources of truth.
+- **Use `docs/code_structure.md` as the map of the codebase.** It summarizes the purpose
+  of every module under `src/netmiko_mcp/`, the classes each defines, and how those
+  modules and classes interact. Consult it first to locate where functionality belongs
+  and to avoid re-implementing something that already exists.
+- **Keep `docs/code_structure.md` up to date.** Whenever you add, remove, rename, or
+  materially change a module or class under `src/netmiko_mcp/` — or change how the pieces
+  relate — update `docs/code_structure.md` in the same change so it stays an accurate
+  reference. Treat it as part of the definition of done, not an afterthought.
+
+## Known Issues / Future Refactors
+
+- **MCP server built at import time (no factory).** In `src/netmiko_mcp/server.py` the
+  `mcp = MCPServer(...)` object is constructed at module import time and every tool is
+  registered via `@mcp.tool()` decorators against that module-level object, so the server
+  name/instructions/version and the tool set are fixed at import. Note the HTTP transport
+  settings (`stateless_http`, `json_response`, host/port/path) are **not** construction-time
+  arguments under `mcp` 2.0.0: they are read from `settings` and passed to
+  `streamable_http_app()` inside `_run_http()` at call time, and are unit-tested there
+  (see the `_run_http` wiring tests). A `build_mcp_server(cfg)` factory could still make
+  construction explicit and ease testing of the import-time wiring, but it would touch
+  every tool definition (a structural refactor requiring review) and is lower priority now
+  that the config-driven settings are applied at runtime rather than frozen at import.
 
 ## Package Management
 
@@ -22,10 +48,10 @@
 
 ## MCP Tool Implementation Rules
 
-- **Every tool must be decorated with `@check_startup_error` (below `@mcp.tool()`).** This decorator short-circuits the tool and returns `_startup_error` if it is set, ensuring that a missing `command_file` (or any other startup failure) surfaces in-session through any tool call rather than being swallowed by the MCP client on stdio transport. `@mcp.tool()` must be the outermost decorator so FastMCP registers the correctly-wrapped function with the right schema. New tools that omit `@check_startup_error` will silently misbehave when the server is misconfigured.
+- **Every tool must be decorated with `@check_startup_error` (below `@mcp.tool()`).** This decorator short-circuits the tool and returns `_startup_error` if it is set, ensuring that a missing `command_file` (or any other startup failure) surfaces in-session through any tool call rather than being swallowed by the MCP client on stdio transport. `@mcp.tool()` must be the outermost decorator so MCPServer registers the correctly-wrapped function with the right schema. New tools that omit `@check_startup_error` will silently misbehave when the server is misconfigured.
 
   ```python
-  @mcp.tool()           # outermost — registers the tool with FastMCP
+  @mcp.tool()           # outermost — registers the tool with MCPServer
   @check_startup_error  # innermost — short-circuits on startup error
   def my_new_tool(...) -> str:
       ...
@@ -46,6 +72,21 @@
    before committing.
 - `uv run --frozen mypy src tests` must 100% pass before committing.
 - `uv run --frozen pytest -v` must 100% pass before committing. Note: Live integration tests are protected via `@pytest.mark.skipif(not os.environ.get("RUN_LIVE_TESTS"), ...)`.
+- **Tests must be able to fail.** Avoid tautological "a-is-a" assertions that pass
+  regardless of whether the underlying code is correct. A test that asserts a value equals
+  the field's own default, while also relying on that default to produce the value, proves
+  nothing. Design each assertion so that a real bug in the code under test would make it
+  fail:
+  - When verifying that a value is read from a config file (or any lower-precedence
+    source), set that source to a value **different from the default**, so a passing
+    assertion proves the source was actually consulted rather than the default leaking
+    through.
+  - When verifying precedence/override, make the higher-precedence source's value differ
+    from both the default and the lower-precedence source's value, so the observed result
+    is only explainable by the correct precedence.
+  - Prefer asserting on the specific behavior/output, not on inputs echoed straight back.
+  - When practical, sanity-check a new test by mentally (or temporarily) mutating the code
+    under test and confirming the test would fail; then revert the mutation.
 - **Comment Style:** Avoid using numbered or bulleted lists in inline code comments (e.g., `# 1. This part` or `# 2. Some other part`). Write comments as descriptive paragraphs or clear, individual sentences without numeric or alphabetic step indicators.
 
 ## Skills Documentation

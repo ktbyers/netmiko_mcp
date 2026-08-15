@@ -27,7 +27,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from netmiko_mcp.config import settings
 
@@ -277,7 +277,7 @@ def log_connection_outcome(
     device: str,
     command: str,
     outcome: str,
-    detail: Optional[str] = None,
+    detail: str | None = None,
     textfsm_parse_failed: bool = False,
 ) -> None:
     """Emit an audit record for a connection and command execution outcome.
@@ -393,7 +393,7 @@ class CommandAuditContext:
     def log_outcome(
         self,
         outcome: str,
-        detail: Optional[str] = None,
+        detail: str | None = None,
         textfsm_parse_failed: bool = False,
     ) -> None:
         """Emit a connection_outcome audit record for this invocation."""

@@ -3,3 +3,7 @@ inventory_type: "netmiko_tools"
 inventory_file: "tests/etc/.netmiko.yml"
 command_file: "tests/etc/commands.yml"
 allow_pipe: true
+# HTTP transport statelessness/response-format defaults (streamable-http only; no effect
+# under stdio). The live HTTP test sets transport/host/port/token via NETMIKO_MCP_* env.
+# http_stateless: true
+# http_json_response: true

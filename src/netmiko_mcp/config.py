@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Literal, Optional, Tuple, Type
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import (
@@ -22,7 +22,7 @@ class McpConfig(BaseSettings):
     )
 
     inventory_type: Literal["netmiko_tools"] = Field(default="netmiko_tools")
-    inventory_file: Optional[str] = Field(default=None)
+    inventory_file: str | None = Field(default=None)
     command_file: str = Field(default="~/commands.yml")
     allow_pipe: bool = Field(default=False)
     # Characters permitted in commands. The pipe character '|' is intentionally
@@ -44,6 +44,11 @@ class McpConfig(BaseSettings):
     http_port: int = Field(default=8000)
     http_path: str = Field(default="/mcp")
     http_auth_enabled: bool = Field(default=True)
+    # Streamable-http only (no effect under stdio); modern clients are always stateless
+    # and False only gives legacy clients session state ID.
+    http_stateless: bool = Field(default=True)
+    # True returns a single application/json body instead of an SSE stream.
+    http_json_response: bool = Field(default=True)
 
     # Audit logging
     audit_log_enabled: bool = Field(default=True)
@@ -70,12 +75,12 @@ class McpConfig(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         """
         Define the exact priority order for settings sources.
         Environment variables (NETMIKO_MCP_*) always take precedence over the YAML

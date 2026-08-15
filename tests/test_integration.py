@@ -4,8 +4,26 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx
+import httpx2
 import pytest
 from mcp.client.session import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+
+_INIT_BODY = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {},
+        "clientInfo": {"name": "netmiko-mcp-tests", "version": "0.0.0"},
+    },
+}
+_INIT_HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+}
 
 
 @pytest.mark.anyio
@@ -503,6 +521,75 @@ async def test_read_device_output_pagination(
     assert page1_lines[1:] != page2_lines[1:], (
         "Pages 1 and 2 returned identical content — pagination is not advancing"
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    not os.environ.get("RUN_LIVE_TESTS"),
+    reason="Requires external network access and real credentials. Set RUN_LIVE_TESTS=1 to run.",
+)
+async def test_live_http_stateless_transport(
+    mcp_http_server: tuple[str, str], test_config: dict[str, Any]
+) -> None:
+    """End-to-end over the streamable-http transport against a real device.
+
+    Verifies bearer-token enforcement, legacy-handshake stateless wire behavior
+    (initialize), and that a real show command executes through the HTTP path.
+
+    Both the raw probe and the official client negotiate the 2025-11-25 handshake, so with
+    stateless_http=True no Mcp-Session-Id is issued and responses are application/json. This
+    test does not exercise the modern 2026-07-28 per-request envelope, which is covered
+    in-process by tests/test_http_behavior.py.
+    """
+    base_url, token = mcp_http_server
+    url = f"{base_url}/mcp"
+
+    async with httpx.AsyncClient(timeout=10) as probe:
+        # Missing bearer token is rejected.
+        resp = await probe.post(url, json=_INIT_BODY, headers=_INIT_HEADERS)
+        assert resp.status_code == 401
+
+        # Wrong bearer token is rejected.
+        resp = await probe.post(
+            url,
+            json=_INIT_BODY,
+            headers={**_INIT_HEADERS, "Authorization": "Bearer wrong-token"},
+        )
+        assert resp.status_code == 401
+
+        # Valid token: initialize succeeds, statelessly (no session id) with a JSON response.
+        resp = await probe.post(
+            url,
+            json=_INIT_BODY,
+            headers={**_INIT_HEADERS, "Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert "mcp-session-id" not in {k.lower() for k in resp.headers}
+        assert resp.headers["content-type"].lower().startswith("application/json")
+
+    # Functional round-trip via the official MCP client with the auth header.
+    device = test_config["test_device"]
+    auth_client = httpx2.AsyncClient(headers={"Authorization": f"Bearer {token}"}, timeout=60)
+    async with (
+        auth_client,
+        streamable_http_client(url, http_client=auth_client) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+
+        ping_result = await session.call_tool("ping", arguments={})
+        assert getattr(ping_result.content[0], "text", "") == "pong"
+
+        cmd_result = await session.call_tool(
+            "send_show_command",
+            arguments={
+                "device_name": device,
+                "command": "show version",
+                "use_textfsm": False,
+            },
+        )
+        output = getattr(cmd_result.content[0], "text", "")
+        assert test_config["show_version_contains"] in output
 
 
 @pytest.mark.anyio

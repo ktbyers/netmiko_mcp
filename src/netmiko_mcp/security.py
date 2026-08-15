@@ -150,12 +150,12 @@ class TrieNode:
     """
 
     def __init__(self) -> None:
-        self.children: dict[str, "TrieNode"] = {}
+        self.children: dict[str, TrieNode] = {}
         self.word_end: bool = False
         self.final_word: bool = False
         self.glob_suffix: bool = False
         self.glob_next_word: bool = False
-        self.next_word_trie: "TrieNode | None" = None
+        self.next_word_trie: TrieNode | None = None
 
 
 class AbbreviationDenyFilter:

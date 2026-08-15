@@ -33,6 +33,8 @@ http_host: "127.0.0.1"                  # default: 127.0.0.1
 http_port: 8000                          # default: 8000
 http_path: "/mcp"                        # default: /mcp
 http_auth_enabled: true                  # default: true (bearer token is env-only: NETMIKO_MCP_HTTP_BEARER_TOKEN)
+http_stateless: true                     # default: true (stateless per request; LB/serverless friendly; streamable-http only)
+http_json_response: true                 # default: true (application/json responses instead of SSE; streamable-http only)
 audit_log_enabled: true                  # default: true
 audit_log_destination: "file"            # default: file (file | syslog | both)
 audit_log_file: "~/.netmiko_mcp_audit.log"  # default: ~/.netmiko_mcp_audit.log

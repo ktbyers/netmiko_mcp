@@ -1,8 +1,14 @@
 import os
+import secrets
+import socket
+import subprocess
 import sys
+import time
+from collections.abc import AsyncGenerator, Iterator
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any
 
+import httpx
 import pytest
 import yaml
 from mcp.client.session import ClientSession
@@ -54,10 +60,12 @@ def _make_mcp_client(
             env=test_env,
         )
 
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                yield session
+        async with (
+            stdio_client(server_params) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            yield session
 
     return _client()
 
@@ -97,3 +105,65 @@ async def mcp_client_low_threshold() -> AsyncGenerator[ClientSession, None]:
     _require_inventory()
     async for client in _make_mcp_client({"NETMIKO_MCP_SAVE_THRESHOLD": "5"}):
         yield client
+
+
+def _free_port() -> int:
+    """Return an unused TCP port on the loopback interface."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+@pytest.fixture
+def mcp_http_server() -> Iterator[tuple[str, str]]:
+    """Start the server as a subprocess on the streamable-http transport and yield
+    ``(base_url, bearer_token)``.
+
+    A random bearer token is generated per run and passed only via the subprocess
+    environment (never logged). The same test config/inventory/command wiring as the
+    stdio fixtures is reused. The fixture waits until the HTTP stack answers before
+    yielding, and terminates the subprocess on teardown.
+    """
+    _require_inventory()
+    token = secrets.token_hex(32)
+    port = _free_port()
+    base_url = f"http://127.0.0.1:{port}"
+
+    test_env = {**os.environ}
+    test_env["NETMIKO_MCP_CONFIG"] = str(_ETC_DIR / "netmiko-mcp.yml")
+    test_env["NETMIKO_MCP_INVENTORY_FILE"] = str(_ETC_DIR / ".netmiko.yml")
+    test_env["NETMIKO_MCP_COMMAND_FILE"] = str(_ETC_DIR / "commands.yml")
+    test_env["NETMIKO_MCP_TRANSPORT"] = "streamable-http"
+    test_env["NETMIKO_MCP_HTTP_HOST"] = "127.0.0.1"
+    test_env["NETMIKO_MCP_HTTP_PORT"] = str(port)
+    test_env["NETMIKO_MCP_HTTP_PATH"] = "/mcp"
+    test_env["NETMIKO_MCP_HTTP_BEARER_TOKEN"] = token
+
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "from netmiko_mcp.server import main; main()"],
+        env=test_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    try:
+        deadline = time.monotonic() + 20
+        while True:
+            if proc.poll() is not None:
+                out = proc.stdout.read().decode(errors="replace") if proc.stdout else ""
+                raise RuntimeError(f"HTTP server subprocess exited early:\n{out}")
+            try:
+                # Any HTTP response (e.g. 401 from the auth middleware) means the ASGI
+                # stack is serving and ready to accept MCP requests.
+                httpx.get(f"{base_url}/mcp", timeout=0.5)
+                break
+            except httpx.HTTPError:
+                if time.monotonic() > deadline:
+                    raise RuntimeError("HTTP server did not become ready in time")
+                time.sleep(0.1)
+        yield base_url, token
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:  # pragma: no cover
+            proc.kill()

@@ -14,7 +14,6 @@ import pytest
 
 from netmiko_mcp.server import _get_bearer_token, _run_http, _validate_startup, main
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -185,6 +184,68 @@ def test_run_http_no_auth_middleware_when_disabled(
     mock_uvicorn_run.assert_called_once()
     app_arg = mock_uvicorn_run.call_args[0][0]
     assert not isinstance(app_arg, BearerTokenMiddleware)
+
+
+@patch("netmiko_mcp.server.uvicorn.run")
+@patch("netmiko_mcp.server.mcp")
+@patch("netmiko_mcp.server.settings")
+def test_run_http_forwards_transport_settings_to_streamable_http_app(
+    mock_settings: Any, mock_mcp: Any, mock_uvicorn_run: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_run_http() must forward http_path, http_json_response, http_stateless and http_host
+    into mcp.streamable_http_app() so the operator's stateless / response-format / bind
+    configuration actually reaches the transport.
+
+    The settings are deliberately set to NON-default values (a custom path, stateless
+    False, json_response False) so a passing assertion proves the values were read from
+    settings rather than the defaults or hard-coded literals leaking through: if the code
+    dropped a kwarg or hard-coded True, the exact-match assertion would fail.
+    """
+    mock_settings.http_host = "127.0.0.1"
+    mock_settings.http_port = 8000
+    mock_settings.http_path = "/custom-mcp"
+    mock_settings.http_stateless = False
+    mock_settings.http_json_response = False
+    mock_settings.http_auth_enabled = False
+    monkeypatch.delenv("NETMIKO_MCP_HTTP_BEARER_TOKEN", raising=False)
+
+    _run_http()
+
+    mock_mcp.streamable_http_app.assert_called_once_with(
+        streamable_http_path="/custom-mcp",
+        json_response=False,
+        stateless_http=False,
+        host="127.0.0.1",
+    )
+    # The app handed to uvicorn is exactly what streamable_http_app() returned (auth off).
+    mock_uvicorn_run.assert_called_once()
+    assert mock_uvicorn_run.call_args[0][0] is mock_mcp.streamable_http_app.return_value
+
+
+@patch("netmiko_mcp.server.uvicorn.run")
+@patch("netmiko_mcp.server.mcp")
+@patch("netmiko_mcp.server.settings")
+def test_run_http_forwards_stateless_true_json_true(
+    mock_settings: Any, mock_mcp: Any, mock_uvicorn_run: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Complementary case: stateless True / json_response True are forwarded verbatim, so
+    the assertion distinguishes the two boolean states rather than always seeing one."""
+    mock_settings.http_host = "0.0.0.0"
+    mock_settings.http_port = 8000
+    mock_settings.http_path = "/mcp"
+    mock_settings.http_stateless = True
+    mock_settings.http_json_response = True
+    mock_settings.http_auth_enabled = False
+    monkeypatch.delenv("NETMIKO_MCP_HTTP_BEARER_TOKEN", raising=False)
+
+    _run_http()
+
+    mock_mcp.streamable_http_app.assert_called_once_with(
+        streamable_http_path="/mcp",
+        json_response=True,
+        stateless_http=True,
+        host="0.0.0.0",
+    )
 
 
 # ---------------------------------------------------------------------------

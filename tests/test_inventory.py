@@ -1,7 +1,8 @@
-import os
 import json
+import os
 from typing import Any
 from unittest.mock import patch
+
 import pytest
 
 from netmiko_mcp.inventory import (

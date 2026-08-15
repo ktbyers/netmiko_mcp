@@ -1,6 +1,6 @@
 # Netmiko MCP - TODO
 
-Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTURE.md`.
+Items are grouped by area.
 
 ---
 
@@ -12,19 +12,19 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ---
 
-## Connection & Performance (`connection.py` / `ARCHITECTURE.md`)
+## Connection & Performance (`connection.py`)
 
-- **No connection pooling** `[ARCH §2]` - A new SSH connection is opened for every
+- **No connection pooling** - A new SSH connection is opened for every
   `send_show_command` call. SSH handshakes take 3-10 seconds per device. A connection
   pool/cache with a configurable TTL (e.g. 60 seconds of inactivity) would dramatically
   improve response times for multi-step LLM interactions.
 
-- **No stale session detection** `[ARCH §2]` - No mechanism to detect, purge, or
+- **No stale session detection** - No mechanism to detect, purge, or
   re-establish SSH connections that have silently dropped.
 
 ---
 
-## Output Handling (`connection.py` / `ARCHITECTURE.md`)
+## Output Handling (`connection.py`)
 
 - **`grep_device_output` tool not implemented** - Once output is saved to disk, the LLM
   has no way to search it without reading the whole file page by page. A
@@ -36,15 +36,15 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ## Server Tools (`server.py`)
 
-- **No read-write / config mode** `[ARCH §1]` - `send_config_set` is intentionally absent.
+- **No read-write / config mode** - `send_config_set` is intentionally absent.
   A separate opt-in `send_config_command` tool behind a `allow_config: false` config flag
   would let operators explicitly unlock configuration capability when needed.
 
-- **No blast radius limits** `[ARCH §1]` - No constraint on how many devices the LLM can
+- **No blast radius limits** - No constraint on how many devices the LLM can
   touch in a single session or time window. A `max_devices_per_request` config setting
   would limit the damage from a runaway agent.
 
-- **No human-in-the-loop for config changes** `[ARCH §1]` - For any future config tool,
+- **No human-in-the-loop for config changes** - For any future config tool,
   consider a staging/approval step: the server generates the config diff, pauses, and
   requires explicit user confirmation before pushing.
 
@@ -66,7 +66,7 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
   config is a `Literal["netmiko_tools"]` - only one value is valid. Future inventory
   backends (NetBox, Nautobot, CSV, plain YAML) are not yet supported.
 
-- **SSH key / SSH agent support not documented** `[ARCH §4]` - Netmiko supports SSH keys
+- **SSH key / SSH agent support not documented** - Netmiko supports SSH keys
   and agents natively, but there is no documentation or explicit handling in the MCP layer
   to guide users toward keyring-based auth instead of encrypted passwords.
 
@@ -111,9 +111,9 @@ Items are grouped by area. Items marked **[ARCH]** are sourced from `ARCHITECTUR
 
 ---
 
-## MCP Protocol Features (`server.py` / `ARCHITECTURE.md`)
+## MCP Protocol Features (`server.py`)
 
-- **No MCP Resources** `[ARCH §5]` - The device inventory could be exposed as an MCP
+- **No MCP Resources** - The device inventory could be exposed as an MCP
   Resource (read-only data) rather than only as a Tool call. This would let clients
   discover available devices without consuming tool-call budget.
 

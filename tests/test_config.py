@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import pytest
 from pydantic_core import ValidationError
 
@@ -22,6 +23,44 @@ def test_mcp_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.max_workers == 10
     assert config.save_output_dir == "~/.netmiko_mcp_tmp"
     assert config.save_threshold == 1000
+    assert config.http_stateless is True
+    assert config.http_json_response is True
+
+
+@pytest.mark.anyio
+async def test_mcp_config_http_stateless_yaml_and_env_precedence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """http_stateless / http_json_response must be read from YAML and be overridable by
+    env vars.
+
+    Both fields default to True. The YAML deliberately sets the NON-default value
+    (false) so that a passing assertion proves the YAML was actually parsed rather than
+    the default value leaking through (a value of True here would pass even if YAML
+    loading were broken). The env override is then set to the opposite of the YAML value
+    (true) so that a passing assertion proves env precedence over a *differing* YAML
+    value — if env were ignored, the result would fall back to the YAML false and the
+    assertion would fail.
+    """
+    cfg_file = tmp_path / "test-config.yml"
+    cfg_file.write_text("http_stateless: false\nhttp_json_response: false\n", encoding="utf-8")
+    monkeypatch.setenv("NETMIKO_MCP_CONFIG", str(cfg_file))
+    # Ensure no ambient env var masks the YAML read for this first assertion.
+    monkeypatch.delenv("NETMIKO_MCP_HTTP_STATELESS", raising=False)
+    monkeypatch.delenv("NETMIKO_MCP_HTTP_JSON_RESPONSE", raising=False)
+
+    config = McpConfig()
+    # False is the non-default: only reachable if the YAML value was applied.
+    assert config.http_stateless is False
+    assert config.http_json_response is False
+
+    # Env is the opposite of the YAML value; True is only reachable if env overrode the
+    # YAML false (and cannot be explained by the YAML value alone).
+    monkeypatch.setenv("NETMIKO_MCP_HTTP_STATELESS", "true")
+    monkeypatch.setenv("NETMIKO_MCP_HTTP_JSON_RESPONSE", "true")
+    config_override = McpConfig()
+    assert config_override.http_stateless is True
+    assert config_override.http_json_response is True
 
 
 def test_mcp_config_validation() -> None:
