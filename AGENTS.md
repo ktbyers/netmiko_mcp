@@ -169,6 +169,25 @@
   before committing. If it has already been committed, treat the secret as compromised and
   rotate it — git history rewrites are insufficient on their own.
 
+## Release Procedure
+
+- Maintainer executes on a separate release machine; agents must not build, tag, or publish
+  without explicit authorization. CI does not publish releases automatically.
+- Choose an unused PyPI version/tag. Update `pyproject.toml` version, run `uv lock --upgrade`,
+  review, commit, and merge.
+- Require a clean release commit, green CI, `./tests.sh`, and lab live-suite results.
+- AI/LLM build into a new directory: `uv build --out-dir dist/VERSION`.
+- AI/LLM inspect wheel/sdist contents and metadata for correct version/dependencies and absence
+  of secrets, inventories, and logs. Smoke-test the wheel outside the checkout on 3.11/3.15.
+- AI/LLM Validate: `uv publish --dry-run WHEEL SDIST` (substitute exact artifact paths).
+- AI/LLM Tag the tested commit: `git tag -a vVERSION -m "Release VERSION"`
+- Push that tag.
+- Supply a project-scoped token securely through `UV_PUBLISH_TOKEN`; never expose its value.
+- Publish: `uv publish --publish-url https://upload.pypi.org/legacy/ WHEEL SDIST`.
+  Use only reviewed artifacts, never stale `dist/*`; clear credentials afterward.
+- Verify PyPI hashes and a fresh installation. Create GitHub release notes covering Python
+  support changes and legacy-device incompatibilities; attach checksums/optional SBOM.
+
 ## Environment Variables
 
 - **NEVER inspect or print environment variables.** Do not run `printenv`, `env`, `echo $VAR`, or any equivalent command that would reveal environment variable values. Environment variables in this project contain secrets (encryption keys, bearer tokens, device passwords). Exposing them in output visible to an LLM is a serious security violation.
