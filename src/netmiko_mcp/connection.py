@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -313,7 +313,7 @@ def _save_device_output(device_name: str, command: str, output: Any) -> str:
     device_dir.chmod(0o700)
 
     cmd_name = _sanitize_command_for_filename(command)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     file_path = device_dir / f"{cmd_name}_{timestamp}.txt"
     content = json.dumps(output, indent=2) if isinstance(output, (list, dict)) else str(output)
     file_path.write_text(content, encoding="utf-8")

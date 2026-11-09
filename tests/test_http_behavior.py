@@ -485,12 +485,14 @@ async def test_stateless_http_client_ping_and_tools() -> None:
     """
     app = _build_app(stateless=True, json_response=True)
     with _serve(app) as base_url:
-        async with streamable_http_client(f"{base_url}/mcp") as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+        async with (
+            streamable_http_client(f"{base_url}/mcp") as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
 
-                ping_result = await session.call_tool("ping", arguments={})
-                assert getattr(ping_result.content[0], "text", "") == "pong"
+            ping_result = await session.call_tool("ping", arguments={})
+            assert getattr(ping_result.content[0], "text", "") == "pong"
 
-                tools = {t.name for t in (await session.list_tools()).tools}
-                assert {"ping", "send_show_command", "list_devices"}.issubset(tools)
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert {"ping", "send_show_command", "list_devices"}.issubset(tools)

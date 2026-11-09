@@ -38,6 +38,10 @@
 
 ## Package Management
 
+- Supported Python versions: 3.11–3.15; Python 3.10 is not supported. Keep
+  `requires-python`, package classifiers, Ruff's target version, `tests.sh`, and CI's
+  test matrix consistent with this range.
+- Require uv >=0.13.5 for lock-file audits; CI pins the tested uv version.
 - ONLY use uv, NEVER pip
 - Installation: `uv add <package>`
 - Running tools: `uv run --frozen <tool>`. Always pass `--frozen` so uv doesn't
@@ -45,6 +49,11 @@
 - Upgrading all packages: `uv lock --upgrade`
 - Upgrading a specific package: `uv lock --upgrade-package <package>`
 - FORBIDDEN: `uv pip install`, `@latest` syntax
+- Do not pin or constrain Paramiko below 5.x in project dependencies or the committed
+  lock file to accommodate legacy live devices. Paramiko 4.x introduces known security
+  vulnerabilities; keep the project environment and lock file on Paramiko 5.x or newer.
+- Do not suppress Paramiko 4.x advisories (including `CVE-2026-44405` and
+  `PYSEC-2026-2858`) in dependency audits or CI to accommodate legacy live devices.
 
 ## MCP Tool Implementation Rules
 
@@ -88,6 +97,28 @@
   - When practical, sanity-check a new test by mentally (or temporarily) mutating the code
     under test and confirming the test would fail; then revert the mutation.
 - **Comment Style:** Avoid using numbered or bulleted lists in inline code comments (e.g., `# 1. This part` or `# 2. Some other part`). Write comments as descriptive paragraphs or clear, individual sentences without numeric or alphabetic step indicators.
+
+## Local and CI Testing
+
+- `tests.sh` is the local entry point. Run `./tests.sh` for the full non-live workflow.
+  `.github/workflows/main_testing.yaml` invokes each uv command directly in an explicit,
+  named step; do not replace those steps with `tests.sh` calls.
+- `./tests.sh checks`: lock freshness, frozen sync, Ruff formatting/linting, mypy,
+  and Bandit, using Python 3.13. Dependency auditing uses `uv audit`; do not retain a
+  redundant installed-environment auditor.
+- `./tests.sh audit`: `uv audit --frozen` for Python 3.11–3.15 targeting Linux, macOS,
+  Windows, and `wasm32-pyodide2025`. Include dependency groups and extras; do not add
+  vulnerability exclusions. Emscripten is an audit target for a lock-file branch,
+  not a supported SSH deployment environment. Audit errors must fail the workflow.
+- `./tests.sh audit VERSION PLATFORM`: audit one supported combination. CI runs the
+  20 combinations as independent Ubuntu matrix jobs with `fail-fast: false`; keep
+  both matrix axes aligned with the full local audit.
+- `./tests.sh test VERSION`: isolated, frozen pytest for one supported Python version;
+  Python 3.13 also enforces 98% coverage. CI and the default local run cover 3.11–3.15.
+- Every stage checks lock freshness without rewriting `uv.lock`. These commands clear
+  `RUN_LIVE_TESTS`; run live tests separately after the non-live workflow passes.
+- `tests/test_testing_workflow.py` checks stage dispatch, failure propagation,
+  matrix coverage, and local/CI command parity without network or device access.
 
 ## Skills Documentation
 
@@ -154,10 +185,27 @@ Live integration tests require the following setup before running `RUN_LIVE_TEST
 
 Everything else (`tests/etc/netmiko-mcp.yml`, `tests/etc/commands.yml`) is committed and requires no setup.
 
+Validate formatting, linting, typing, non-live tests, and dependency audits with the
+locked Paramiko 5.x-or-newer environment before running live-device tests. If legacy
+lab devices require Paramiko 4.x, use it only temporarily for the live tests, preferably
+in an isolated environment. Do not change `pyproject.toml`, `uv.lock`, or audit exclusions
+for this workaround. After the live tests, restore or verify the project environment
+uses the locked Paramiko 5.x-or-newer version and rerun its dependency audit. A live pass
+with Paramiko 4.x does not establish Paramiko 5.x compatibility with those devices.
+
 To run the full live test suite:
 
 ```bash
 RUN_LIVE_TESTS=1 uv run --frozen pytest -v tests/test_integration.py
+```
+
+For legacy lab devices only, temporarily override Paramiko in an isolated environment:
+
+```bash
+RUN_LIVE_TESTS=1 uv run --frozen --isolated --with 'paramiko==4.0.0' pytest -v tests/test_integration.py
+uv sync --frozen
+uv run --frozen python -c 'import paramiko; print(paramiko.__version__)'
+./tests.sh audit
 ```
 
 To run a single live test:
