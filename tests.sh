@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared local and GitHub Actions checks. Live-device tests run separately.
+# Local equivalents of the explicit GitHub Actions checks. Live tests run separately.
 set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
@@ -12,7 +12,7 @@ AUDIT_PLATFORMS=(linux macos windows wasm32-pyodide2025)
 usage() {
     printf 'Usage: %s [all|checks|audit [PYTHON_VERSION PLATFORM]|test PYTHON_VERSION|--help]\n' "$0"
     printf '  all (default): checks, full lock-file audit, and Python 3.11–3.15 tests\n'
-    printf '  checks: Ruff, mypy, Bandit, and installed-environment pip-audit on Python 3.13\n'
+    printf '  checks: Ruff, mypy, and Bandit on Python 3.13\n'
     printf '  audit: full audit matrix, or one Python/platform combination when specified\n'
     printf '  test PYTHON_VERSION: non-live pytest; 98%% coverage gate on Python 3.13\n'
 }
@@ -49,8 +49,6 @@ run_checks() {
     uv run --frozen --python "$CHECK_PYTHON" mypy src tests
     printf '\nRunning Bandit security scan...\n'
     uv run --frozen --python "$CHECK_PYTHON" bandit -r src/
-    printf '\nAuditing the installed environment with pip-audit...\n'
-    uv run --frozen --python "$CHECK_PYTHON" pip-audit
 }
 
 audit_target() {

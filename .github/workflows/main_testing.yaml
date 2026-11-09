@@ -22,8 +22,23 @@ jobs:
           python-version: "3.13"
           enable-cache: true
 
-      - name: Run shared lint, type, and security checks
-        run: ./tests.sh checks
+      - name: Check lock-file freshness
+        run: uv lock --check
+
+      - name: Install locked dependencies
+        run: uv sync --frozen --python 3.13
+
+      - name: Check formatting
+        run: uv run --frozen --python 3.13 ruff format --check .
+
+      - name: Check lint rules
+        run: uv run --frozen --python 3.13 ruff check .
+
+      - name: Check types
+        run: uv run --frozen --python 3.13 mypy src tests
+
+      - name: Scan application code with Bandit
+        run: uv run --frozen --python 3.13 bandit -r src/
 
   audit:
     name: "Dependency Audit (Python ${{ matrix.python-version }}, ${{ matrix.platform }})"
@@ -57,6 +72,8 @@ jobs:
   unit-tests:
     name: "Unit Tests (Python ${{ matrix.python-version }})"
     runs-on: ubuntu-24.04
+    env:
+      RUN_LIVE_TESTS: ""
     strategy:
       fail-fast: false
       matrix:
@@ -73,5 +90,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
-      - name: Run shared non-live tests
-        run: ./tests.sh test '${{ matrix.python-version }}'
+      - name: Check lock-file freshness
+        run: uv lock --check
+
+      - name: Install locked dependencies
+        run: uv sync --frozen --python '${{ matrix.python-version }}'
+
+      - name: Run pytest with coverage
+        if: matrix.python-version == '3.13'
+        run: >-
+          uv run --frozen --python '${{ matrix.python-version }}' pytest -v
+          --cov=netmiko_mcp --cov-report=term-missing --cov-fail-under=98
+
+      - name: Run pytest without coverage
+        if: matrix.python-version != '3.13'
+        run: uv run --frozen --python '${{ matrix.python-version }}' pytest -v

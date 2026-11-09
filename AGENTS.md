@@ -100,12 +100,12 @@
 
 ## Local and CI Testing
 
-- `tests.sh` is the local entry point; `.github/workflows/main_testing.yaml` invokes
-  its `checks` and `test` stages. Run `./tests.sh` for the full non-live workflow.
-  CI audit jobs run `uv lock --check` and `uv audit --frozen` directly as separate,
-  explicitly named steps, not through `tests.sh`.
+- `tests.sh` is the local entry point. Run `./tests.sh` for the full non-live workflow.
+  `.github/workflows/main_testing.yaml` invokes each uv command directly in an explicit,
+  named step; do not replace those steps with `tests.sh` calls.
 - `./tests.sh checks`: lock freshness, frozen sync, Ruff formatting/linting, mypy,
-  Bandit, and installed-environment `pip-audit`, using Python 3.13.
+  and Bandit, using Python 3.13. Dependency auditing uses `uv audit`; do not retain a
+  redundant installed-environment auditor.
 - `./tests.sh audit`: `uv audit --frozen` for Python 3.11–3.15 targeting Linux, macOS,
   Windows, and `wasm32-pyodide2025`. Include dependency groups and extras; do not add
   vulnerability exclusions. Emscripten is an audit target for a lock-file branch,
@@ -205,7 +205,6 @@ For legacy lab devices only, temporarily override Paramiko in an isolated enviro
 RUN_LIVE_TESTS=1 uv run --frozen --isolated --with 'paramiko==4.0.0' pytest -v tests/test_integration.py
 uv sync --frozen
 uv run --frozen python -c 'import paramiko; print(paramiko.__version__)'
-uv run --frozen pip-audit
 ./tests.sh audit
 ```
 

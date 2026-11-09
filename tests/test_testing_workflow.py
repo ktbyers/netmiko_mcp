@@ -74,20 +74,14 @@ def test_default_runs_ci_checks_and_matrices(
     assert commands[0] == ["lock", "--check"]
     assert commands[1] == ["sync", "--frozen", "--python", "3.13"]
     checks = [command[5:] for command in commands if command[:2] == ["run", "--frozen"]]
-    assert checks[:5] == [
+    assert checks[:4] == [
         ["format", "--check", "."],
         ["check", "."],
         ["src", "tests"],
         ["-r", "src/"],
-        [],
     ]
-    assert [command[4] for command in commands[2:7]] == [
-        "ruff",
-        "ruff",
-        "mypy",
-        "bandit",
-        "pip-audit",
-    ]
+    assert [command[4] for command in commands[2:6]] == ["ruff", "ruff", "mypy", "bandit"]
+    assert not any("pip-audit" in command for command in commands)
     audits = [command for command in commands if command[0] == "audit"]
     assert audits == [
         ["audit", "--frozen", "--python-version", version, "--python-platform", platform]
@@ -206,7 +200,14 @@ def test_ci_commands_and_supported_python_matrix() -> None:
     assert audit_strategy["matrix"] == {"python-version": _VERSIONS, "platform": _PLATFORMS}
     assert jobs["audit"]["runs-on"] == "ubuntu-24.04"
     expected = {
-        "checks": ["./tests.sh checks"],
+        "checks": [
+            "uv lock --check",
+            "uv sync --frozen --python 3.13",
+            "uv run --frozen --python 3.13 ruff format --check .",
+            "uv run --frozen --python 3.13 ruff check .",
+            "uv run --frozen --python 3.13 mypy src tests",
+            "uv run --frozen --python 3.13 bandit -r src/",
+        ],
         "audit": [
             "uv lock --check",
             (
@@ -214,7 +215,15 @@ def test_ci_commands_and_supported_python_matrix() -> None:
                 "--python-platform '${{ matrix.platform }}'"
             ),
         ],
-        "unit-tests": ["./tests.sh test '${{ matrix.python-version }}'"],
+        "unit-tests": [
+            "uv lock --check",
+            "uv sync --frozen --python '${{ matrix.python-version }}'",
+            (
+                "uv run --frozen --python '${{ matrix.python-version }}' pytest -v "
+                "--cov=netmiko_mcp --cov-report=term-missing --cov-fail-under=98"
+            ),
+            "uv run --frozen --python '${{ matrix.python-version }}' pytest -v",
+        ],
     }
     for name, commands in expected.items():
         assert [
@@ -222,7 +231,16 @@ def test_ci_commands_and_supported_python_matrix() -> None:
         ] == commands
         setup = next(step for step in jobs[name]["steps"] if "setup-uv@" in step.get("uses", ""))
         assert setup["with"]["version"] == "0.13.5"
+    pytest_steps = [step for step in jobs["unit-tests"]["steps"] if "pytest" in step.get("run", "")]
+    assert [step["if"] for step in pytest_steps] == [
+        "matrix.python-version == '3.13'",
+        "matrix.python-version != '3.13'",
+    ]
+    assert jobs["unit-tests"]["env"]["RUN_LIVE_TESTS"] == ""
     project = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert not any(item.startswith("pip-audit") for item in project["dependency-groups"]["dev"])
+    lock = tomllib.loads((_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    assert "pip-audit" not in {package["name"] for package in lock["package"]}
     versions = [
         item.rsplit(" ", maxsplit=1)[-1]
         for item in project["project"]["classifiers"]

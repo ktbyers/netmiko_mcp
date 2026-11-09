@@ -164,24 +164,23 @@ with every MCP client or every optional protocol feature.
 
 ## Development Testing
 
-`tests.sh` runs the local checks and tests; GitHub Actions also uses its `checks` and
-`test` stages. CI audit jobs expose their uv commands directly. From the repository
-root, run:
+`tests.sh` runs the local equivalents of the GitHub Actions checks and tests. CI
+invokes each uv command explicitly in named steps, without calling the script.
+From the repository root, run:
 
 ```bash
 ./tests.sh
 ```
 
-The default run checks lock-file freshness, Ruff formatting/linting, mypy, Bandit, and
-installed-environment dependencies with `pip-audit`. It then audits `uv.lock` with
-`uv audit --frozen` and runs the non-live tests on Python 3.11–3.15. Python 3.13 tests
-also enforce the 98% coverage threshold. uv can download missing Python interpreters;
+The default run checks lock-file freshness, Ruff formatting/linting, mypy, and Bandit.
+It then audits `uv.lock` with `uv audit --frozen` and runs the non-live tests on
+Python 3.11–3.15. Python 3.13 tests also enforce the 98% coverage threshold. uv can download missing Python interpreters;
 these checks require network access.
 
 For individual CI-equivalent stages:
 
 ```bash
-./tests.sh checks       # Formatting, linting, types, Bandit, and pip-audit on Python 3.13
+./tests.sh checks       # Formatting, linting, types, and Bandit on Python 3.13
 ./tests.sh audit        # Lock-file audits across the Python/platform matrix
 ./tests.sh audit 3.15 windows  # One Python/platform combination, as in each CI audit job
 ./tests.sh test 3.13    # One Python version; includes coverage on 3.13
@@ -195,9 +194,8 @@ audits do not execute tests on those platforms. GitHub Actions runs the 20 audit
 combinations as independent Ubuntu matrix jobs with `fail-fast: false`, so a failed
 combination should not cancel the others. Each audit job runs `uv lock --check` and
 `uv audit --frozen` in separate, explicitly named steps rather than calling `tests.sh`.
-Audit findings and audit errors fail
-the workflow; no vulnerability exclusions are supplied. CI pins uv 0.13.5, and the
-project requires at least that version.
+Audit findings and audit errors fail the workflow; no vulnerability exclusions are
+supplied. CI pins uv 0.13.5, and the project requires at least that version.
 
 Python-version tests use isolated environments, leaving the project environment on
 Python 3.13 when the `checks` stage runs. These commands keep live-device tests disabled,
