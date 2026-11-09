@@ -180,7 +180,8 @@
 - AI/LLM inspect wheel/sdist contents and metadata for correct version/dependencies and absence
   of secrets, inventories, and logs. Smoke-test the wheel outside the checkout on 3.11/3.15.
 - AI/LLM Validate: `uv publish --dry-run WHEEL SDIST` (substitute exact artifact paths).
-- Tag the tested commit: `git tag -a vVERSION -m "Release VERSION"`; push that tag.
+- AI/LLM Tag the tested commit: `git tag -a vVERSION -m "Release VERSION"`
+- Push that tag.
 - Supply a project-scoped token securely through `UV_PUBLISH_TOKEN`; never expose its value.
 - Publish: `uv publish --publish-url https://upload.pypi.org/legacy/ WHEEL SDIST`.
   Use only reviewed artifacts, never stale `dist/*`; clear credentials afterward.
