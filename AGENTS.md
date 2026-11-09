@@ -108,6 +108,9 @@
   Windows, and `wasm32-pyodide2025`. Include dependency groups and extras; do not add
   vulnerability exclusions. Emscripten is an audit target for a lock-file branch,
   not a supported SSH deployment environment. Audit errors must fail the workflow.
+- `./tests.sh audit VERSION PLATFORM`: audit one supported combination. CI runs the
+  20 combinations as independent Ubuntu matrix jobs with `fail-fast: false`; keep
+  both matrix axes aligned with the full local audit.
 - `./tests.sh test VERSION`: isolated, frozen pytest for one supported Python version;
   Python 3.13 also enforces 98% coverage. CI and the default local run cover 3.11–3.15.
 - Every stage checks lock freshness without rewriting `uv.lock`. These commands clear

@@ -182,6 +182,7 @@ For individual CI-equivalent stages:
 ```bash
 ./tests.sh checks       # Formatting, linting, types, Bandit, and pip-audit on Python 3.13
 ./tests.sh audit        # Lock-file audits across the Python/platform matrix
+./tests.sh audit 3.15 windows  # One Python/platform combination, as in each CI audit job
 ./tests.sh test 3.13    # One Python version; includes coverage on 3.13
 ```
 
@@ -189,7 +190,9 @@ Lock-file audits include runtime, development, optional, and transitive dependen
 for each supported Python version, targeting Linux, macOS, Windows, and Emscripten
 (`wasm32-pyodide2025`). The Emscripten target covers an additional dependency branch in
 the lock file; it is not a claim that the SSH server runs in a browser. Cross-platform
-audits do not execute tests on those platforms. Audit findings and audit errors fail
+audits do not execute tests on those platforms. GitHub Actions runs the 20 audit
+combinations as independent Ubuntu matrix jobs with `fail-fast: false`, so a failed
+combination should not cancel the others. Audit findings and audit errors fail
 the workflow; no vulnerability exclusions are supplied. CI pins uv 0.13.5, and the
 project requires at least that version.
 

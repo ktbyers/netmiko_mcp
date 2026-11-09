@@ -114,6 +114,31 @@ def test_audit_mode_only_audits_lock(fake_uv: tuple[Path, Path], tmp_path: Path)
 
 
 @pytest.mark.parametrize("version", _VERSIONS)
+@pytest.mark.parametrize("platform", _PLATFORMS)
+def test_single_audit_target(
+    fake_uv: tuple[Path, Path], tmp_path: Path, version: str, platform: str
+) -> None:
+    log, _ = fake_uv
+    result = _run(arguments=["audit", version, platform], cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert [record["args"] for record in _records(log=log)] == [
+        ["lock", "--check"],
+        ["audit", "--frozen", "--python-version", version, "--python-platform", platform],
+    ]
+
+
+def test_single_audit_target_propagates_failure(fake_uv: tuple[Path, Path], tmp_path: Path) -> None:
+    log, failure = fake_uv
+    failure.write_text(data=json.dumps(["audit"]), encoding="utf-8")
+    result = _run(arguments=["audit", "3.15", "windows"], cwd=tmp_path)
+    assert result.returncode == 7
+    assert [record["args"] for record in _records(log=log)] == [
+        ["lock", "--check"],
+        ["audit", "--frozen", "--python-version", "3.15", "--python-platform", "windows"],
+    ]
+
+
+@pytest.mark.parametrize("version", _VERSIONS)
 def test_single_python_mode(fake_uv: tuple[Path, Path], tmp_path: Path, version: str) -> None:
     log, _ = fake_uv
     result = _run(arguments=["test", version], cwd=tmp_path)
@@ -132,6 +157,11 @@ def test_single_python_mode(fake_uv: tuple[Path, Path], tmp_path: Path, version:
         ["test", "3.16"],
         ["test", "3.13", "extra"],
         ["audit", "extra"],
+        ["audit", "3.13"],
+        ["audit", "3.10", "linux"],
+        ["audit", "3.16", "linux"],
+        ["audit", "3.13", "plan9"],
+        ["audit", "3.13", "linux", "extra"],
         ["unknown"],
     ],
 )
@@ -171,9 +201,13 @@ def test_ci_uses_shared_commands_and_supported_python_matrix() -> None:
     )
     jobs = workflow["jobs"]
     assert jobs["unit-tests"]["strategy"]["matrix"]["python-version"] == _VERSIONS
+    audit_strategy = jobs["audit"]["strategy"]
+    assert audit_strategy["fail-fast"] is False
+    assert audit_strategy["matrix"] == {"python-version": _VERSIONS, "platform": _PLATFORMS}
+    assert jobs["audit"]["runs-on"] == "ubuntu-24.04"
     expected = {
         "checks": "./tests.sh checks",
-        "audit": "./tests.sh audit",
+        "audit": "./tests.sh audit '${{ matrix.python-version }}' '${{ matrix.platform }}'",
         "unit-tests": "./tests.sh test '${{ matrix.python-version }}'",
     }
     for name, command in expected.items():

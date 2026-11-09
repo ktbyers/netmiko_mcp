@@ -10,10 +10,10 @@ CHECK_PYTHON=3.13
 AUDIT_PLATFORMS=(linux macos windows wasm32-pyodide2025)
 
 usage() {
-    printf 'Usage: %s [all|checks|audit|test PYTHON_VERSION|--help]\n' "$0"
+    printf 'Usage: %s [all|checks|audit [PYTHON_VERSION PLATFORM]|test PYTHON_VERSION|--help]\n' "$0"
     printf '  all (default): checks, full lock-file audit, and Python 3.11–3.15 tests\n'
     printf '  checks: Ruff, mypy, Bandit, and installed-environment pip-audit on Python 3.13\n'
-    printf '  audit: uv audit --frozen across the Python and platform matrices\n'
+    printf '  audit: full audit matrix, or one Python/platform combination when specified\n'
     printf '  test PYTHON_VERSION: non-live pytest; 98%% coverage gate on Python 3.13\n'
 }
 
@@ -24,7 +24,18 @@ validate_python() {
             return 0
         fi
     done
-    printf 'Unsupported test Python version: %s\n' "$1" >&2
+    printf 'Unsupported Python version: %s\n' "$1" >&2
+    return 2
+}
+
+validate_platform() {
+    local supported
+    for supported in "${AUDIT_PLATFORMS[@]}"; do
+        if [[ "$1" == "$supported" ]]; then
+            return 0
+        fi
+    done
+    printf 'Unsupported audit platform: %s\n' "$1" >&2
     return 2
 }
 
@@ -42,12 +53,16 @@ run_checks() {
     uv run --frozen --python "$CHECK_PYTHON" pip-audit
 }
 
+audit_target() {
+    printf '\nAuditing uv.lock: Python %s, %s...\n' "$1" "$2"
+    uv audit --frozen --python-version "$1" --python-platform "$2"
+}
+
 audit_lock() {
     local version platform
     for version in "${PYTHON_VERSIONS[@]}"; do
         for platform in "${AUDIT_PLATFORMS[@]}"; do
-            printf '\nAuditing uv.lock: Python %s, %s...\n' "$version" "$platform"
-            uv audit --frozen --python-version "$version" --python-platform "$platform"
+            audit_target "$version" "$platform"
         done
     done
 }
@@ -68,8 +83,17 @@ case "$mode" in
         usage
         exit 0
         ;;
-    all|checks|audit)
+    all|checks)
         if [[ "$#" -gt 1 ]]; then
+            usage >&2
+            exit 2
+        fi
+        ;;
+    audit)
+        if [[ "$#" -eq 3 ]]; then
+            validate_python "$2"
+            validate_platform "$3"
+        elif [[ "$#" -ne 1 ]]; then
             usage >&2
             exit 2
         fi
@@ -100,6 +124,12 @@ case "$mode" in
         done
         ;;
     checks) run_checks ;;
-    audit) audit_lock ;;
+    audit)
+        if [[ "$#" -eq 3 ]]; then
+            audit_target "$2" "$3"
+        else
+            audit_lock
+        fi
+        ;;
     test) run_tests "$2" ;;
 esac

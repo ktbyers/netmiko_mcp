@@ -26,8 +26,13 @@ jobs:
         run: ./tests.sh checks
 
   audit:
-    name: "Audit Locked Dependencies (Python 3.11–3.15, Cross-platform)"
+    name: "Dependency Audit (Python ${{ matrix.python-version }}, ${{ matrix.platform }})"
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
+        platform: ["linux", "macos", "windows", "wasm32-pyodide2025"]
 
     steps:
       - name: Checkout code
@@ -41,7 +46,7 @@ jobs:
           enable-cache: true
 
       - name: Audit dependencies
-        run: ./tests.sh audit
+        run: ./tests.sh audit '${{ matrix.python-version }}' '${{ matrix.platform }}'
 
   unit-tests:
     name: "Unit Tests (Python ${{ matrix.python-version }})"
