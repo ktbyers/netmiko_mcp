@@ -37,7 +37,8 @@ netmiko-mcp sits between your AI client and your network devices. It supports tw
 
 ## Prerequisites
 
-- **uv**  Python package manager used to install and run the server. See details online regarding installation instructions.
+- **Python 3.11 or newer** (tested versions: 3.11–3.15).
+- **uv 0.13.5 or newer** — Python package manager used to install and run the server; local and CI dependency checks use its `audit` command.
 - **An AI client that supports MCP (for example, Claude Code, Claude Desktop, Cursor, VS Code + Copilot, Codex)**  
 
 ## Installation
@@ -133,6 +134,15 @@ Full details on allowed/denied matching, globbing, pipes, and allowed characters
 
 With the server installed and the three config files in place, register `netmiko-mcp` with your AI client. Each client has its own config file or CLI command for registering the server - see the [mcp-client-config skill](skills/mcp-client-config/SKILL.md) for per-client instructions covering Claude Code, Claude Desktop, Cursor, Devin Desktop, VS Code + GitHub Copilot, and Kiro.
 
+## MCP Protocol Support
+
+Netmiko-MCP supports the **July 28, 2026 MCP specification** (protocol revision
+`2026-07-28`) through the MCP 2.x SDK. Automated HTTP tests exercise stateless
+`tools/list` and `tools/call` requests using the modern per-request envelope, including
+validation of malformed requests. Tests also cover the older `2025-11-25` initialization
+handshake for legacy clients. This protocol coverage does not establish compatibility
+with every MCP client or every optional protocol feature.
+
 ## Supported MCP Clients (June 2026)
 
 | Client | stdio | HTTP | Verified | Notes |
@@ -147,12 +157,47 @@ With the server installed and the three config files in place, register `netmiko
 | Gemini CLI | ✓ | ✓ | - | Not tested |
 | ChatGPT | ✗ | ✗ | ✗ | SSE-only; complex workaround required; not recommended |
 
-> **Note (mcp 2.0.0):** The HTTP transport now runs on the `mcp` 2.0.0 SDK (protocol
-> `2026-07-28`, stateless by default). The per-client verification above predates that
-> upgrade and is pending re-verification against a stateless 2.0.0 server. `stdio` behavior
-> is unchanged.
+> **Compatibility note:** The per-client verification above predates the MCP 2.x SDK
+> upgrade and is pending re-verification against the current stateless HTTP server.
 <br />
 
+
+## Development Testing
+
+`tests.sh` is the shared local and GitHub Actions test entry point. From the repository
+root, run:
+
+```bash
+./tests.sh
+```
+
+The default run checks lock-file freshness, Ruff formatting/linting, mypy, Bandit, and
+installed-environment dependencies with `pip-audit`. It then audits `uv.lock` with
+`uv audit --frozen` and runs the non-live tests on Python 3.11–3.15. Python 3.13 tests
+also enforce the 98% coverage threshold. uv can download missing Python interpreters;
+these checks require network access.
+
+For individual CI-equivalent stages:
+
+```bash
+./tests.sh checks       # Formatting, linting, types, Bandit, and pip-audit on Python 3.13
+./tests.sh audit        # Lock-file audits across the Python/platform matrix
+./tests.sh test 3.13    # One Python version; includes coverage on 3.13
+```
+
+Lock-file audits include runtime, development, optional, and transitive dependencies
+for each supported Python version, targeting Linux, macOS, Windows, and Emscripten
+(`wasm32-pyodide2025`). The Emscripten target covers an additional dependency branch in
+the lock file; it is not a claim that the SSH server runs in a browser. Cross-platform
+audits do not execute tests on those platforms. Audit findings and audit errors fail
+the workflow; no vulnerability exclusions are supplied. CI pins uv 0.13.5, and the
+project requires at least that version.
+
+Python-version tests use isolated environments, leaving the project environment on
+Python 3.13 when the `checks` stage runs. These commands keep live-device tests disabled,
+even if `RUN_LIVE_TESTS` was inherited. Run live tests separately using the instructions
+in `AGENTS.md`; legacy-device Paramiko overrides must remain isolated from the locked
+project environment.
 
 ## Reference Documentation
 

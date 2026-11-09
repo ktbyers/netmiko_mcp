@@ -6,24 +6,24 @@ authors = [{ name = "Kirk Byers", email = "ktbyers@twb-tech.com" }]
 license = { text = "Apache-2.0" }
 readme = "README.md"
 keywords = ["netmiko", "mcp", "network-automation", "ssh"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "License :: OSI Approved :: Apache Software License",
     "Topic :: System :: Networking",
 ]
 dependencies = [
-    "mcp>=2.0.0",
-    "netmiko>=4.7.0",
-    "ntc-templates>=4.1.0",
-    "pydantic-settings>=2.14.1",
+    "mcp>=2.3.0",
+    "netmiko>=4.8.0",
+    "ntc-templates>=9.3.0",
+    "pydantic-settings>=2.16.2",
     "pyyaml>=6.0.3",
-    "uvicorn>=0.49.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.urls]
@@ -41,17 +41,18 @@ netmiko-mcp = "netmiko_mcp.server:main"
 dev = [
     "bandit==1.9.4",
     "httpx==0.28.1",
-    "mypy==2.3.0",
+    "mypy==2.4.1",
     "pip-audit==2.10.1",
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "pytest-cov==7.1.0",
-    "pytest-mypy==1.0.1",
-    "ruff==0.16.2",
-    "types-paramiko==5.0.0.20260724",
-    "types-pyyaml==6.0.12.20260724",
+    "pytest-mypy==1.1.0",
+    "ruff==0.17.4",
+    "types-paramiko==5.1.0.20261030",
+    "types-pyyaml==6.0.12.20261103",
 ]
 
 [tool.uv]
+required-version = ">=0.13.5"
 managed = true
 package = true
 
@@ -59,7 +60,7 @@ package = true
 line-length = 100
 
 # Specify your floor Python version (i.e. minimum version Netmiko supports) 
-target-version = "py310"
+target-version = "py311"
 
 # Files or directories to exclude from linting and formatting
 exclude = [

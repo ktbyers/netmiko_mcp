@@ -25,7 +25,7 @@ import logging
 import logging.handlers
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +123,7 @@ class _AuditJsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         data: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
         }
         for key, value in record.__dict__.items():
@@ -347,7 +347,7 @@ def save_channel_transcript(
     transcript_dir.mkdir(parents=True, exist_ok=True)
     transcript_dir.chmod(0o700)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     safe_device = "".join(c if c.isalnum() or c in "-_." else "_" for c in device_name)
     filename = f"{timestamp}_{correlation_id}_{safe_device}.txt"
     file_path = transcript_dir / filename
