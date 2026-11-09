@@ -100,8 +100,10 @@
 
 ## Local and CI Testing
 
-- `tests.sh` is the shared local/CI entry point; `.github/workflows/main_testing.yaml`
-  invokes its stages. Run `./tests.sh` for the full non-live workflow.
+- `tests.sh` is the local entry point; `.github/workflows/main_testing.yaml` invokes
+  its `checks` and `test` stages. Run `./tests.sh` for the full non-live workflow.
+  CI audit jobs run `uv lock --check` and `uv audit --frozen` directly as separate,
+  explicitly named steps, not through `tests.sh`.
 - `./tests.sh checks`: lock freshness, frozen sync, Ruff formatting/linting, mypy,
   Bandit, and installed-environment `pip-audit`, using Python 3.13.
 - `./tests.sh audit`: `uv audit --frozen` for Python 3.11–3.15 targeting Linux, macOS,

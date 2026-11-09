@@ -38,15 +38,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
 
-      - name: Install uv and Python 3.13
+      - name: Install uv and host Python for lock-file validation
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
         with:
           version: "0.13.5"
           python-version: "3.13"
           enable-cache: true
 
-      - name: Audit dependencies
-        run: ./tests.sh audit '${{ matrix.python-version }}' '${{ matrix.platform }}'
+      - name: Check lock-file freshness
+        run: uv lock --check
+
+      - name: Audit locked dependencies for target Python and platform
+        run: >-
+          uv audit --frozen
+          --python-version '${{ matrix.python-version }}'
+          --python-platform '${{ matrix.platform }}'
 
   unit-tests:
     name: "Unit Tests (Python ${{ matrix.python-version }})"

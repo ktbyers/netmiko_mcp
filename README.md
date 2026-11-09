@@ -164,7 +164,8 @@ with every MCP client or every optional protocol feature.
 
 ## Development Testing
 
-`tests.sh` is the shared local and GitHub Actions test entry point. From the repository
+`tests.sh` runs the local checks and tests; GitHub Actions also uses its `checks` and
+`test` stages. CI audit jobs expose their uv commands directly. From the repository
 root, run:
 
 ```bash
@@ -192,7 +193,9 @@ for each supported Python version, targeting Linux, macOS, Windows, and Emscript
 the lock file; it is not a claim that the SSH server runs in a browser. Cross-platform
 audits do not execute tests on those platforms. GitHub Actions runs the 20 audit
 combinations as independent Ubuntu matrix jobs with `fail-fast: false`, so a failed
-combination should not cancel the others. Audit findings and audit errors fail
+combination should not cancel the others. Each audit job runs `uv lock --check` and
+`uv audit --frozen` in separate, explicitly named steps rather than calling `tests.sh`.
+Audit findings and audit errors fail
 the workflow; no vulnerability exclusions are supplied. CI pins uv 0.13.5, and the
 project requires at least that version.
 

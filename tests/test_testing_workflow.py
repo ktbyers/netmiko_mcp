@@ -195,7 +195,7 @@ def test_help_does_not_run_uv(fake_uv: tuple[Path, Path], tmp_path: Path) -> Non
     assert not _records(log=log)
 
 
-def test_ci_uses_shared_commands_and_supported_python_matrix() -> None:
+def test_ci_commands_and_supported_python_matrix() -> None:
     workflow = yaml.safe_load(
         (_ROOT / ".github/workflows/main_testing.yaml").read_text(encoding="utf-8")
     )
@@ -206,12 +206,20 @@ def test_ci_uses_shared_commands_and_supported_python_matrix() -> None:
     assert audit_strategy["matrix"] == {"python-version": _VERSIONS, "platform": _PLATFORMS}
     assert jobs["audit"]["runs-on"] == "ubuntu-24.04"
     expected = {
-        "checks": "./tests.sh checks",
-        "audit": "./tests.sh audit '${{ matrix.python-version }}' '${{ matrix.platform }}'",
-        "unit-tests": "./tests.sh test '${{ matrix.python-version }}'",
+        "checks": ["./tests.sh checks"],
+        "audit": [
+            "uv lock --check",
+            (
+                "uv audit --frozen --python-version '${{ matrix.python-version }}' "
+                "--python-platform '${{ matrix.platform }}'"
+            ),
+        ],
+        "unit-tests": ["./tests.sh test '${{ matrix.python-version }}'"],
     }
-    for name, command in expected.items():
-        assert [step["run"] for step in jobs[name]["steps"] if "run" in step] == [command]
+    for name, commands in expected.items():
+        assert [
+            " ".join(step["run"].split()) for step in jobs[name]["steps"] if "run" in step
+        ] == commands
         setup = next(step for step in jobs[name]["steps"] if "setup-uv@" in step.get("uses", ""))
         assert setup["with"]["version"] == "0.13.5"
     project = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
